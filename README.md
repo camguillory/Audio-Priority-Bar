@@ -33,12 +33,14 @@ A native macOS menu bar app that automatically manages audio device priorities. 
    cd AudioPriorityBar
    ```
 
-2. Open in Xcode:
+2. Build using the build script:
    ```bash
-   open AudioPriorityBar.xcodeproj
+   ./build.sh
    ```
 
-3. Build and run (⌘R)
+3. The app will be at `dist/AudioPriorityBar.app`
+
+Or open `AudioPriorityBar.xcodeproj` in Xcode and build with ⌘R.
 
 ### Download Release
 Check the [Releases](https://github.com/tobi/AudioPriorityBar/releases) page for pre-built binaries.
