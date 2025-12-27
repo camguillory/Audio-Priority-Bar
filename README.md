@@ -6,6 +6,8 @@ A native macOS menu bar app that automatically manages audio device priorities. 
 ![Swift](https://img.shields.io/badge/Swift-5.9-orange)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
+![Screenshot](screenshot.jpeg)
+
 ## Features
 
 - **Priority-based auto-switching**: Devices are ranked by priority. When a higher-priority device connects, it automatically becomes active.
@@ -16,18 +18,6 @@ A native macOS menu bar app that automatically manages audio device priorities. 
 - **Drag-to-reorder**: Reorder devices by dragging or using up/down arrows.
 - **Volume control**: Adjust volume with slider or scroll wheel.
 - **Menu bar integration**: Shows current mode icon and volume percentage.
-
-## Screenshots
-
-The app lives in your menu bar and shows:
-- Speaker/headphone/custom mode indicator
-- Current volume level
-
-Click to open the popover with:
-- Mode toggle (Speakers / Headphones / Custom)
-- Volume slider
-- Prioritized device lists
-- Edit mode for managing disconnected devices
 
 ## Installation
 
