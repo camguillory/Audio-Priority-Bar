@@ -1,5 +1,8 @@
-
 # Audio Priority Bar
+
+<p align="center">
+  <img src="icon.png" width="128" height="128" alt="Audio Priority Bar Icon">
+</p>
 
 A native macOS menu bar app that automatically manages audio device priorities. Set your preferred order for speakers, headphones, and microphones - the app automatically switches to the highest-priority connected device.
 
