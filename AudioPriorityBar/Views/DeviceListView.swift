@@ -120,56 +120,57 @@ struct DeviceRowView: View {
 
     var body: some View {
         HStack(spacing: 4) {
-            // Reorder controls (on hover)
+            // Priority label OR reorder controls (on hover)
             if !isHiddenSection {
-                HStack(spacing: 0) {
-                    // Up arrow
-                    Button {
-                        onMoveUp?()
-                    } label: {
-                        Image(systemName: "chevron.up")
-                            .font(.system(size: 9, weight: .semibold))
-                            .frame(width: 16, height: 20)
-                            .contentShape(Rectangle())
+                ZStack {
+                    // Reorder controls on hover
+                    HStack(spacing: 0) {
+                        Button {
+                            onMoveUp?()
+                        } label: {
+                            Image(systemName: "chevron.up")
+                                .font(.system(size: 9, weight: .semibold))
+                                .frame(width: 14)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundColor(onMoveUp != nil ? .secondary : .secondary.opacity(0.3))
+                        .disabled(onMoveUp == nil)
+
+                        Image(systemName: "line.3.horizontal")
+                            .font(.system(size: 9))
+                            .foregroundColor(.secondary)
+                            .frame(width: 10)
+
+                        Button {
+                            onMoveDown?()
+                        } label: {
+                            Image(systemName: "chevron.down")
+                                .font(.system(size: 9, weight: .semibold))
+                                .frame(width: 14)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundColor(onMoveDown != nil ? .secondary : .secondary.opacity(0.3))
+                        .disabled(onMoveDown == nil)
                     }
-                    .buttonStyle(.plain)
-                    .foregroundColor(onMoveUp != nil && isHovering ? .secondary : .clear)
-                    .disabled(onMoveUp == nil)
+                    .opacity(isHovering ? 1 : 0)
 
-                    // Drag handle
-                    Image(systemName: "line.3.horizontal")
-                        .font(.system(size: 9))
-                        .foregroundColor(isHovering ? .secondary : .clear)
-                        .frame(width: 12)
-
-                    // Down arrow
-                    Button {
-                        onMoveDown?()
-                    } label: {
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 9, weight: .semibold))
-                            .frame(width: 16, height: 20)
-                            .contentShape(Rectangle())
+                    // Priority number or "Active" label when not hovering
+                    Group {
+                        if isSelected && !isDisconnected {
+                            Text("Active")
+                                .font(.system(size: 9, weight: .semibold))
+                                .foregroundColor(.accentColor)
+                        } else {
+                            Text("\(index + 1)")
+                                .font(.system(size: 10, weight: .medium, design: .monospaced))
+                                .foregroundColor(.secondary)
+                        }
                     }
-                    .buttonStyle(.plain)
-                    .foregroundColor(onMoveDown != nil && isHovering ? .secondary : .clear)
-                    .disabled(onMoveDown == nil)
+                    .opacity(isHovering ? 0 : 1)
                 }
-            }
-
-            // Priority number or "Active" label
-            if !isHiddenSection {
-                if isSelected && !isDisconnected {
-                    Text("Active")
-                        .font(.system(size: 9, weight: .semibold))
-                        .foregroundColor(.accentColor)
-                        .frame(width: 36)
-                } else {
-                    Text("\(index + 1)")
-                        .font(.system(size: 10, weight: .medium, design: .monospaced))
-                        .foregroundColor(.secondary)
-                        .frame(width: 36)
-                }
+                .frame(width: 38)
             }
 
             // Device name
@@ -287,8 +288,9 @@ struct DeviceRowView: View {
                 .frame(width: 24)
             }
         }
-        .padding(.horizontal, 6)
-        .padding(.vertical, 6)
+        .padding(.leading, 2)
+        .padding(.trailing, 6)
+        .padding(.vertical, 5)
         .opacity(isGrayed ? 0.6 : 1.0)
         .background(
             RoundedRectangle(cornerRadius: 6)
