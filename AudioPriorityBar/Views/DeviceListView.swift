@@ -94,7 +94,7 @@ struct DeviceRowView: View {
     }
 
     var isGrayed: Bool {
-        isDisconnected || isIgnored || isHiddenSection
+        isDisconnected || isHiddenSection
     }
 
     var statusIcon: String? {
@@ -157,17 +157,24 @@ struct DeviceRowView: View {
                 }
             }
 
-            // Priority number
+            // Priority number or "Active" label
             if !isHiddenSection {
-                Text("\(index + 1)")
-                    .font(.system(size: 10, weight: .medium, design: .monospaced))
-                    .foregroundColor(.secondary)
-                    .frame(width: 16)
+                if isSelected && !isDisconnected {
+                    Text("Active")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundColor(.accentColor)
+                        .frame(width: 36)
+                } else {
+                    Text("\(index + 1)")
+                        .font(.system(size: 10, weight: .medium, design: .monospaced))
+                        .foregroundColor(.secondary)
+                        .frame(width: 36)
+                }
             }
 
             // Device name
             Button(action: {
-                if !isDisconnected {
+                if !isDisconnected && audioManager.isCustomMode {
                     onSelect()
                 }
             }) {
@@ -286,6 +293,10 @@ struct DeviceRowView: View {
         .background(
             RoundedRectangle(cornerRadius: 6)
                 .fill(isSelected && !isDisconnected ? Color.accentColor.opacity(0.1) : (isHovering ? Color.primary.opacity(0.05) : Color.clear))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 6)
+                .stroke(isSelected && !isDisconnected ? Color.accentColor : Color.clear, lineWidth: 1.5)
         )
         .onHover { hovering in
             isHovering = hovering

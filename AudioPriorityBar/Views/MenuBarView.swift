@@ -294,16 +294,6 @@ struct DeviceSectionView: View {
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundColor(.secondary)
                     .textCase(.uppercase)
-                Spacer()
-                if isActiveCategory {
-                    Text("Active")
-                        .font(.system(size: 9, weight: .medium))
-                        .foregroundColor(.accentColor)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(Color.accentColor.opacity(0.1))
-                        .cornerRadius(4)
-                }
             }
 
             if devices.isEmpty {
