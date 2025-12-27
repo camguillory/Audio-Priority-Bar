@@ -1,6 +1,3 @@
-<p align="center">
-  <img src="icon.png" width="128" height="128" alt="Audio Priority Bar Icon">
-</p>
 
 # Audio Priority Bar
 
