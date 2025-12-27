@@ -14,6 +14,7 @@
 		A10000000000000000000005 /* MenuBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000005 /* MenuBarView.swift */; };
 		A10000000000000000000006 /* DeviceListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000006 /* DeviceListView.swift */; };
 		A10000000000000000000010 /* CoreAudio.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A20000000000000000000010 /* CoreAudio.framework */; };
+		A10000000000000000000020 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000020 /* Assets.xcassets */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -25,6 +26,7 @@
 		A20000000000000000000006 /* DeviceListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceListView.swift; sourceTree = "<group>"; };
 		A20000000000000000000007 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A20000000000000000000010 /* CoreAudio.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreAudio.framework; path = System/Library/Frameworks/CoreAudio.framework; sourceTree = SDKROOT; };
+		A20000000000000000000020 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A30000000000000000000001 /* AudioPriorityBar.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AudioPriorityBar.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -56,6 +58,7 @@
 				A50000000000000000000003 /* Models */,
 				A50000000000000000000004 /* Services */,
 				A50000000000000000000005 /* Views */,
+				A20000000000000000000020 /* Assets.xcassets */,
 				A20000000000000000000007 /* Info.plist */,
 			);
 			path = AudioPriorityBar;
@@ -105,6 +108,17 @@
 		};
 /* End PBXGroup section */
 
+/* Begin PBXResourcesBuildPhase section */
+		A40000000000000000000002 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A10000000000000000000020 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
 /* Begin PBXNativeTarget section */
 		A60000000000000000000001 /* AudioPriorityBar */ = {
 			isa = PBXNativeTarget;
@@ -112,6 +126,7 @@
 			buildPhases = (
 				A70000000000000000000001 /* Sources */,
 				A40000000000000000000001 /* Frameworks */,
+				A40000000000000000000002 /* Resources */,
 			);
 			buildRules = (
 			);
