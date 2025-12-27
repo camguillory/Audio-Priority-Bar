@@ -96,6 +96,7 @@ class AudioManager: ObservableObject {
     private let deviceService = AudioDeviceService()
     let priorityManager = PriorityManager()
     private var connectedDeviceUIDs: Set<String> = []
+    private var muteCheckTimer: Timer?
 
     var menuBarIcon: String {
         currentMode.icon
@@ -165,10 +166,20 @@ class AudioManager: ObservableObject {
         refreshVolume()
         refreshMuteStatus()
         setupDeviceChangeListener()
+        startMuteCheckTimer()
         // Apply priority on startup (unless in custom mode)
         if !isCustomMode {
             applyHighestPriorityInput()
             applyHighestPriorityOutput()
+        }
+    }
+
+    private func startMuteCheckTimer() {
+        muteCheckTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                self?.refreshMuteStatus()
+                self?.refreshVolume()
+            }
         }
     }
 
