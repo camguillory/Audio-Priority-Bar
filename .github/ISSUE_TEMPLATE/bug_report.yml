@@ -1,0 +1,78 @@
+name: Bug report
+description: Tell us what went wrong with Audio Priority Bar
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a problem.
+
+        For first-launch or permission problems, first check the [Gatekeeper](https://github.com/camguillory/Audio-Priority-Bar#gatekeeper) and [Jabra Link monitoring](https://github.com/camguillory/Audio-Priority-Bar#jabra-link-monitoring) notes.
+
+  - type: checkboxes
+    id: existing-issues
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched the existing issues for this problem.
+          required: true
+
+  - type: input
+    id: app-version
+    attributes:
+      label: App version
+      description: Open the menu bar icon, choose Settings, and look under About.
+      placeholder: "2.0.0"
+    validations:
+      required: true
+
+  - type: input
+    id: macos-version
+    attributes:
+      label: macOS version
+      description: Open the Apple menu and choose About This Mac.
+      placeholder: "14.5"
+    validations:
+      required: true
+
+  - type: textarea
+    id: behavior
+    attributes:
+      label: What happened?
+      description: Describe what happened and what you expected instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+
+  - type: textarea
+    id: devices
+    attributes:
+      label: Audio devices
+      description: If relevant, list device names exactly as shown in the app.
+
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Terminal diagnostics (optional)
+      description: |
+        If you are comfortable using Terminal, run the command below and paste its output. The output includes your audio-device names.
+
+        `sw_vers -productVersion; uname -m; system_profiler SPAudioDataType; ioreg -c IOHIDDevice -r -l | grep -i '"Product" = "Jabra' | sort -u`
+      render: text
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Anything else?
+      description: Add screenshots or crash reports from ~/Library/Logs/DiagnosticReports/ if available.

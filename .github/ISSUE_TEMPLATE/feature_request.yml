@@ -1,0 +1,32 @@
+name: Feature request
+description: Suggest an improvement to Audio Priority Bar
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for sharing an idea. For substantial changes, please discuss the approach here before writing code.
+
+  - type: checkboxes
+    id: existing-issues
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched the existing issues for this idea.
+          required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+      description: Explain what is difficult or missing today.
+    validations:
+      required: true
+
+  - type: textarea
+    id: request
+    attributes:
+      label: What would you like Audio Priority Bar to do?
+    validations:
+      required: true
