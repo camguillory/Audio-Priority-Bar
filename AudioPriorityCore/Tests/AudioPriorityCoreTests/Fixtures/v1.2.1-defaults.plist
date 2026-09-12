@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>customMode</key>
+	<true/>
+	<key>deviceCategories</key>
+	<dict>
+		<key>v1-headset</key>
+		<string>headphone</string>
+	</dict>
+	<key>headphonePriorities</key>
+	<array>
+		<string>v1-headset</string>
+	</array>
+	<key>hiddenHeadphones</key>
+	<array>
+		<string>v1-hidden</string>
+	</array>
+	<key>hiddenMics</key>
+	<array>
+		<string>v1-mic-hidden</string>
+	</array>
+	<key>hiddenSpeakers</key>
+	<array>
+		<string>v1-speaker-hidden</string>
+	</array>
+	<key>inputPriorities</key>
+	<array>
+		<string>v1-mic</string>
+	</array>
+	<key>knownDevices</key>
+	<data>
+	W3sidWlkIjoidjEtaGVhZHNldCIsIm5hbWUiOiJTeW50aGV0aWMgVjEgSGVhZHNldCIs
+	ImlzSW5wdXQiOmZhbHNlLCJsYXN0U2VlbiI6MTIzNDU2fV0=
+	</data>
+	<key>neverUseDevices</key>
+	<array>
+		<string>v1-never</string>
+	</array>
+	<key>speakerPriorities</key>
+	<array>
+		<string>v1-speaker</string>
+	</array>
+</dict>
+</plist>

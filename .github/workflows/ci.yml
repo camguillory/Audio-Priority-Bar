@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-26
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: maxim-lobanov/setup-xcode@1242409711ff5721add51979e9e11e23ebb7e5a4 # v1
+        with:
+          xcode-version: "26.6"
+
+      - name: Test core
+        run: swift test --package-path AudioPriorityCore
+
+      - name: Test app
+        run: |
+          xcodebuild test \
+            -project AudioPriorityBar.xcodeproj \
+            -scheme AudioPriorityBar \
+            -destination 'platform=macOS' \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Package release build
+        run: scripts/package-release.sh

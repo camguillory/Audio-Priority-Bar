@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>currentMode</key>
+	<string>headphone</string>
+	<key>customMode</key>
+	<true/>
+	<key>deviceCategories</key>
+	<dict>
+		<key>shared-device</key>
+		<string>headphone</string>
+		<key>speaker-b</key>
+		<string>speaker</string>
+	</dict>
+	<key>headphonePriorities</key>
+	<array>
+		<string>shared-device</string>
+		<string>headphone-hidden</string>
+	</array>
+	<key>hiddenHeadphones</key>
+	<array>
+		<string>headphone-hidden</string>
+	</array>
+	<key>hiddenMics</key>
+	<array>
+		<string>mic-hidden</string>
+	</array>
+	<key>hiddenSpeakers</key>
+	<array>
+		<string>speaker-hidden</string>
+	</array>
+	<key>inputPriorities</key>
+	<array>
+		<string>shared-device</string>
+		<string>mic-hidden</string>
+	</array>
+	<key>knownDevices</key>
+	<data>
+	W3siaXNJbnB1dCI6dHJ1ZSwibGFzdFNlZW4iOjEyMzQ1NiwidWlkIjoic2hhcmVkLWRl
+	dmljZSIsIm5hbWUiOiJTeW50aGV0aWMgVVNCIEhlYWRzZXQifSx7InVpZCI6InNoYXJl
+	ZC1kZXZpY2UiLCJpc0lucHV0IjpmYWxzZSwibmFtZSI6IlN5bnRoZXRpYyBVU0IgSGVh
+	ZHNldCIsImxhc3RTZWVuIjoyMzQ1Njd9LHsibmFtZSI6IlN5bnRoZXRpYyBEaXNwbGF5
+	IiwiaXNJbnB1dCI6ZmFsc2UsImxhc3RTZWVuIjozNDU2NzgsInVpZCI6InNwZWFrZXIt
+	YiJ9XQ==
+	</data>
+	<key>neverUseInputs</key>
+	<array>
+		<string>mic-never</string>
+	</array>
+	<key>neverUseOutputs</key>
+	<array>
+		<string>speaker-never</string>
+	</array>
+	<key>roleSpecificNeverUseMigration_v1</key>
+	<true/>
+	<key>speakerPriorities</key>
+	<array>
+		<string>speaker-b</string>
+		<string>shared-device</string>
+		<string>speaker-hidden</string>
+	</array>
+</dict>
+</plist>

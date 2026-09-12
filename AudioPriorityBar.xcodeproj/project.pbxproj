@@ -7,152 +7,222 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		A10000000000000000000001 /* AudioPriorityBarApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000001 /* AudioPriorityBarApp.swift */; };
-		A10000000000000000000002 /* AudioDevice.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000002 /* AudioDevice.swift */; };
-		A10000000000000000000003 /* AudioDeviceService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000003 /* AudioDeviceService.swift */; };
-		A10000000000000000000004 /* PriorityManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000004 /* PriorityManager.swift */; };
-		A10000000000000000000005 /* MenuBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000005 /* MenuBarView.swift */; };
-		A10000000000000000000006 /* DeviceListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000006 /* DeviceListView.swift */; };
-		A10000000000000000000010 /* CoreAudio.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A20000000000000000000010 /* CoreAudio.framework */; };
-		A10000000000000000000020 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000020 /* Assets.xcassets */; };
+		A10000000000000000000001 /* AudioPriorityBarApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000001 /* AudioPriorityBarApp.swift */; };
+		A10000000000000000000002 /* StatusItemController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000002 /* StatusItemController.swift */; };
+		A10000000000000000000003 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000004 /* Assets.xcassets */; };
+		A10000000000000000000004 /* LICENSE in Resources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000005 /* LICENSE */; };
+		A10000000000000000000005 /* CoreAudio.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B10000000000000000000009 /* CoreAudio.framework */; };
+		A10000000000000000000006 /* AudioPriorityCore in Frameworks */ = {isa = PBXBuildFile; productRef = M100000000000000000000001 /* AudioPriorityCore */; };
+		A10000000000000000000007 /* AppIdentityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000008 /* AppIdentityTests.swift */; };
+		A10000000000000000000008 /* CoreAudioListeners.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000010 /* CoreAudioListeners.swift */; };
+		A10000000000000000000009 /* CoreAudioProperties.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000011 /* CoreAudioProperties.swift */; };
+		A10000000000000000000010 /* CoreAudioObserver.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000012 /* CoreAudioObserver.swift */; };
+		A10000000000000000000011 /* CoreAudioLifecycleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000013 /* CoreAudioLifecycleTests.swift */; };
+		A10000000000000000000012 /* JabraHIDMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000014 /* JabraHIDMonitor.swift */; };
+		A10000000000000000000013 /* IOKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B10000000000000000000015 /* IOKit.framework */; };
+		A10000000000000000000014 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000016 /* AppModel.swift */; };
+		A10000000000000000000015 /* AppModelActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000017 /* AppModelActions.swift */; };
+		A10000000000000000000016 /* AppRuntime.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000018 /* AppRuntime.swift */; };
+		A10000000000000000000017 /* AppModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000019 /* AppModelTests.swift */; };
+		A10000000000000000000018 /* DeviceListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000020 /* DeviceListView.swift */; };
+		A10000000000000000000019 /* PanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000021 /* PanelView.swift */; };
+		A10000000000000000000020 /* LaunchAtLoginController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000022 /* LaunchAtLoginController.swift */; };
+		A10000000000000000000021 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000023 /* SettingsView.swift */; };
+		A10000000000000000000022 /* StatusItemRoutingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000024 /* StatusItemRoutingTests.swift */; };
+		A10000000000000000000023 /* DeviceRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000025 /* DeviceRowView.swift */; };
+		A10000000000000000000024 /* DeviceInteractionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000026 /* DeviceInteractionTests.swift */; };
+		A10000000000000000000025 /* DeviceDrag.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000027 /* DeviceDrag.swift */; };
+		A10000000000000000000026 /* SelectionBehaviorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000028 /* SelectionBehaviorTests.swift */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		I10000000000000000000001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = G100000000000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = F100000000000000000000001;
+			remoteInfo = AudioPriorityBar;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
-		A20000000000000000000001 /* AudioPriorityBarApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPriorityBarApp.swift; sourceTree = "<group>"; };
-		A20000000000000000000002 /* AudioDevice.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioDevice.swift; sourceTree = "<group>"; };
-		A20000000000000000000003 /* AudioDeviceService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioDeviceService.swift; sourceTree = "<group>"; };
-		A20000000000000000000004 /* PriorityManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PriorityManager.swift; sourceTree = "<group>"; };
-		A20000000000000000000005 /* MenuBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarView.swift; sourceTree = "<group>"; };
-		A20000000000000000000006 /* DeviceListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceListView.swift; sourceTree = "<group>"; };
-		A20000000000000000000007 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		A20000000000000000000010 /* CoreAudio.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreAudio.framework; path = System/Library/Frameworks/CoreAudio.framework; sourceTree = SDKROOT; };
-		A20000000000000000000020 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
-		A30000000000000000000001 /* AudioPriorityBar.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AudioPriorityBar.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		B10000000000000000000001 /* AudioPriorityBarApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPriorityBarApp.swift; sourceTree = "<group>"; };
+		B10000000000000000000002 /* StatusItemController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusItemController.swift; sourceTree = "<group>"; };
+		B10000000000000000000003 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		B10000000000000000000004 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		B10000000000000000000005 /* LICENSE */ = {isa = PBXFileReference; lastKnownFileType = text; path = LICENSE; sourceTree = "<group>"; };
+		B10000000000000000000006 /* AudioPriorityBar.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AudioPriorityBar.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		B10000000000000000000007 /* AudioPriorityBarTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AudioPriorityBarTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		B10000000000000000000008 /* AppIdentityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppIdentityTests.swift; sourceTree = "<group>"; };
+		B10000000000000000000009 /* CoreAudio.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreAudio.framework; path = System/Library/Frameworks/CoreAudio.framework; sourceTree = SDKROOT; };
+		B10000000000000000000010 /* CoreAudioListeners.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreAudioListeners.swift; sourceTree = "<group>"; };
+		B10000000000000000000011 /* CoreAudioProperties.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreAudioProperties.swift; sourceTree = "<group>"; };
+		B10000000000000000000012 /* CoreAudioObserver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreAudioObserver.swift; sourceTree = "<group>"; };
+		B10000000000000000000013 /* CoreAudioLifecycleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreAudioLifecycleTests.swift; sourceTree = "<group>"; };
+		B10000000000000000000014 /* JabraHIDMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JabraHIDMonitor.swift; sourceTree = "<group>"; };
+		B10000000000000000000015 /* IOKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = IOKit.framework; path = System/Library/Frameworks/IOKit.framework; sourceTree = SDKROOT; };
+		B10000000000000000000016 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
+		B10000000000000000000017 /* AppModelActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModelActions.swift; sourceTree = "<group>"; };
+		B10000000000000000000018 /* AppRuntime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppRuntime.swift; sourceTree = "<group>"; };
+		B10000000000000000000019 /* AppModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModelTests.swift; sourceTree = "<group>"; };
+		B10000000000000000000020 /* DeviceListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceListView.swift; sourceTree = "<group>"; };
+		B10000000000000000000021 /* PanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PanelView.swift; sourceTree = "<group>"; };
+		B10000000000000000000022 /* LaunchAtLoginController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaunchAtLoginController.swift; sourceTree = "<group>"; };
+		B10000000000000000000023 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		B10000000000000000000024 /* StatusItemRoutingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusItemRoutingTests.swift; sourceTree = "<group>"; };
+		B10000000000000000000025 /* DeviceRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceRowView.swift; sourceTree = "<group>"; };
+		B10000000000000000000026 /* DeviceInteractionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceInteractionTests.swift; sourceTree = "<group>"; };
+		B10000000000000000000027 /* DeviceDrag.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceDrag.swift; sourceTree = "<group>"; };
+		B10000000000000000000028 /* SelectionBehaviorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectionBehaviorTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
-		A40000000000000000000001 /* Frameworks */ = {
+		C100000000000000000000001 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				A10000000000000000000010 /* CoreAudio.framework in Frameworks */,
+				A10000000000000000000005 /* CoreAudio.framework in Frameworks */,
+				A10000000000000000000013 /* IOKit.framework in Frameworks */,
+				A10000000000000000000006 /* AudioPriorityCore in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C100000000000000000000002 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		A50000000000000000000001 /* Root */ = {
+		D100000000000000000000001 = {
 			isa = PBXGroup;
 			children = (
-				A50000000000000000000002 /* AudioPriorityBar */,
-				A50000000000000000000007 /* Frameworks */,
-				A50000000000000000000006 /* Products */,
+				D100000000000000000000002 /* AudioPriorityBar */,
+				D100000000000000000000003 /* AudioPriorityBarTests */,
+				D100000000000000000000005 /* Frameworks */,
+				D100000000000000000000004 /* Products */,
+				B10000000000000000000005 /* LICENSE */,
 			);
 			sourceTree = "<group>";
 		};
-		A50000000000000000000002 /* AudioPriorityBar */ = {
+		D100000000000000000000002 /* AudioPriorityBar */ = {
 			isa = PBXGroup;
 			children = (
-				A20000000000000000000001 /* AudioPriorityBarApp.swift */,
-				A50000000000000000000003 /* Models */,
-				A50000000000000000000004 /* Services */,
-				A50000000000000000000005 /* Views */,
-				A20000000000000000000020 /* Assets.xcassets */,
-				A20000000000000000000007 /* Info.plist */,
+				B10000000000000000000001 /* AudioPriorityBarApp.swift */,
+				B10000000000000000000002 /* StatusItemController.swift */,
+				B10000000000000000000010 /* CoreAudioListeners.swift */,
+				B10000000000000000000011 /* CoreAudioProperties.swift */,
+				B10000000000000000000012 /* CoreAudioObserver.swift */,
+				B10000000000000000000014 /* JabraHIDMonitor.swift */,
+				B10000000000000000000016 /* AppModel.swift */,
+				B10000000000000000000017 /* AppModelActions.swift */,
+				B10000000000000000000018 /* AppRuntime.swift */,
+				B10000000000000000000020 /* DeviceListView.swift */,
+				B10000000000000000000025 /* DeviceRowView.swift */,
+				B10000000000000000000027 /* DeviceDrag.swift */,
+				B10000000000000000000021 /* PanelView.swift */,
+				B10000000000000000000022 /* LaunchAtLoginController.swift */,
+				B10000000000000000000023 /* SettingsView.swift */,
+				B10000000000000000000004 /* Assets.xcassets */,
+				B10000000000000000000003 /* Info.plist */,
 			);
 			path = AudioPriorityBar;
 			sourceTree = "<group>";
 		};
-		A50000000000000000000003 /* Models */ = {
+		D100000000000000000000003 /* AudioPriorityBarTests */ = {
 			isa = PBXGroup;
 			children = (
-				A20000000000000000000002 /* AudioDevice.swift */,
+				B10000000000000000000008 /* AppIdentityTests.swift */,
+				B10000000000000000000013 /* CoreAudioLifecycleTests.swift */,
+				B10000000000000000000019 /* AppModelTests.swift */,
+				B10000000000000000000026 /* DeviceInteractionTests.swift */,
+				B10000000000000000000028 /* SelectionBehaviorTests.swift */,
+				B10000000000000000000024 /* StatusItemRoutingTests.swift */,
 			);
-			path = Models;
+			path = AudioPriorityBarTests;
 			sourceTree = "<group>";
 		};
-		A50000000000000000000004 /* Services */ = {
+		D100000000000000000000004 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				A20000000000000000000003 /* AudioDeviceService.swift */,
-				A20000000000000000000004 /* PriorityManager.swift */,
-			);
-			path = Services;
-			sourceTree = "<group>";
-		};
-		A50000000000000000000005 /* Views */ = {
-			isa = PBXGroup;
-			children = (
-				A20000000000000000000005 /* MenuBarView.swift */,
-				A20000000000000000000006 /* DeviceListView.swift */,
-			);
-			path = Views;
-			sourceTree = "<group>";
-		};
-		A50000000000000000000006 /* Products */ = {
-			isa = PBXGroup;
-			children = (
-				A30000000000000000000001 /* AudioPriorityBar.app */,
+				B10000000000000000000006 /* AudioPriorityBar.app */,
+				B10000000000000000000007 /* AudioPriorityBarTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
 		};
-		A50000000000000000000007 /* Frameworks */ = {
+		D100000000000000000000005 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
-				A20000000000000000000010 /* CoreAudio.framework */,
+				B10000000000000000000009 /* CoreAudio.framework */,
+				B10000000000000000000015 /* IOKit.framework */,
 			);
 			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
 
-/* Begin PBXResourcesBuildPhase section */
-		A40000000000000000000002 /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				A10000000000000000000020 /* Assets.xcassets in Resources */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-/* End PBXResourcesBuildPhase section */
-
 /* Begin PBXNativeTarget section */
-		A60000000000000000000001 /* AudioPriorityBar */ = {
+		F100000000000000000000001 /* AudioPriorityBar */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = A80000000000000000000001 /* Build configuration list for PBXNativeTarget "AudioPriorityBar" */;
+			buildConfigurationList = K100000000000000000000001 /* Build configuration list for PBXNativeTarget "AudioPriorityBar" */;
 			buildPhases = (
-				A70000000000000000000001 /* Sources */,
-				A40000000000000000000001 /* Frameworks */,
-				A40000000000000000000002 /* Resources */,
+				H100000000000000000000001 /* Sources */,
+				C100000000000000000000001 /* Frameworks */,
+				E100000000000000000000001 /* Resources */,
 			);
 			buildRules = (
 			);
 			dependencies = (
 			);
 			name = AudioPriorityBar;
+			packageProductDependencies = (
+				M100000000000000000000001 /* AudioPriorityCore */,
+			);
 			productName = AudioPriorityBar;
-			productReference = A30000000000000000000001 /* AudioPriorityBar.app */;
+			productReference = B10000000000000000000006 /* AudioPriorityBar.app */;
 			productType = "com.apple.product-type.application";
+		};
+		F100000000000000000000002 /* AudioPriorityBarTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = K100000000000000000000002 /* Build configuration list for PBXNativeTarget "AudioPriorityBarTests" */;
+			buildPhases = (
+				H100000000000000000000002 /* Sources */,
+				C100000000000000000000002 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				I10000000000000000000002 /* PBXTargetDependency */,
+			);
+			name = AudioPriorityBarTests;
+			productName = AudioPriorityBarTests;
+			productReference = B10000000000000000000007 /* AudioPriorityBarTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
 		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
-		A90000000000000000000001 /* Project object */ = {
+		G100000000000000000000001 /* Project object */ = {
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
-				LastSwiftUpdateCheck = 1500;
-				LastUpgradeCheck = 1500;
+				LastSwiftUpdateCheck = 1600;
+				LastUpgradeCheck = 1600;
 				TargetAttributes = {
-					A60000000000000000000001 = {
-						CreatedOnToolsVersion = 15.0;
+					F100000000000000000000001 = {
+						CreatedOnToolsVersion = 16.0;
+					};
+					F100000000000000000000002 = {
+						CreatedOnToolsVersion = 16.0;
+						TestTargetID = F100000000000000000000001;
 					};
 				};
 			};
-			buildConfigurationList = A80000000000000000000002 /* Build configuration list for PBXProject "AudioPriorityBar" */;
+			buildConfigurationList = K100000000000000000000003 /* Build configuration list for PBXProject "AudioPriorityBar" */;
 			compatibilityVersion = "Xcode 14.0";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
@@ -160,232 +230,238 @@
 				en,
 				Base,
 			);
-			mainGroup = A50000000000000000000001 /* Root */;
-			productRefGroup = A50000000000000000000006 /* Products */;
+			mainGroup = D100000000000000000000001;
+			packageReferences = (
+				L100000000000000000000001 /* XCLocalSwiftPackageReference "AudioPriorityCore" */,
+			);
+			productRefGroup = D100000000000000000000004 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				A60000000000000000000001 /* AudioPriorityBar */,
+				F100000000000000000000001 /* AudioPriorityBar */,
+				F100000000000000000000002 /* AudioPriorityBarTests */,
 			);
 		};
 /* End PBXProject section */
 
+/* Begin PBXResourcesBuildPhase section */
+		E100000000000000000000001 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A10000000000000000000003 /* Assets.xcassets in Resources */,
+				A10000000000000000000004 /* LICENSE in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
 /* Begin PBXSourcesBuildPhase section */
-		A70000000000000000000001 /* Sources */ = {
+		H100000000000000000000001 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 				A10000000000000000000001 /* AudioPriorityBarApp.swift in Sources */,
-				A10000000000000000000002 /* AudioDevice.swift in Sources */,
-				A10000000000000000000003 /* AudioDeviceService.swift in Sources */,
-				A10000000000000000000004 /* PriorityManager.swift in Sources */,
-				A10000000000000000000005 /* MenuBarView.swift in Sources */,
-				A10000000000000000000006 /* DeviceListView.swift in Sources */,
+				A10000000000000000000002 /* StatusItemController.swift in Sources */,
+				A10000000000000000000008 /* CoreAudioListeners.swift in Sources */,
+				A10000000000000000000009 /* CoreAudioProperties.swift in Sources */,
+				A10000000000000000000010 /* CoreAudioObserver.swift in Sources */,
+				A10000000000000000000012 /* JabraHIDMonitor.swift in Sources */,
+				A10000000000000000000014 /* AppModel.swift in Sources */,
+				A10000000000000000000015 /* AppModelActions.swift in Sources */,
+				A10000000000000000000016 /* AppRuntime.swift in Sources */,
+				A10000000000000000000018 /* DeviceListView.swift in Sources */,
+				A10000000000000000000023 /* DeviceRowView.swift in Sources */,
+				A10000000000000000000025 /* DeviceDrag.swift in Sources */,
+				A10000000000000000000019 /* PanelView.swift in Sources */,
+				A10000000000000000000020 /* LaunchAtLoginController.swift in Sources */,
+				A10000000000000000000021 /* SettingsView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		H100000000000000000000002 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A10000000000000000000007 /* AppIdentityTests.swift in Sources */,
+				A10000000000000000000011 /* CoreAudioLifecycleTests.swift in Sources */,
+				A10000000000000000000017 /* AppModelTests.swift in Sources */,
+				A10000000000000000000024 /* DeviceInteractionTests.swift in Sources */,
+				A10000000000000000000026 /* SelectionBehaviorTests.swift in Sources */,
+				A10000000000000000000022 /* StatusItemRoutingTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
 
+/* Begin PBXTargetDependency section */
+		I10000000000000000000002 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = F100000000000000000000001 /* AudioPriorityBar */;
+			targetProxy = I10000000000000000000001 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
 /* Begin XCBuildConfiguration section */
-		B10000000000000000000001 /* Debug */ = {
+		J100000000000000000000001 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
-				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
-				CLANG_ANALYZER_NONNULL = YES;
-				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
-				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_ARC = YES;
-				CLANG_ENABLE_OBJC_WEAK = YES;
-				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
-				CLANG_WARN_BOOL_CONVERSION = YES;
-				CLANG_WARN_COMMA = YES;
-				CLANG_WARN_CONSTANT_CONVERSION = YES;
-				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
-				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
-				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
-				CLANG_WARN_EMPTY_BODY = YES;
-				CLANG_WARN_ENUM_CONVERSION = YES;
-				CLANG_WARN_INFINITE_RECURSION = YES;
-				CLANG_WARN_INT_CONVERSION = YES;
-				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
-				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
-				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
-				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
-				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
-				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
-				CLANG_WARN_STRICT_PROTOTYPES = YES;
-				CLANG_WARN_SUSPICIOUS_MOVE = YES;
-				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
-				CLANG_WARN_UNREACHABLE_CODE = YES;
-				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = dwarf;
-				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
-				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
-				GCC_DYNAMIC_NO_PIC = NO;
-				GCC_NO_COMMON_BLOCKS = YES;
 				GCC_OPTIMIZATION_LEVEL = 0;
-				GCC_PREPROCESSOR_DEFINITIONS = (
-					"DEBUG=1",
-					"$(inherited)",
-				);
-				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
-				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
-				GCC_WARN_UNDECLARED_SELECTOR = YES;
-				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
-				GCC_WARN_UNUSED_FUNCTION = YES;
-				GCC_WARN_UNUSED_VARIABLE = YES;
-				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-				MACOSX_DEPLOYMENT_TARGET = 13.0;
-				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
-				MTL_FAST_MATH = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = macosx;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 6.0;
 			};
 			name = Debug;
 		};
-		B10000000000000000000002 /* Release */ = {
+		J100000000000000000000002 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
-				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
-				CLANG_ANALYZER_NONNULL = YES;
-				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
-				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
 				CLANG_ENABLE_MODULES = YES;
 				CLANG_ENABLE_OBJC_ARC = YES;
-				CLANG_ENABLE_OBJC_WEAK = YES;
-				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
-				CLANG_WARN_BOOL_CONVERSION = YES;
-				CLANG_WARN_COMMA = YES;
-				CLANG_WARN_CONSTANT_CONVERSION = YES;
-				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
-				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
-				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
-				CLANG_WARN_EMPTY_BODY = YES;
-				CLANG_WARN_ENUM_CONVERSION = YES;
-				CLANG_WARN_INFINITE_RECURSION = YES;
-				CLANG_WARN_INT_CONVERSION = YES;
-				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
-				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
-				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
-				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
-				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
-				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
-				CLANG_WARN_STRICT_PROTOTYPES = YES;
-				CLANG_WARN_SUSPICIOUS_MOVE = YES;
-				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
-				CLANG_WARN_UNREACHABLE_CODE = YES;
-				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
-				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_NS_ASSERTIONS = NO;
-				ENABLE_STRICT_OBJC_MSGSEND = YES;
-				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
-				GCC_NO_COMMON_BLOCKS = YES;
-				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
-				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
-				GCC_WARN_UNDECLARED_SELECTOR = YES;
-				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
-				GCC_WARN_UNUSED_FUNCTION = YES;
-				GCC_WARN_UNUSED_VARIABLE = YES;
-				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-				MACOSX_DEPLOYMENT_TARGET = 13.0;
-				MTL_ENABLE_DEBUG_INFO = NO;
-				MTL_FAST_MATH = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				SDKROOT = macosx;
 				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_VERSION = 6.0;
 			};
 			name = Release;
 		};
-		B20000000000000000000001 /* Debug */ = {
+		J100000000000000000000003 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = "";
 				CODE_SIGN_STYLE = Automatic;
-				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = "";
-				ENABLE_HARDENED_RUNTIME = YES;
-				GENERATE_INFOPLIST_FILE = YES;
+				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = AudioPriorityBar/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "Audio Priority Bar";
-				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
-				INFOPLIST_KEY_LSUIElement = YES;
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.example.AudioPriorityBar;
+				MARKETING_VERSION = 2.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = app.audioprioritybar;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_VERSION = 5.0;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
 			};
 			name = Debug;
 		};
-		B20000000000000000000002 /* Release */ = {
+		J100000000000000000000004 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = "";
 				CODE_SIGN_STYLE = Automatic;
-				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = "";
-				ENABLE_HARDENED_RUNTIME = YES;
-				GENERATE_INFOPLIST_FILE = YES;
+				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = AudioPriorityBar/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "Audio Priority Bar";
-				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
-				INFOPLIST_KEY_LSUIElement = YES;
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.example.AudioPriorityBar;
+				MARKETING_VERSION = 2.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = app.audioprioritybar;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_VERSION = 5.0;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+		J100000000000000000000005 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = app.audioprioritybar.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/AudioPriorityBar.app/Contents/MacOS/AudioPriorityBar";
+			};
+			name = Debug;
+		};
+		J100000000000000000000006 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = app.audioprioritybar.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/AudioPriorityBar.app/Contents/MacOS/AudioPriorityBar";
 			};
 			name = Release;
 		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		A80000000000000000000001 /* Build configuration list for PBXNativeTarget "AudioPriorityBar" */ = {
+		K100000000000000000000001 /* Build configuration list for PBXNativeTarget "AudioPriorityBar" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				B20000000000000000000001 /* Debug */,
-				B20000000000000000000002 /* Release */,
+				J100000000000000000000003 /* Debug */,
+				J100000000000000000000004 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		A80000000000000000000002 /* Build configuration list for PBXProject "AudioPriorityBar" */ = {
+		K100000000000000000000002 /* Build configuration list for PBXNativeTarget "AudioPriorityBarTests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				B10000000000000000000001 /* Debug */,
-				B10000000000000000000002 /* Release */,
+				J100000000000000000000005 /* Debug */,
+				J100000000000000000000006 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		K100000000000000000000003 /* Build configuration list for PBXProject "AudioPriorityBar" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				J100000000000000000000001 /* Debug */,
+				J100000000000000000000002 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
 
+/* Begin XCLocalSwiftPackageReference section */
+		L100000000000000000000001 /* XCLocalSwiftPackageReference "AudioPriorityCore" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = AudioPriorityCore;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		M100000000000000000000001 /* AudioPriorityCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = L100000000000000000000001 /* XCLocalSwiftPackageReference "AudioPriorityCore" */;
+			productName = AudioPriorityCore;
+		};
+/* End XCSwiftPackageProductDependency section */
+
 	};
-	rootObject = A90000000000000000000001 /* Project object */;
+	rootObject = G100000000000000000000001 /* Project object */;
 }

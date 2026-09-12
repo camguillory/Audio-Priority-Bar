@@ -1,21 +1,33 @@
-#!/bin/bash
-set -e
+#!/usr/bin/env bash
+set -euo pipefail
 
-echo "Building AudioPriorityBar..."
+root="$(cd "$(dirname "$0")" && pwd)"
+derived_data="${DERIVED_DATA:-$root/.build/app}"
+app="$root/dist/AudioPriorityBar.app"
 
-xcodebuild -scheme AudioPriorityBar \
+xcodebuild \
+  -project "$root/AudioPriorityBar.xcodeproj" \
+  -scheme AudioPriorityBar \
   -configuration Release \
-  -derivedDataPath .build \
+  -derivedDataPath "$derived_data" \
   -arch arm64 -arch x86_64 \
   ONLY_ACTIVE_ARCH=NO \
-  CODE_SIGN_IDENTITY="-" \
   CODE_SIGNING_REQUIRED=NO \
   CODE_SIGNING_ALLOWED=NO \
   build
 
-mkdir -p dist
-rm -rf dist/AudioPriorityBar.app
-cp -R .build/Build/Products/Release/AudioPriorityBar.app dist/
+mkdir -p "$root/dist"
+rm -rf "$app"
+cp -R \
+  "$derived_data/Build/Products/Release/AudioPriorityBar.app" \
+  "$root/dist/"
 
-echo ""
-echo "Build complete: dist/AudioPriorityBar.app"
+while IFS= read -r -d '' file; do
+  if /usr/bin/file "$file" | /usr/bin/grep -q "Mach-O"; then
+    /usr/bin/codesign --force --sign - "$file"
+  fi
+done < <(/usr/bin/find "$app/Contents" -type f -print0)
+/usr/bin/codesign --force --sign - "$app"
+/usr/bin/codesign --verify --deep --strict --verbose=2 "$app"
+
+echo "Build complete: $app"
