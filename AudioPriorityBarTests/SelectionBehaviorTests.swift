@@ -75,6 +75,74 @@ func automaticDecisionFailsOpenForUnknownHeadphone() {
 
 @Test
 @MainActor
+func automaticSelectionWaitsWhileADongleIsStillBeingChecked() {
+    let defaults = isolatedDefaults()
+    let audio = FakeAudio()
+    let speaker = output(1, "speaker")
+    let jabra = output(2, "jabra", "Jabra Link 380")
+    audio.catalog = [speaker, jabra]
+    // The dongle lies about its link right after enumeration, so the monitor
+    // reports `.checking` until its first authoritative answer arrives.
+    var linkState: LinkState = .checking
+    let model = testModel(
+        audio: audio,
+        defaults: defaults,
+        usable: { device in
+            device.uid == jabra.uid
+                ? JabraLink.allowsSelection(isSupported: true, state: linkState)
+                : true
+        },
+        state: { $0.uid == jabra.uid ? linkState : nil }
+    )
+
+    model.start()
+
+    // Nothing is routed yet: choosing the speaker now would only be undone.
+    #expect(model.automaticOutputDecision.isDeferred)
+    #expect(model.automaticOutputDecision.target == nil)
+    #expect(audio.selections.isEmpty)
+
+    // The answer arrives: the headset really is off, so the speaker wins.
+    linkState = .down
+    model.handleDevicesChanged()
+
+    #expect(!model.automaticOutputDecision.isDeferred)
+    #expect(model.automaticOutputDecision.target == speaker)
+    #expect(audio.selections.contains { $0.1 == speaker.platformID })
+    #expect(!audio.selections.contains { $0.1 == jabra.platformID })
+}
+
+@Test
+@MainActor
+func checkingDoesNotDeferDevicesAlreadyRuledOut() {
+    let defaults = isolatedDefaults()
+    let store = PriorityStore(defaults: defaults)
+    let speaker = output(1, "speaker")
+    let jabra = output(2, "jabra", "Jabra Link 380")
+    // Excluded by the user, so its link state is irrelevant and waiting for it
+    // would stall selection for nothing.
+    store.setNeverUse(jabra, true)
+    let audio = FakeAudio()
+    audio.catalog = [speaker, jabra]
+    let model = testModel(
+        audio: audio,
+        defaults: defaults,
+        usable: { _ in true },
+        state: { $0.uid == jabra.uid ? .checking : nil }
+    )
+
+    model.start()
+
+    #expect(!model.automaticOutputDecision.isDeferred)
+    #expect(model.automaticOutputDecision.target == speaker)
+    #expect(model.automaticOutputDecision.skipped == SkippedOutput(
+        device: jabra,
+        reason: .neverAutoSelect
+    ))
+}
+
+@Test
+@MainActor
 func automaticDecisionExplainsNeverAutoSelect() {
     let defaults = isolatedDefaults()
     let store = PriorityStore(defaults: defaults)

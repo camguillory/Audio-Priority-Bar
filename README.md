@@ -26,7 +26,7 @@ highest-priority connected headphones, speakers, and microphone.
 - Per-list visibility controls, Never Auto-Select, and remembered devices
 - Optional microphone switching with a matching physical USB output
 - Settings, right-click quick actions, VoiceOver support, and Open at Login
-- Jabra Link 380 and 390 headset power-off detection
+- Jabra Link headset power-off detection, asked of the dongle rather than guessed
 
 ## Install
 
@@ -105,14 +105,29 @@ Speakers, Headphones, and Microphones remain visible in both modes.
 ### Jabra Link monitoring
 
 Jabra Link dongles remain visible to CoreAudio when their wireless headset is
-powered off. Audio Priority Bar reads the dongle's HID link state and falls
-back to the next usable device after a short debounce.
+powered off, so the app asks the dongle directly which remembered device is
+connected and falls back to the next usable output when nothing is.
 
-Link 380 behavior is locally hardware-verified. Link 390 support uses the
-hardware measurements from
-[tobi/AudioPriorityBar#32](https://github.com/tobi/AudioPriorityBar/pull/32);
-it has not been locally verified for this release. If monitoring is unreadable
-or cannot start, the app fails open and leaves the device selectable.
+The dongle's simple HID link bit is not sufficient on its own. Roughly 1.8
+seconds after USB enumeration the dongle asserts that a headset is linked,
+identically whether one is powered on or off, and never corrects it. That is
+why the app queries the dongle's vendor management channel instead, and keeps
+the link bit only as a fallback and as a hint that something changed.
+
+A dongle is used this way whenever its HID descriptor exposes the management
+collection and it answers the query, rather than because its model appears in a
+list. Only a complete answer is trusted: a timeout, a malformed record or a
+partial scan leaves the state unknown and the device selectable, so an
+unrecognised dongle degrades instead of misbehaving. Link 380 is locally
+hardware-verified, including USB replug and cold start with the headset off.
+Link 390 is expected to work through the same capability check but has not been
+verified on hardware; it retains the fallback measurements from
+[tobi/AudioPriorityBar#32](https://github.com/tobi/AudioPriorityBar/pull/32).
+
+Right after replugging a dongle while the headset is on, the app briefly
+reports the headset as off. That is accurate: the wireless link takes a couple
+of seconds to re-establish, and until it does audio sent there would not be
+heard.
 
 macOS may request **Input Monitoring** permission. Open at Login may separately
 require approval in **System Settings > General > Login Items**.
@@ -146,5 +161,8 @@ before you spend time on it.
 ## Acknowledgments
 
 Originally created by [tobi](https://github.com/tobi).
+
+The Jabra GNP framing and pairing-record query are based on
+[jabridge](https://github.com/Watchdog0x/jabridge) by Watchdog0x (Apache-2.0).
 
 Built with SwiftUI, AppKit, CoreAudio, and IOKit.

@@ -15,6 +15,9 @@ public enum LinkState: Equatable, Sendable {
     case down
     case unknown
     case monitoringUnavailable
+    /// The dongle is being asked and has not answered yet. Bounded by the
+    /// query timeout, so it never persists.
+    case checking
 }
 
 public struct AudioDevice: Identifiable, Equatable, Hashable, Sendable {

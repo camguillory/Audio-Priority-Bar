@@ -22,8 +22,8 @@ final class AppRuntime {
                 isMuted: { CoreAudioProperties.isMuted($1, role: $0) }
             ),
             link: LinkOperations(
-                isUsable: { $0.isConnected && jabra.isUsable($0.name) },
-                state: { jabra.monitoredState(for: $0.name) }
+                isUsable: { $0.isConnected && jabra.isUsable($0) },
+                state: { jabra.monitoredState(for: $0) }
             )
         )
 
@@ -50,8 +50,10 @@ final class AppRuntime {
     }
 
     func stop() {
-        model.stop()
-        audioObserver.stopListening()
+        // Producers first: once they are down, no callback, timeout or debounce
+        // can reach the model and restart work it just tore down.
         jabra.stop()
+        audioObserver.stopListening()
+        model.stop()
     }
 }

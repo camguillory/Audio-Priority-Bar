@@ -43,15 +43,6 @@ func link390ReportDecodingIgnoresUnrelatedOrShortReports() {
 }
 
 @Test
-func aggregatePrefersUpAndRequiresEverySignalForDown() {
-    #expect(JabraLink.aggregate([]) == .monitoringUnavailable)
-    #expect(JabraLink.aggregate([nil]) == .monitoringUnavailable)
-    #expect(JabraLink.aggregate([false]) == .down)
-    #expect(JabraLink.aggregate([false, nil]) == .unknown)
-    #expect(JabraLink.aggregate([false, true]) == .up)
-}
-
-@Test
 func automaticSelectionFailsOpenUnlessLinkIsConfirmedDown() {
     #expect(JabraLink.allowsSelection(isSupported: false, state: .unknown))
     #expect(JabraLink.allowsSelection(
@@ -61,6 +52,28 @@ func automaticSelectionFailsOpenUnlessLinkIsConfirmedDown() {
     #expect(JabraLink.allowsSelection(isSupported: true, state: .unknown))
     #expect(!JabraLink.allowsSelection(isSupported: true, state: .down))
     #expect(JabraLink.allowsSelection(isSupported: true, state: .up))
+    // A pending authoritative answer is not permission to route audio.
+    #expect(!JabraLink.allowsSelection(isSupported: true, state: .checking))
+    #expect(JabraLink.allowsSelection(isSupported: false, state: .checking))
+}
+
+@Test
+func onlyLinkDonglesAreLinkMonitored() {
+    // A dongle publishes its audio device whether or not a headset is on, so
+    // it needs monitoring.
+    #expect(JabraLink.isDongleProduct("Jabra Link 380"))
+    #expect(JabraLink.isDongleProduct("JABRA LINK 390"))
+    #expect(JabraLink.isDongleProduct("Jabra Link 370"))
+    #expect(JabraLink.isDongleProduct("USB Jabra Link 400"))
+
+    // These are present whenever macOS lists them. Monitoring them would let
+    // an empty pairing list mark a working device as off, which is the
+    // regression risk for the speakerphone in tobi/AudioPriorityBar#39.
+    #expect(!JabraLink.isDongleProduct("Jabra Speak2 75"))
+    #expect(!JabraLink.isDongleProduct("Jabra Speak 750"))
+    #expect(!JabraLink.isDongleProduct("Jabra Evolve2 85"))
+    #expect(!JabraLink.isDongleProduct("Jabra Elite 8 Active"))
+    #expect(!JabraLink.isDongleProduct("MacBook Pro Speakers"))
 }
 
 @Test

@@ -411,6 +411,52 @@ func unlinkedHeadsetIsSkippedDuringAutomaticSelection() {
 
     #expect(audio.selections.last?.1 == fallback.platformID)
     #expect(model.linkState(for: unlinked) == .down)
+    // The menu bar warning follows the active output only, so a powered-off
+    // device we already switched away from must not raise it.
+    #expect(!model.isActiveOutputLinkDown)
+}
+
+@Test
+@MainActor
+func menuBarWarningTracksOnlyTheActiveOutputBeingUnplayable() {
+    let defaults = isolatedDefaults()
+
+    // Manual mode parks the user on a headset that is powered off, which is
+    // the case automatic switching cannot rescue them from.
+    let audio = FakeAudio()
+    let jabra = output(1, "jabra", "Jabra Link 380")
+    audio.catalog = [jabra]
+    let stranded = testModel(
+        audio: audio,
+        defaults: defaults,
+        usable: { _ in true },
+        state: { $0.uid == "jabra" ? .down : nil }
+    )
+    stranded.start()
+    #expect(stranded.currentOutputID == jabra.platformID)
+    #expect(stranded.isActiveOutputLinkDown)
+
+    // Every other link state leaves the warning off, including the transient
+    // checking window and the two states that mean "not known".
+    for state in [LinkState.up, .checking, .unknown, .monitoringUnavailable] {
+        let audio = FakeAudio()
+        audio.catalog = [jabra]
+        let model = testModel(
+            audio: audio,
+            defaults: defaults,
+            usable: { _ in true },
+            state: { _ in state }
+        )
+        model.start()
+        #expect(!model.isActiveOutputLinkDown)
+    }
+
+    // No selected output at all.
+    let empty = FakeAudio()
+    let idle = testModel(audio: empty, defaults: defaults)
+    idle.start()
+    #expect(idle.currentOutputDevice == nil)
+    #expect(!idle.isActiveOutputLinkDown)
 }
 
 @Test

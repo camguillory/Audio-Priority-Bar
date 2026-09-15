@@ -52,6 +52,32 @@ public enum JabraLink {
         }
     }
 
+    /// Only a Link dongle can publish an audio device whose headset is absent.
+    /// A Jabra headset or speakerphone plugged in directly is present whenever
+    /// macOS lists it, yet it may expose the same management collection, so
+    /// monitoring one would let an empty pairing list report it as off.
+    public static func isDongleProduct(_ name: String) -> Bool {
+        name.range(of: dongleFamily, options: .caseInsensitive) != nil
+    }
+
+    private static let dongleFamily = "Jabra Link"
+
+    /// USB serial embedded in a CoreAudio device UID, used to bind an audio
+    /// device to one physical dongle instead of to every dongle of its model.
+    /// Example UID:
+    /// `AppleUSBAudioEngine:Unknown Manufacturer:Jabra Link 380:50C275445423:1`
+    public static func serial(fromAudioUID uid: String) -> String? {
+        guard uid.hasPrefix("AppleUSBAudioEngine:") else { return nil }
+        let parts = uid.split(separator: ":", omittingEmptySubsequences: false)
+        guard parts.count >= 5 else { return nil }
+        let serial = String(parts[parts.count - 2])
+        return serial.isEmpty ? nil : serial
+    }
+
+    public static func serialsMatch(_ left: String, _ right: String) -> Bool {
+        left.compare(right, options: .caseInsensitive) == .orderedSame
+    }
+
     public static func decodeElement(
         value: Int,
         linkedValue: Int
@@ -81,18 +107,16 @@ public enum JabraLink {
         return bytes[byteIndex] & bitMask != 0
     }
 
-    public static func aggregate(_ states: [Bool?]) -> LinkState {
-        if states.contains(where: { $0 == true }) { return .up }
-        if states.allSatisfy({ $0 == nil }) { return .monitoringUnavailable }
-        if states.contains(where: { $0 == nil }) { return .unknown }
-        return .down
-    }
-
     public static func allowsSelection(
         isSupported: Bool,
         state: LinkState
     ) -> Bool {
-        !isSupported || state != .down
+        guard isSupported else { return true }
+        // Unknown still fails open, because monitoring may be unavailable for
+        // perfectly good devices. `.checking` is different: an authoritative
+        // answer is milliseconds away, so acting now risks routing audio to a
+        // headset that is switched off.
+        return state != .down && state != .checking
     }
 }
 

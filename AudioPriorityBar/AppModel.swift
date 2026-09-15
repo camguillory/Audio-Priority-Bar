@@ -32,6 +32,8 @@ struct SkippedOutput: Equatable {
 struct AutomaticOutputDecision {
     let target: AudioDevice?
     let skipped: SkippedOutput?
+    /// A candidate is still being checked, so no choice should be applied yet.
+    var isDeferred = false
 }
 
 @MainActor
@@ -284,6 +286,14 @@ final class AppModel {
         return allOutputs.first { $0.platformID == currentOutputID }
     }
 
+    /// Audio is routed to a device we know cannot play it. Automatic switching
+    /// moves away on its own, so this only persists in manual mode or when
+    /// there is nothing better to fall back to.
+    var isActiveOutputLinkDown: Bool {
+        guard let output = currentOutputDevice else { return false }
+        return linkState(for: output) == .down
+    }
+
     var automaticOutputDecision: AutomaticOutputDecision {
         guard !isManualMode else {
             return AutomaticOutputDecision(target: nil, skipped: nil)
@@ -299,6 +309,15 @@ final class AppModel {
                     reason: .neverAutoSelect
                 )
                 continue
+            }
+            // Waiting a moment beats routing audio to this device and then
+            // immediately moving away from it once the answer arrives.
+            if link.state(device) == .checking {
+                return AutomaticOutputDecision(
+                    target: nil,
+                    skipped: skipped,
+                    isDeferred: true
+                )
             }
             if !link.isUsable(device) {
                 skipped = skipped ?? SkippedOutput(
@@ -334,6 +353,9 @@ final class AppModel {
     }
 
     private func applyHighestPriority(_ role: DeviceRole) {
+        // Deferral covers both roles: picking a microphone now could pair it
+        // with an output we are about to change.
+        guard !automaticOutputDecision.isDeferred else { return }
         if let first = automaticTarget(for: role) {
             select(first, automatically: true)
         }

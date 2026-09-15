@@ -5,6 +5,8 @@ import SwiftUI
 struct DeviceRow: View {
     private struct Status {
         let icon: String, text: String
+        /// Carried with the value so restyling never depends on matching copy.
+        var tint: Color = .secondary
     }
 
     @Bindable var model: AppModel
@@ -30,7 +32,8 @@ struct DeviceRow: View {
         if isSelected && isUnavailable {
             result.append(Status(
                 icon: "exclamationmark.circle",
-                text: "Current"
+                text: "Current",
+                tint: .orange
             ))
         }
         if !device.isConnected {
@@ -44,15 +47,27 @@ struct DeviceRow: View {
                     .compactMap { $0 }.joined(separator: " · ")
             ))
         }
+        // The antenna-slash glyph means a proven verdict, so it belongs to
+        // `.down` alone: that state dims the row and blocks selection, while
+        // the states below leave the device selectable. `.checking` shows
+        // nothing at all because it settles in tens of milliseconds and would
+        // only flicker; automatic selection still waits for it internally.
         if linkState == .down {
             result.append(Status(
                 icon: "antenna.radiowaves.left.and.right.slash",
-                text: "Headset off"
+                text: "Headset off",
+                tint: .orange
             ))
         } else if linkState == .unknown {
-            result.append(Status(icon: "questionmark.circle", text: "Link unknown"))
+            result.append(Status(
+                icon: "questionmark.circle",
+                text: "Link unknown"
+            ))
         } else if linkState == .monitoringUnavailable {
-            result.append(Status(icon: "antenna.radiowaves.left.and.right.slash", text: "Link unavailable"))
+            result.append(Status(
+                icon: "questionmark.circle",
+                text: "Link status unavailable"
+            ))
         }
         if isIgnored {
             result.append(Status(icon: "eye.slash", text: "Excluded"))
@@ -63,7 +78,8 @@ struct DeviceRow: View {
         if model.isMuted(device) {
             result.append(Status(
                 icon: device.role == .input ? "mic.slash.fill" : "speaker.slash.fill",
-                text: "Muted"
+                text: "Muted",
+                tint: .red
             ))
         }
         return result
@@ -100,7 +116,7 @@ struct DeviceRow: View {
                         ForEach(statuses, id: \.text) { status in
                             Label(status.text, systemImage: status.icon)
                                 .font(.caption)
-                                .foregroundStyle(statusColor(status))
+                                .foregroundStyle(status.tint)
                         }
                     }
                     .lineLimit(1)
@@ -180,12 +196,6 @@ struct DeviceRow: View {
         if isSelected && isUnavailable { return Color.orange.opacity(0.12) }
         if isSelected { return Color.accentColor.opacity(0.14) }
         return isHovering ? Color.primary.opacity(0.06) : .clear
-    }
-
-    private func statusColor(_ status: Status) -> Color {
-        if status.text == "Muted" { return .red }
-        if status.text == "Current" { return .orange }
-        return .secondary
     }
 
     private var actions: some View {

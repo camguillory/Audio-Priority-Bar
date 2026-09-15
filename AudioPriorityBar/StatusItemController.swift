@@ -143,6 +143,9 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         labelView.layoutSubtreeIfNeeded()
         statusItem.length = ceil(labelView.fittingSize.width) + 8
         statusItem.button?.setAccessibilityValue(statusDescription)
+        // Sighted users get the same wording on hover, so the warning glyph
+        // does not have to carry the explanation by itself.
+        statusItem.button?.toolTip = statusDescription
         if panel.isVisible, let button = statusItem.button {
             positionPanel(relativeTo: button)
         }
@@ -266,6 +269,7 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         if let category = model.activeOutputCategory {
             values.append(category == .speaker ? "speakers" : "headphones")
         }
+        if model.isActiveOutputLinkDown { values.append("headset off") }
         if model.isActiveOutputMuted { values.append("output muted") }
         if model.isActiveInputMuted { values.append("microphone muted") }
         if model.isVolumeControllable {
@@ -301,6 +305,14 @@ private struct StatusLabel: View {
                 }
             }
             .frame(width: 24)
+
+            // Beside the audio glyph rather than replacing it: that glyph
+            // still identifies the app and the active category, while this
+            // one flags the exceptional state. Monochrome like the rest, since
+            // colored menu bar icons fight light and dark contrast.
+            if model.isActiveOutputLinkDown {
+                Image(systemName: "exclamationmark.triangle.fill")
+            }
         }
         .accessibilityHidden(true)
     }
