@@ -24,6 +24,9 @@ highest-priority connected headphones, speakers, and microphone.
 - Volume control by slider or scroll wheel, with mute and availability status
 - Drag ordering within lists and between output lists, with forbidden-drop feedback
 - Per-list visibility controls, Never Auto-Select, and remembered devices
+- Output categories taken from what each device reports, in any system language
+- New HDMI and DisplayPort outputs start excluded, since a screen rarely is
+  where you want sound
 - Optional microphone switching with a matching physical USB output
 - Settings, right-click quick actions, VoiceOver support, and Open at Login
 - Jabra Link headset power-off detection, asked of the dongle rather than guessed
@@ -102,6 +105,12 @@ Speakers, Headphones, and Microphones remain visible in both modes.
 - Use **Show all** to manage excluded and disconnected remembered devices.
 - Forget a disconnected device to remove its saved settings.
 
+A monitor or TV connected over HDMI or DisplayPort is excluded the first time
+it is seen. Including one from **Show all** is permanent, and the
+**Hide new HDMI and DisplayPort outputs** setting turns the behaviour off for
+devices seen later. Whatever is currently playing always stays listed, even
+when excluded, so you can see where the sound is going.
+
 ### Jabra Link monitoring
 
 Jabra Link dongles remain visible to CoreAudio when their wireless headset is
@@ -113,6 +122,11 @@ seconds after USB enumeration the dongle asserts that a headset is linked,
 identically whether one is powered on or off, and never corrects it. That is
 why the app queries the dongle's vendor management channel instead, and keeps
 the link bit only as a fallback and as a hint that something changed.
+
+Transitions are not polled. The dongle announces a headset connecting or
+disconnecting about 100ms after it happens, and that announcement triggers a
+fresh query, so powering a headset off is reflected in well under a second. A
+periodic refresh stays in place only for an announcement that never arrives.
 
 A dongle is used this way whenever its HID descriptor exposes the management
 collection and it answers the query, rather than because its model appears in a
