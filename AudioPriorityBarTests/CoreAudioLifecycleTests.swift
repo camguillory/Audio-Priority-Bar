@@ -72,6 +72,23 @@ func streamsMustAgreeBeforeTheyCountAsEvidence() {
 }
 
 @Test
+func onlyVideoCableTransportsCountAsDisplayOutputs() {
+    // Both attached Dell panels report HDMI, including the one behind a
+    // USB-C hub, so the hub does not need its own case.
+    #expect(CoreAudioProperties.isDisplayTransport(0x68646D69)) // 'hdmi'
+    #expect(CoreAudioProperties.isDisplayTransport(0x64707274)) // 'dprt'
+
+    #expect(!CoreAudioProperties.isDisplayTransport(0x626C746E)) // 'bltn'
+    #expect(!CoreAudioProperties.isDisplayTransport(0x75736220)) // 'usb '
+    #expect(!CoreAudioProperties.isDisplayTransport(0x626C7565)) // 'blue'
+    #expect(!CoreAudioProperties.isDisplayTransport(0x76697274)) // 'virt'
+    #expect(!CoreAudioProperties.isDisplayTransport(0x67727570)) // 'grup'
+    // Thunderbolt carries a dock rather than a panel, so it is left out.
+    #expect(!CoreAudioProperties.isDisplayTransport(0x7468756E)) // 'thun'
+    #expect(!CoreAudioProperties.isDisplayTransport(0))
+}
+
+@Test
 @MainActor
 func listenerStartRollsBackPartialRegistration() {
     let log = ListenerLog()

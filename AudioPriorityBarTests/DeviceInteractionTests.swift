@@ -391,6 +391,92 @@ func changingCategoryKeepsAnExcludedDeviceVisible() {
 }
 
 @Test
+func settingsFollowTheScreenBeingUsedWithoutNudgingTheWindow() {
+    let left = NSRect(x: 0, y: 0, width: 1_920, height: 1_080)
+    let right = NSRect(x: 1_920, y: 0, width: 1_440, height: 900)
+    // Menu bar and Dock removed, so centering must use the visible area.
+    let rightVisible = NSRect(x: 1_920, y: 80, width: 1_440, height: 780)
+    let window = NSRect(x: 100, y: 200, width: 420, height: 480)
+
+    // Left behind on the other screen, so it comes to this one, centered.
+    let moved = SettingsPlacement.origin(
+        forWindow: window,
+        screenFrame: right,
+        visibleFrame: rightVisible
+    )
+    #expect(moved == NSPoint(x: 1_920 + 720 - 210, y: 80 + 390 - 240))
+
+    // Already here, so wherever the user dragged it is respected.
+    #expect(SettingsPlacement.origin(
+        forWindow: window,
+        screenFrame: left,
+        visibleFrame: left
+    ) == nil)
+
+    // Straddling two screens counts as being on the one holding its centre.
+    let straddling = NSRect(x: 1_800, y: 200, width: 420, height: 480)
+    #expect(SettingsPlacement.origin(
+        forWindow: straddling,
+        screenFrame: right,
+        visibleFrame: rightVisible
+    ) == nil)
+}
+
+@Test
+@MainActor
+func aNewDisplayOutputArrivesExcluded() {
+    let defaults = isolatedDefaults()
+    let store = PriorityStore(defaults: defaults)
+    store.isManualMode = true
+    let speaker = output(1, "speaker")
+    let dell = AudioDevice(
+        platformID: 2,
+        uid: "dell",
+        name: "DELL U2518D",
+        role: .output,
+        isDisplayOutput: true
+    )
+    let audio = FakeAudio()
+    audio.catalog = [speaker, dell]
+    audio.defaults[.output] = speaker.platformID
+    let model = testModel(audio: audio, defaults: defaults)
+
+    model.start()
+
+    // The exclusion is applied while remembering, which happens inside the
+    // same refresh that splits the lists, so one pass has to be enough.
+    #expect(model.speakerDevices == [speaker])
+    #expect(model.hiddenSpeakerDevices == [dell])
+}
+
+@Test
+@MainActor
+func theActiveOutputStaysListedEvenWhenExcluded() {
+    let defaults = isolatedDefaults()
+    let store = PriorityStore(defaults: defaults)
+    store.isManualMode = true
+    let dell = AudioDevice(
+        platformID: 1,
+        uid: "dell",
+        name: "DELL U2518D",
+        role: .output,
+        isDisplayOutput: true
+    )
+    let audio = FakeAudio()
+    audio.catalog = [dell]
+    audio.defaults[.output] = dell.platformID
+    let model = testModel(audio: audio, defaults: defaults)
+
+    model.start()
+
+    // Excluded, but still shown, because hiding the row would leave no way to
+    // see where the sound is going.
+    #expect(model.isIgnored(dell, category: .speaker))
+    #expect(model.speakerDevices == [dell])
+    #expect(model.hiddenSpeakerDevices.isEmpty)
+}
+
+@Test
 @MainActor
 func dropRejectsDevicesFromAnotherRole() {
     let defaults = isolatedDefaults()

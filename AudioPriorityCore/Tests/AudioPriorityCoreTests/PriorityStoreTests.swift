@@ -339,6 +339,100 @@ func microphoneLinkingDefaultsOnAndPersistsOff() throws {
     }
 }
 
+private func monitor(
+    _ uid: String = "dell",
+    _ name: String = "DELL U2518D"
+) -> AudioDevice {
+    AudioDevice(
+        platformID: 1,
+        uid: uid,
+        name: name,
+        role: .output,
+        isDisplayOutput: true
+    )
+}
+
+@Test
+func displayOutputsAreExcludedOnceAndIncludingOneSticks() throws {
+    try withDefaults { defaults in
+        let store = PriorityStore(defaults: defaults)
+        let dell = monitor()
+        store.remember([dell])
+        #expect(store.isHidden(dell, in: .speaker))
+
+        // A monitor keyword-classifies as a speaker, so nothing should have
+        // touched the headphone list.
+        #expect(!store.isHidden(dell, in: .headphone))
+
+        store.unhide(dell, from: .speaker)
+        store.remember([dell])
+
+        // Deciding once is the whole point: a later sighting must not undo
+        // the user including it by hand.
+        #expect(!store.isHidden(dell, in: .speaker))
+    }
+}
+
+@Test
+func displayDefaultAppliesToNewDevicesRatherThanRetroactively() throws {
+    try withDefaults { defaults in
+        let store = PriorityStore(defaults: defaults)
+        store.hideNewDisplayOutputs = false
+        let seen = monitor()
+        store.remember([seen])
+        #expect(!store.isHidden(seen, in: .speaker))
+
+        store.hideNewDisplayOutputs = true
+        store.remember([seen])
+        // Already dealt with, so enabling the preference leaves it alone.
+        #expect(!store.isHidden(seen, in: .speaker))
+
+        let arrived = monitor("dell2", "DELL U2720Q")
+        store.remember([arrived])
+        #expect(store.isHidden(arrived, in: .speaker))
+    }
+}
+
+@Test
+func displayDefaultLeavesOtherOutputsAndMicrophonesAlone() throws {
+    try withDefaults { defaults in
+        let store = PriorityStore(defaults: defaults)
+        let speaker = device("speakers", name: "Haut-parleurs MacBook Pro")
+        let mic = device("mic", role: .input)
+        store.remember([speaker, mic])
+
+        #expect(!store.isHidden(speaker, in: .speaker))
+        #expect(!store.isHidden(mic))
+    }
+}
+
+@Test
+func displayPreferenceDefaultsOnAndPersistsOff() throws {
+    try withDefaults { defaults in
+        let store = PriorityStore(defaults: defaults)
+        #expect(store.hideNewDisplayOutputs)
+
+        store.hideNewDisplayOutputs = false
+
+        #expect(!PriorityStore(defaults: defaults).hideNewDisplayOutputs)
+    }
+}
+
+@Test
+func forgettingADisplayLetsItBeTreatedAsNewAgain() throws {
+    try withDefaults { defaults in
+        let store = PriorityStore(defaults: defaults)
+        let dell = monitor()
+        store.remember([dell])
+        store.unhide(dell, from: .speaker)
+
+        store.forget(uid: dell.uid, role: .output)
+        store.remember([dell])
+
+        #expect(store.isHidden(dell, in: .speaker))
+    }
+}
+
 @Test
 func forgettingOneRolePreservesTheOther() throws {
     try withDefaults { defaults in

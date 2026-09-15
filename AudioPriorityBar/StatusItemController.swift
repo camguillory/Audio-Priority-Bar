@@ -92,7 +92,7 @@ final class StatusItemController: NSObject, NSWindowDelegate {
                 model: model,
                 showSettings: { [weak self] in
                     self?.hidePanel()
-                    self?.settings.showSettings()
+                    self?.showSettings()
                 }
             )
         )
@@ -201,7 +201,9 @@ final class StatusItemController: NSObject, NSWindowDelegate {
     }
 
     @objc private func showSettings() {
-        settings.showSettings()
+        // The status item lives in the menu bar of the screen being used, which
+        // is the same screen the panel is positioned against.
+        settings.showSettings(on: statusItem.button?.window?.screen)
     }
 
     private func hidePanel(suppressNextClick: Bool = false) {

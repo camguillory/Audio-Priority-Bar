@@ -51,6 +51,7 @@ final class AppModel {
     var showAll = false
     var isManualMode: Bool
     var linksMicrophone: Bool
+    var hideNewDisplayOutputs: Bool
     var isActiveOutputMuted = false
     var isActiveInputMuted = false
     var micFlashState = false
@@ -83,6 +84,7 @@ final class AppModel {
         self.reduceMotion = reduceMotion
         isManualMode = store.isManualMode
         linksMicrophone = store.linksMicrophone
+        hideNewDisplayOutputs = store.hideNewDisplayOutputs
     }
 
     func start() {
@@ -199,6 +201,10 @@ final class AppModel {
                 }, uniquingKeysWith: { first, _ in first })
             }
         store.remember(connected)
+        // Read before the lists are split, because splitting keeps whatever is
+        // playing visible even when it is excluded.
+        currentInputID = audio.defaultDevice(.input)
+        currentOutputID = audio.defaultDevice(.output)
 
         var inputs = connected.filter { $0.role == .input }
         var outputs = connected.filter { $0.role == .output }
@@ -221,8 +227,6 @@ final class AppModel {
         )
         (speakerDevices, hiddenSpeakerDevices) = split(outputs, .speaker)
         (headphoneDevices, hiddenHeadphoneDevices) = split(outputs, .headphone)
-        currentInputID = audio.defaultDevice(.input)
-        currentOutputID = audio.defaultDevice(.output)
     }
 
     /// Splits one output category into the list the panel shows and the list it
@@ -232,12 +236,16 @@ final class AppModel {
         _ category: OutputCategory
     ) -> (visible: [AudioDevice], hidden: [AudioDevice]) {
         let members = outputs.filter { store.category(for: $0) == category }
+        // Hiding whatever is currently playing would leave no way to see where
+        // the sound is going, so it stays listed and shows as excluded.
+        func isVisible(_ device: AudioDevice) -> Bool {
+            showAll
+                || !store.isHidden(device, in: category)
+                || (device.isConnected && device.platformID == currentOutputID)
+        }
         return (
-            store.sorted(
-                members.filter { showAll || !store.isHidden($0, in: category) },
-                category: category
-            ),
-            members.filter { !showAll && store.isHidden($0, in: category) }
+            store.sorted(members.filter(isVisible), category: category),
+            members.filter { !isVisible($0) }
         )
     }
 

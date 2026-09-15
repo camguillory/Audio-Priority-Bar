@@ -136,17 +136,19 @@ enum CoreAudioProperties {
               ) else {
             return nil
         }
+        let transport = transport(id)
         return AudioDevice(
             platformID: id,
             uid: uid,
             name: name,
             role: role,
-            isVirtual: isVirtual(id),
+            isVirtual: isVirtualTransport(transport),
             // Input terminals describe a microphone, which says nothing about
             // where output should go.
             declaredCategory: role == .output
                 ? declaredCategory(streams: streams)
-                : nil
+                : nil,
+            isDisplayOutput: role == .output && Self.isDisplayTransport(transport)
         )
     }
 
@@ -212,20 +214,32 @@ enum CoreAudioProperties {
         }
     }
 
-    /// CoreAudio reports software devices as virtual or aggregate transports,
-    /// which separates Krisp and Multi-Output from real hardware without
-    /// matching on names.
-    private static func isVirtual(_ id: AudioObjectID) -> Bool {
+    private static func transport(_ id: AudioObjectID) -> UInt32 {
         var transport = UInt32(0)
         guard read(
             id,
             selector: kAudioDevicePropertyTransportType,
             into: &transport
         ) == noErr else {
-            return false
+            return kAudioDeviceTransportTypeUnknown
         }
-        return transport == kAudioDeviceTransportTypeVirtual
+        return transport
+    }
+
+    /// CoreAudio reports software devices as virtual or aggregate transports,
+    /// which separates Krisp and Multi-Output from real hardware without
+    /// matching on names.
+    private static func isVirtualTransport(_ transport: UInt32) -> Bool {
+        transport == kAudioDeviceTransportTypeVirtual
             || transport == kAudioDeviceTransportTypeAggregate
+    }
+
+    /// Sound reaching a monitor or TV over the video cable. The transport says
+    /// so outright, which a product name cannot: both of the attached Dell
+    /// panels report HDMI, including the one behind a USB-C hub.
+    static func isDisplayTransport(_ transport: UInt32) -> Bool {
+        transport == kAudioDeviceTransportTypeHDMI
+            || transport == kAudioDeviceTransportTypeDisplayPort
     }
 
     private static func streams(

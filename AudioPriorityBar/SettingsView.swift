@@ -16,20 +16,14 @@ struct SettingsView: View {
             Text("Startup")
                 .font(.headline)
 
-            Toggle(
+            SettingSwitch(
+                title: "Open at Login",
+                explanation: "Open Audio Priority Bar automatically when you log in.",
                 isOn: Binding(
                     get: { launchAtLogin.isEnabled },
                     set: { launchAtLogin.setEnabled($0) }
                 )
-            ) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Open at Login")
-                    Text("Open Audio Priority Bar automatically when you log in.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .toggleStyle(.switch)
+            )
 
             if launchAtLogin.requiresApproval {
                 Text("Approval required in System Settings → General → Login Items.")
@@ -47,20 +41,26 @@ struct SettingsView: View {
             Text("Devices")
                 .font(.headline)
 
-            Toggle(
+            SettingSwitch(
+                title: "Move microphone with output",
+                explanation: "When an output has its own microphone, switch both together.",
                 isOn: Binding(
                     get: { model.linksMicrophone },
                     set: { model.setLinksMicrophone($0) }
                 )
-            ) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Move microphone with output")
-                    Text("When an output has its own microphone, switch both together.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .toggleStyle(.switch)
+            )
+
+            SettingSwitch(
+                title: "Hide new HDMI and DisplayPort outputs",
+                explanation: """
+                    A monitor or TV plays sound but is rarely where you want it. \
+                    Newly detected ones start excluded. Use Show all to include one.
+                    """,
+                isOn: Binding(
+                    get: { model.hideNewDisplayOutputs },
+                    set: { model.setHideNewDisplayOutputs($0) }
+                )
+            )
 
             Divider()
 
@@ -84,8 +84,55 @@ struct SettingsView: View {
             Button("Quit Audio Priority Bar") { NSApp.terminate(nil) }
         }
         .padding(20)
-        .frame(width: 380)
+        .frame(minWidth: 380, idealWidth: 420)
         .onAppear { launchAtLogin.refresh() }
+    }
+}
+
+/// A switch whose explanation wraps instead of being squeezed into whatever
+/// room is left beside the control, which truncated the longer descriptions.
+private struct SettingSwitch: View {
+    let title: String
+    let explanation: String
+    @Binding var isOn: Bool
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                Text(explanation)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            // The switch carries both strings, so reading them again here
+            // would announce everything twice.
+            .accessibilityHidden(true)
+
+            Toggle(title, isOn: $isOn)
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .accessibilityHint(explanation)
+        }
+    }
+}
+
+enum SettingsPlacement {
+    /// Where to move a window so it lands centered on a screen, or nil when it
+    /// is already on that screen and whatever the user did with it should be
+    /// left alone.
+    static func origin(
+        forWindow frame: NSRect,
+        screenFrame: NSRect,
+        visibleFrame: NSRect
+    ) -> NSPoint? {
+        let center = NSPoint(x: frame.midX, y: frame.midY)
+        guard !screenFrame.contains(center) else { return nil }
+        return NSPoint(
+            x: visibleFrame.midX - frame.width / 2,
+            y: visibleFrame.midY - frame.height / 2
+        )
     }
 }
 
@@ -94,17 +141,21 @@ final class SettingsWindowController: NSWindowController {
     init(model: AppModel, launchAtLogin: LaunchAtLoginController) {
         let window = NSWindow(
             contentRect: .zero,
-            styleMask: [.titled, .closable],
+            styleMask: [.titled, .closable, .resizable],
             backing: .buffered,
             defer: false
         )
         window.title = "\(appDisplayName) Settings"
-        window.contentViewController = NSHostingController(
+        let hostingController = NSHostingController(
             rootView: SettingsView(
                 model: model,
                 launchAtLogin: launchAtLogin
             )
         )
+        // Gives the window its real size before it is ever placed, so the
+        // first open on another screen is centered on the actual height.
+        hostingController.sizingOptions = [.preferredContentSize]
+        window.contentViewController = hostingController
         window.isReleasedWhenClosed = false
         window.center()
         super.init(window: window)
@@ -115,8 +166,19 @@ final class SettingsWindowController: NSWindowController {
         fatalError()
     }
 
-    func showSettings() {
+    /// Opens on the screen whose menu bar was used, rather than reappearing
+    /// wherever it was last left, which on a multi-screen desk is usually the
+    /// wrong one.
+    func showSettings(on screen: NSScreen? = nil) {
         NSApp.activate(ignoringOtherApps: true)
+        if let window, let screen = screen ?? NSScreen.main,
+           let origin = SettingsPlacement.origin(
+               forWindow: window.frame,
+               screenFrame: screen.frame,
+               visibleFrame: screen.visibleFrame
+           ) {
+            window.setFrameOrigin(origin)
+        }
         showWindow(nil)
     }
 }

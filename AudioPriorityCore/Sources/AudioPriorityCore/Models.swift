@@ -32,6 +32,8 @@ public struct AudioDevice: Identifiable, Equatable, Hashable, Sendable {
     /// What the device says it is, from its audio terminal type. `nil` when it
     /// declares nothing usable, as aggregate and HDMI devices do.
     public var declaredCategory: OutputCategory?
+    /// A monitor or TV reached over a video cable, from its transport type.
+    public var isDisplayOutput = false
 
     public var id: String { roleIdentifier }
     public var roleIdentifier: String { "\(role.rawValue):\(uid)" }
@@ -57,7 +59,8 @@ public struct AudioDevice: Identifiable, Equatable, Hashable, Sendable {
         role: DeviceRole,
         isConnected: Bool = true,
         isVirtual: Bool = false,
-        declaredCategory: OutputCategory? = nil
+        declaredCategory: OutputCategory? = nil,
+        isDisplayOutput: Bool = false
     ) {
         self.platformID = platformID
         self.uid = uid
@@ -66,6 +69,7 @@ public struct AudioDevice: Identifiable, Equatable, Hashable, Sendable {
         self.isConnected = isConnected
         self.isVirtual = isVirtual
         self.declaredCategory = declaredCategory
+        self.isDisplayOutput = isDisplayOutput
     }
 
 }

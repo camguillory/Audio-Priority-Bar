@@ -8,6 +8,8 @@ public final class PriorityStore {
         static let categories = "deviceCategories"
         static let manualMode = "customMode"
         static let linksMicrophone = "linksMicrophone"
+        static let hideNewDisplayOutputs = "hideNewDisplayOutputs"
+        static let displayDefaultsApplied = "displayDefaultsApplied"
         static let knownDevices = "knownDevices"
         static let legacyNeverUse = "neverUseDevices"
         static let neverUseInputs = "neverUseInputs"
@@ -85,6 +87,7 @@ public final class PriorityStore {
             if device.isVirtual, existing == nil || seedsExisting {
                 setNeverUse(device, true)
             }
+            applyDisplayDefaultIfNeeded(device)
         }
         if seedsExisting, !devices.isEmpty {
             defaults.set(true, forKey: Key.virtualDefaults)
@@ -121,6 +124,9 @@ public final class PriorityStore {
             var categories = defaults.dictionary(forKey: Key.categories) ?? [:]
             categories.removeValue(forKey: uid)
             defaults.set(categories, forKey: Key.categories)
+            // Forgetting clears every saved choice, so a display seen again
+            // afterwards is genuinely new and gets the default once more.
+            remove(uid, from: Key.displayDefaultsApplied)
         }
     }
 
@@ -132,6 +138,13 @@ public final class PriorityStore {
     public var linksMicrophone: Bool {
         get { defaults.object(forKey: Key.linksMicrophone) as? Bool ?? true }
         set { defaults.set(newValue, forKey: Key.linksMicrophone) }
+    }
+
+    public var hideNewDisplayOutputs: Bool {
+        get {
+            defaults.object(forKey: Key.hideNewDisplayOutputs) as? Bool ?? true
+        }
+        set { defaults.set(newValue, forKey: Key.hideNewDisplayOutputs) }
     }
 
     public func category(for device: AudioDevice) -> OutputCategory {
@@ -254,6 +267,22 @@ public final class PriorityStore {
         }
         merged.append(contentsOf: IteratorSequence(remaining))
         return merged.uniqued()
+    }
+
+    /// Excludes a monitor or TV the first time it is seen, and records that it
+    /// has been dealt with. Deciding once is what makes including one by hand
+    /// permanent: a later sighting must never hide it again. The record is kept
+    /// even when the preference is off, so turning the preference on applies to
+    /// genuinely new devices rather than retroactively.
+    private func applyDisplayDefaultIfNeeded(_ device: AudioDevice) {
+        guard device.isDisplayOutput else { return }
+        var applied = defaults.stringArray(forKey: Key.displayDefaultsApplied) ?? []
+        guard !applied.contains(device.uid) else { return }
+        applied.append(device.uid)
+        defaults.set(applied, forKey: Key.displayDefaultsApplied)
+        if hideNewDisplayOutputs {
+            hide(device, in: category(for: device))
+        }
     }
 
     private func saveKnownDevices(_ devices: [StoredDevice]) {

@@ -20,6 +20,11 @@ extension AppModel {
         }
     }
 
+    func setHideNewDisplayOutputs(_ enabled: Bool) {
+        hideNewDisplayOutputs = enabled
+        store.hideNewDisplayOutputs = enabled
+    }
+
     func selectManually(_ device: AudioDevice) {
         setManualMode(true)
         select(device)
