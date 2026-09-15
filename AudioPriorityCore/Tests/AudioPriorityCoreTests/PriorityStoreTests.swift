@@ -390,3 +390,90 @@ func headphoneDetectionIsCaseInsensitive() {
     #expect(HeadphoneDetection.isHeadphone("AirPods Pro"))
     #expect(!HeadphoneDetection.isHeadphone("Studio Display Speakers"))
 }
+
+private func declaring(
+    _ uid: String,
+    _ name: String,
+    _ declared: OutputCategory? = nil
+) -> AudioDevice {
+    AudioDevice(
+        platformID: 1,
+        uid: uid,
+        name: name,
+        role: .output,
+        declaredCategory: declared
+    )
+}
+
+@Test
+func knownSpeakerProductsOutrankTheirBrandKeyword() {
+    // The bare "jabra" keyword would otherwise claim these.
+    #expect(HeadphoneDetection.isKnownSpeaker("Jabra Speak2 75"))
+    #expect(HeadphoneDetection.isKnownSpeaker("JABRA SPEAK 750"))
+    #expect(!HeadphoneDetection.isKnownSpeaker("Jabra Evolve2 85"))
+    #expect(!HeadphoneDetection.isKnownSpeaker("Jabra Elite 8 Active"))
+    #expect(!HeadphoneDetection.isKnownSpeaker("Jabra Link 380"))
+    // Brands stay out of the list, so their headphones are unaffected.
+    #expect(!HeadphoneDetection.isKnownSpeaker("Marshall Major IV"))
+}
+
+@Test
+func categoryPrefersTheDeviceClaimOverNameKeywords() throws {
+    try withDefaults { defaults in
+        let store = PriorityStore(defaults: defaults)
+
+        // A speaker that a brand keyword would misfile as headphones.
+        #expect(store.category(
+            for: declaring("anker", "Anker PowerConf S3", .speaker)
+        ) == .speaker)
+        // A localized name no English keyword matches, the headphone jack.
+        #expect(store.category(
+            for: declaring("jack", "Écouteurs externes", .headphone)
+        ) == .headphone)
+        // Without a claim the keyword list still decides, both ways.
+        #expect(store.category(for: declaring("jack", "Écouteurs externes")) == .speaker)
+        #expect(store.category(for: declaring("pods", "AirPods Pro")) == .headphone)
+    }
+}
+
+@Test
+func knownSpeakerWinsEvenWhenTheDeviceClaimsHeadphones() throws {
+    try withDefaults { defaults in
+        let store = PriorityStore(defaults: defaults)
+        // CoreAudio has no speakerphone terminal type, so a Speak may report
+        // headphones. The product rule has to sit ahead of the claim to cover
+        // tobi/AudioPriorityBar#39.
+        let speak = declaring("speak", "Jabra Speak2 75", .headphone)
+        #expect(store.category(for: speak) == .speaker)
+
+        // The user still overrides everything, including that rule.
+        store.setCategory(.headphone, for: speak)
+        #expect(store.category(for: speak) == .headphone)
+    }
+}
+
+@Test
+func rememberedDeviceKeepsWhatTheHardwareDeclared() throws {
+    try withDefaults { defaults in
+        let store = PriorityStore(defaults: defaults)
+        store.remember([declaring("jack", "Écouteurs externes", .headphone)])
+
+        // Reconstructed while disconnected it must not fall back to the
+        // keyword result, or it would change list the moment it is unplugged.
+        let remembered = try #require(
+            store.storedDevice(uid: "jack", role: .output)
+        )
+        #expect(remembered.declaredCategory == .headphone)
+        #expect(store.category(for: remembered.disconnectedDevice()) == .headphone)
+    }
+}
+
+@Test
+func storedDevicesWrittenBeforeDeclarationsStillDecode() throws {
+    let json = Data("""
+    [{"uid":"old","name":"Old Speaker","isInput":false,"lastSeen":0}]
+    """.utf8)
+    let decoded = try JSONDecoder().decode([StoredDevice].self, from: json)
+    #expect(decoded.count == 1)
+    #expect(decoded.first?.declaredCategory == nil)
+}

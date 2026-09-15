@@ -16,8 +16,24 @@ public enum HeadphoneDetection {
         "fiio", "moondrop",
     ]
 
+    /// Product lines that are speakers even though a brand keyword above would
+    /// otherwise claim them. Entries must name a product line, never a brand:
+    /// excluding "marshall" or "anker" would misfile the headphones those same
+    /// brands make.
+    private static let speakerProducts = [
+        "jabra speak",
+    ]
+
     public static func isHeadphone(_ name: String) -> Bool {
         let normalized = name.lowercased()
         return keywords.contains { normalized.contains($0) }
+    }
+
+    /// A product known to be a speaker regardless of what it reports about
+    /// itself. CoreAudio has no speakerphone terminal type, so a speakerphone
+    /// may describe itself as headphones, and only the product line settles it.
+    public static func isKnownSpeaker(_ name: String) -> Bool {
+        let normalized = name.lowercased()
+        return speakerProducts.contains { normalized.contains($0) }
     }
 }

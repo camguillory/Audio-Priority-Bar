@@ -32,6 +32,45 @@ private func lifecycle(
     )
 }
 
+/// Values measured on real hardware, so the mapper is pinned to what macOS
+/// actually reports rather than to what the headers suggest.
+@Test
+func terminalMappingCoversBothValueSpaces() {
+    // USB and Bluetooth arrive translated into CoreAudio constants.
+    #expect(CoreAudioProperties.category(forTerminal: 0x68647068) == .headphone)
+    #expect(CoreAudioProperties.category(forTerminal: 0x73706B72) == .speaker)
+    // Built-in devices report the raw USB Audio codes.
+    #expect(CoreAudioProperties.category(forTerminal: 0x0302) == .headphone)
+    #expect(CoreAudioProperties.category(forTerminal: 0x0301) == .speaker)
+    // A speakerphone has no CoreAudio constant, only the raw codes.
+    #expect(CoreAudioProperties.category(forTerminal: 0x0403) == .speaker)
+    #expect(CoreAudioProperties.category(forTerminal: 0x0404) == .speaker)
+    #expect(CoreAudioProperties.category(forTerminal: 0x0405) == .speaker)
+    #expect(CoreAudioProperties.category(forTerminal: 0x0402) == .headphone)
+}
+
+@Test
+func terminalMappingDeclaresNothingForAmbiguousTerminals() {
+    // Aggregate devices report Unknown, and a monitor reports its own port.
+    #expect(CoreAudioProperties.category(forTerminal: 0) == nil)
+    #expect(CoreAudioProperties.category(forTerminal: 0x68646D69) == nil) // 'hdmi'
+    #expect(CoreAudioProperties.category(forTerminal: 0x73706466) == nil) // 'spdf'
+    #expect(CoreAudioProperties.category(forTerminal: 0x6C696E65) == nil) // 'line'
+}
+
+@Test
+func streamsMustAgreeBeforeTheyCountAsEvidence() {
+    // Every measured device has one stream, which is the ordinary case.
+    #expect(CoreAudioProperties.category(forTerminals: [0x0301]) == .speaker)
+    // An unrecognised stream alongside a recognised one does not veto it.
+    #expect(CoreAudioProperties.category(forTerminals: [0, 0x0302]) == .headphone)
+    // Nothing recognised means no claim, so the caller falls back.
+    #expect(CoreAudioProperties.category(forTerminals: [0, 0x68646D69]) == nil)
+    #expect(CoreAudioProperties.category(forTerminals: []) == nil)
+    // Disagreement is no evidence rather than a coin toss on stream order.
+    #expect(CoreAudioProperties.category(forTerminals: [0x0301, 0x0302]) == nil)
+}
+
 @Test
 @MainActor
 func listenerStartRollsBackPartialRegistration() {

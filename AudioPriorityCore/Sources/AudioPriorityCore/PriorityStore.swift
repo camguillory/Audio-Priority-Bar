@@ -141,6 +141,14 @@ public final class PriorityStore {
            let category = OutputCategory(rawValue: raw) {
             return category
         }
+        // Ahead of the device's own claim, because a speakerphone has no
+        // terminal type of its own and may describe itself as headphones.
+        if HeadphoneDetection.isKnownSpeaker(device.name) {
+            return .speaker
+        }
+        if let declared = device.declaredCategory {
+            return declared
+        }
         return HeadphoneDetection.isHeadphone(device.name)
             ? .headphone
             : .speaker

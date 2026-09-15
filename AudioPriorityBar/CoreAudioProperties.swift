@@ -124,7 +124,8 @@ enum CoreAudioProperties {
         let scope = role == .input
             ? kAudioDevicePropertyScopeInput
             : kAudioDevicePropertyScopeOutput
-        guard hasStreams(id, scope: scope),
+        let streams = streams(id, scope: scope)
+        guard !streams.isEmpty,
               let name = stringProperty(
                 id,
                 selector: kAudioDevicePropertyDeviceNameCFString
@@ -140,8 +141,75 @@ enum CoreAudioProperties {
             uid: uid,
             name: name,
             role: role,
-            isVirtual: isVirtual(id)
+            isVirtual: isVirtual(id),
+            // Input terminals describe a microphone, which says nothing about
+            // where output should go.
+            declaredCategory: role == .output
+                ? declaredCategory(streams: streams)
+                : nil
         )
+    }
+
+    /// The category a device claims for itself, or nil when it claims nothing
+    /// usable. Aggregate devices report `Unknown` and HDMI reports its own
+    /// terminal, so the caller still needs a fallback.
+    private static func declaredCategory(
+        streams: [AudioObjectID]
+    ) -> OutputCategory? {
+        category(forTerminals: streams.compactMap { stream in
+            var terminal = UInt32(0)
+            // AudioStream has only a global scope, which `read` defaults to.
+            guard read(
+                stream,
+                selector: kAudioStreamPropertyTerminalType,
+                into: &terminal
+            ) == noErr else {
+                return nil
+            }
+            return terminal
+        })
+    }
+
+    /// Resolves what a device's streams collectively claim. Streams that
+    /// disagree are no evidence at all, since preferring one by position would
+    /// only make stream order look meaningful.
+    static func category(forTerminals terminals: [UInt32]) -> OutputCategory? {
+        let declared = Set(terminals.compactMap(category(forTerminal:)))
+        return declared.count == 1 ? declared.first : nil
+    }
+
+    /// Maps an audio terminal to a category.
+    ///
+    /// Two value spaces appear in practice. USB and Bluetooth devices arrive
+    /// translated into the CoreAudio constants, while built-in devices report
+    /// the raw code from the USB Audio Terminal Types specification, so both
+    /// are accepted. Anything unrecognised, including `Unknown`, line level and
+    /// digital interfaces, declares nothing.
+    static func category(
+        forTerminal terminal: UInt32
+    ) -> OutputCategory? {
+        switch terminal {
+        case UInt32(kAudioStreamTerminalTypeHeadphones),
+             0x0302, // Headphones
+             0x0303, // Head mounted display audio
+             0x0401, // Handset
+             0x0402: // Headset
+            return .headphone
+        case UInt32(kAudioStreamTerminalTypeSpeaker),
+             UInt32(kAudioStreamTerminalTypeLFESpeaker),
+             UInt32(kAudioStreamTerminalTypeReceiverSpeaker),
+             0x0301, // Speaker
+             0x0304, // Desktop speaker
+             0x0305, // Room speaker
+             0x0306, // Communication speaker
+             0x0307, // Low frequency effects speaker
+             0x0403, // Speakerphone, no echo reduction
+             0x0404, // Echo suppressing speakerphone
+             0x0405: // Echo cancelling speakerphone
+            return .speaker
+        default:
+            return nil
+        }
     }
 
     /// CoreAudio reports software devices as virtual or aggregate transports,
@@ -160,18 +228,30 @@ enum CoreAudioProperties {
             || transport == kAudioDeviceTransportTypeAggregate
     }
 
-    private static func hasStreams(
+    private static func streams(
         _ id: AudioObjectID,
         scope: AudioObjectPropertyScope
-    ) -> Bool {
+    ) -> [AudioObjectID] {
         var address = property(
             kAudioDevicePropertyStreams,
             scope: scope
         )
         var size: UInt32 = 0
-        return AudioObjectGetPropertyDataSize(
+        guard AudioObjectGetPropertyDataSize(
             id, &address, 0, nil, &size
-        ) == noErr && size > 0
+        ) == noErr, size > 0 else {
+            return []
+        }
+        var streams = [AudioObjectID](
+            repeating: 0,
+            count: Int(size) / MemoryLayout<AudioObjectID>.size
+        )
+        guard AudioObjectGetPropertyData(
+            id, &address, 0, nil, &size, &streams
+        ) == noErr else {
+            return []
+        }
+        return streams
     }
 
     private static func stringProperty(

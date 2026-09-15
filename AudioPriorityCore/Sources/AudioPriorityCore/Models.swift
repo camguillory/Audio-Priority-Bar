@@ -29,6 +29,9 @@ public struct AudioDevice: Identifiable, Equatable, Hashable, Sendable {
     /// Software routing device (Krisp, Zoom, a Multi-Output Device) rather than
     /// a physical endpoint.
     public var isVirtual: Bool
+    /// What the device says it is, from its audio terminal type. `nil` when it
+    /// declares nothing usable, as aggregate and HDMI devices do.
+    public var declaredCategory: OutputCategory?
 
     public var id: String { roleIdentifier }
     public var roleIdentifier: String { "\(role.rawValue):\(uid)" }
@@ -53,7 +56,8 @@ public struct AudioDevice: Identifiable, Equatable, Hashable, Sendable {
         name: String,
         role: DeviceRole,
         isConnected: Bool = true,
-        isVirtual: Bool = false
+        isVirtual: Bool = false,
+        declaredCategory: OutputCategory? = nil
     ) {
         self.platformID = platformID
         self.uid = uid
@@ -61,6 +65,7 @@ public struct AudioDevice: Identifiable, Equatable, Hashable, Sendable {
         self.role = role
         self.isConnected = isConnected
         self.isVirtual = isVirtual
+        self.declaredCategory = declaredCategory
     }
 
 }
@@ -70,14 +75,25 @@ public struct StoredDevice: Codable, Equatable, Sendable {
     public let name: String
     public let isInput: Bool
     public var lastSeen: Date
+    /// Remembered so a disconnected row keeps the category the hardware
+    /// declared. Optional, so settings written before this shipped still
+    /// decode.
+    public var declaredCategory: OutputCategory?
 
     public var role: DeviceRole { isInput ? .input : .output }
 
-    public init(uid: String, name: String, isInput: Bool, lastSeen: Date) {
+    public init(
+        uid: String,
+        name: String,
+        isInput: Bool,
+        lastSeen: Date,
+        declaredCategory: OutputCategory? = nil
+    ) {
         self.uid = uid
         self.name = name
         self.isInput = isInput
         self.lastSeen = lastSeen
+        self.declaredCategory = declaredCategory
     }
 
     public init(device: AudioDevice, lastSeen: Date) {
@@ -85,7 +101,8 @@ public struct StoredDevice: Codable, Equatable, Sendable {
             uid: device.uid,
             name: device.name,
             isInput: device.role == .input,
-            lastSeen: lastSeen
+            lastSeen: lastSeen,
+            declaredCategory: device.declaredCategory
         )
     }
 
@@ -95,7 +112,8 @@ public struct StoredDevice: Codable, Equatable, Sendable {
             uid: uid,
             name: name,
             role: role,
-            isConnected: false
+            isConnected: false,
+            declaredCategory: declaredCategory
         )
     }
 
