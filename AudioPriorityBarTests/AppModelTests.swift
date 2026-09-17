@@ -198,25 +198,25 @@ func neverAutoSelectDeviceRemainsVisible() {
 
 @Test
 @MainActor
-func showAllRevealsExcludedDevicesInTheirOwnList() {
+func showAllRevealsHiddenDevicesInTheirOwnList() {
     let defaults = isolatedDefaults()
     let store = PriorityStore(defaults: defaults)
     let kept = output(1, "speaker")
-    let excluded = output(2, "hdmi", "HDMI")
-    store.hide(excluded, in: .speaker)
+    let hidden = output(2, "hdmi", "HDMI")
+    store.hide(hidden, in: .speaker)
     let audio = FakeAudio()
-    audio.catalog = [kept, excluded]
+    audio.catalog = [kept, hidden]
     let model = testModel(audio: audio, defaults: defaults)
 
     model.start()
 
     #expect(model.speakerDevices == [kept])
-    #expect(model.hiddenSpeakerDevices == [excluded])
+    #expect(model.hiddenSpeakerDevices == [hidden])
 
     model.showAll = true
     model.refreshDevices()
 
-    #expect(model.speakerDevices == [kept, excluded])
+    #expect(model.speakerDevices == [kept, hidden])
     #expect(model.hiddenSpeakerDevices.isEmpty)
 }
 

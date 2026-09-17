@@ -36,25 +36,32 @@ extension AppModel {
     }
 
     func setCategory(_ category: OutputCategory, for device: AudioDevice) {
-        store.setCategory(category, for: device)
-        // Without this the device lands in a list that filters it out and
-        // vanishes from the panel until Show all is enabled.
-        store.unhide(device, from: category)
+        preservingVisibility(movingTo: category, device)
         refreshDevices()
         if !isManualMode { applyHighestPriorityOutput() }
     }
 
-    func hide(_ device: AudioDevice, category: OutputCategory? = nil) {
-        if device.role == .output, let category {
+    /// Moves a device to a category without changing whether it is hidden:
+    /// a hidden device stays hidden in its new list, and a visible one stays
+    /// visible rather than inheriting a stale hide flag left over from before
+    /// hiding became a single, both-categories command.
+    private func preservingVisibility(
+        movingTo category: OutputCategory,
+        _ device: AudioDevice
+    ) {
+        let wasHidden = store.isHidden(device)
+        store.setCategory(category, for: device)
+        if wasHidden {
             store.hide(device, in: category)
         } else {
-            store.hide(device)
+            store.unhide(device, from: category)
         }
-        refreshDevices()
-        reselect(device.role)
     }
 
-    func hideEntirely(_ device: AudioDevice) {
+    /// Hides a device everywhere: from Microphones, or from both Speakers and
+    /// Headphones, so one command has one meaning regardless of which output
+    /// list a device currently sits in.
+    func hide(_ device: AudioDevice) {
         if device.role == .input {
             store.hide(device)
         } else {
@@ -65,20 +72,18 @@ extension AppModel {
         reselect(device.role)
     }
 
-    func stopIgnoring(_ device: AudioDevice, category: OutputCategory?) {
+    func unhide(_ device: AudioDevice) {
         if device.role == .input {
             store.unhide(device)
-        } else if let category {
-            store.unhide(device, from: category)
+        } else {
+            store.unhide(device, from: .speaker)
+            store.unhide(device, from: .headphone)
         }
         refreshDevices()
     }
 
-    func isIgnored(_ device: AudioDevice, category: OutputCategory? = nil) -> Bool {
-        if device.role == .input { return store.isHidden(device) }
-        return category.map {
-            store.isHidden(device, in: $0)
-        } ?? store.isHidden(device)
+    func isHidden(_ device: AudioDevice) -> Bool {
+        store.isHidden(device)
     }
 
     func isNeverUse(_ device: AudioDevice) -> Bool {
@@ -162,9 +167,7 @@ extension AppModel {
             return true
         }
 
-        store.setCategory(category, for: device)
-        // Keep the row visible in its destination before applying final order.
-        store.unhide(device, from: category)
+        preservingVisibility(movingTo: category, device)
         refreshDevices()
         var devices = category == .speaker
             ? speakerDevices

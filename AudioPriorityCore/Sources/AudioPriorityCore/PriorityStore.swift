@@ -269,11 +269,15 @@ public final class PriorityStore {
         return merged.uniqued()
     }
 
-    /// Excludes a monitor or TV the first time it is seen, and records that it
-    /// has been dealt with. Deciding once is what makes including one by hand
+    /// Hides a monitor or TV the first time it is seen, and records that it
+    /// has been dealt with. Deciding once is what makes showing one by hand
     /// permanent: a later sighting must never hide it again. The record is kept
     /// even when the preference is off, so turning the preference on applies to
     /// genuinely new devices rather than retroactively.
+    ///
+    /// Hidden in both output categories, matching the app's single Hide
+    /// command: a later category move must not surface a device the user
+    /// never asked to see.
     private func applyDisplayDefaultIfNeeded(_ device: AudioDevice) {
         guard device.isDisplayOutput else { return }
         var applied = defaults.stringArray(forKey: Key.displayDefaultsApplied) ?? []
@@ -281,7 +285,8 @@ public final class PriorityStore {
         applied.append(device.uid)
         defaults.set(applied, forKey: Key.displayDefaultsApplied)
         if hideNewDisplayOutputs {
-            hide(device, in: category(for: device))
+            hide(device, in: .speaker)
+            hide(device, in: .headphone)
         }
     }
 

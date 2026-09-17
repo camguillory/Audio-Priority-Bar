@@ -23,9 +23,9 @@ highest-priority connected headphones, speakers, and microphone.
 - One-click manual override from the app or macOS Sound Settings
 - Volume control by slider or scroll wheel, with mute and availability status
 - Drag ordering within lists and between output lists, with forbidden-drop feedback
-- Per-list visibility controls, Never Auto-Select, and remembered devices
+- Device visibility controls, Never Auto-Select, and remembered devices
 - Output categories taken from what each device reports, in any system language
-- New HDMI and DisplayPort outputs start excluded, since a screen rarely is
+- New HDMI and DisplayPort outputs start hidden, since a screen rarely is
   where you want sound
 - Optional microphone switching with a matching physical USB output
 - Settings, right-click quick actions, VoiceOver support, and Open at Login
@@ -100,16 +100,17 @@ Speakers, Headphones, and Microphones remain visible in both modes.
 - Reorder microphones within Microphones.
 - Use each row's actions menu for keyboard-accessible Move Up, Move Down, and
   Move to commands.
-- Exclude a device from one output list or both, or keep it visible while
+- Hide a device to remove it from its lists, or keep it visible while
   preventing automatic selection.
-- Use **Show all** to manage excluded and disconnected remembered devices.
+- Use **Show hidden and disconnected devices** to manage hidden and
+  disconnected remembered devices.
 - Forget a disconnected device to remove its saved settings.
 
-A monitor or TV connected over HDMI or DisplayPort is excluded the first time
-it is seen. Including one from **Show all** is permanent, and the
-**Hide new HDMI and DisplayPort outputs** setting turns the behaviour off for
-devices seen later. Whatever is currently playing always stays listed, even
-when excluded, so you can see where the sound is going.
+A monitor or TV connected over HDMI or DisplayPort is hidden the first time it
+is seen. Showing one from **Show hidden and disconnected devices** is
+permanent, and the **Hide new HDMI and DisplayPort outputs** setting turns the
+behaviour off for devices seen later. Whatever is currently playing always
+stays listed, even when hidden, so you can see where the sound is going.
 
 ### Jabra Link monitoring
 

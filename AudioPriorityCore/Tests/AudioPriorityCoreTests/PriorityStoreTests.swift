@@ -353,23 +353,24 @@ private func monitor(
 }
 
 @Test
-func displayOutputsAreExcludedOnceAndIncludingOneSticks() throws {
+func displayOutputsAreHiddenOnceAndShowingOneSticks() throws {
     try withDefaults { defaults in
         let store = PriorityStore(defaults: defaults)
         let dell = monitor()
         store.remember([dell])
+        // Hidden in both categories, so a later move between Speakers and
+        // Headphones cannot surface a display the user never asked to see.
         #expect(store.isHidden(dell, in: .speaker))
-
-        // A monitor keyword-classifies as a speaker, so nothing should have
-        // touched the headphone list.
-        #expect(!store.isHidden(dell, in: .headphone))
+        #expect(store.isHidden(dell, in: .headphone))
 
         store.unhide(dell, from: .speaker)
+        store.unhide(dell, from: .headphone)
         store.remember([dell])
 
         // Deciding once is the whole point: a later sighting must not undo
-        // the user including it by hand.
+        // the user showing it by hand.
         #expect(!store.isHidden(dell, in: .speaker))
+        #expect(!store.isHidden(dell, in: .headphone))
     }
 }
 
@@ -390,6 +391,7 @@ func displayDefaultAppliesToNewDevicesRatherThanRetroactively() throws {
         let arrived = monitor("dell2", "DELL U2720Q")
         store.remember([arrived])
         #expect(store.isHidden(arrived, in: .speaker))
+        #expect(store.isHidden(arrived, in: .headphone))
     }
 }
 
@@ -425,11 +427,13 @@ func forgettingADisplayLetsItBeTreatedAsNewAgain() throws {
         let dell = monitor()
         store.remember([dell])
         store.unhide(dell, from: .speaker)
+        store.unhide(dell, from: .headphone)
 
         store.forget(uid: dell.uid, role: .output)
         store.remember([dell])
 
         #expect(store.isHidden(dell, in: .speaker))
+        #expect(store.isHidden(dell, in: .headphone))
     }
 }
 

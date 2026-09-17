@@ -25,7 +25,7 @@ struct DeviceRow: View {
 
     private var linkState: LinkState? { model.linkState(for: device) }
     private var isUnavailable: Bool { linkState == .down }
-    private var isIgnored: Bool { model.isIgnored(device, category: category) }
+    private var isHidden: Bool { model.isHidden(device) }
     private var isNeverUse: Bool { model.isNeverUse(device) }
     private var statuses: [Status] {
         var result: [Status] = []
@@ -69,8 +69,8 @@ struct DeviceRow: View {
                 text: "Link status unavailable"
             ))
         }
-        if isIgnored {
-            result.append(Status(icon: "eye.slash", text: "Excluded"))
+        if isHidden {
+            result.append(Status(icon: "eye.slash", text: "Hidden"))
         }
         if isNeverUse {
             result.append(Status(icon: "nosign", text: "Never auto-select"))
@@ -244,28 +244,17 @@ struct DeviceRow: View {
             }
 
             Divider()
-            if isIgnored {
+            if isHidden {
                 Button {
-                    model.stopIgnoring(device, category: category)
+                    model.unhide(device)
                 } label: {
-                    Label("Include in This List", systemImage: "eye")
+                    Label("Show Device", systemImage: "eye")
                 }
             } else {
                 Button {
-                    model.hide(device, category: category)
+                    model.hide(device)
                 } label: {
-                    Label("Exclude from This List", systemImage: "eye.slash")
-                }
-                .disabled(isSelected)
-            }
-            if device.role == .output {
-                Button {
-                    model.hideEntirely(device)
-                } label: {
-                    Label(
-                        "Exclude from Speakers and Headphones",
-                        systemImage: "eye.slash.fill"
-                    )
+                    Label("Hide Device", systemImage: "eye.slash")
                 }
                 .disabled(isSelected)
             }

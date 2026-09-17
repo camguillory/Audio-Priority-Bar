@@ -202,7 +202,7 @@ final class AppModel {
             }
         store.remember(connected)
         // Read before the lists are split, because splitting keeps whatever is
-        // playing visible even when it is excluded.
+        // playing visible even when it is hidden.
         currentInputID = audio.defaultDevice(.input)
         currentOutputID = audio.defaultDevice(.output)
 
@@ -221,8 +221,14 @@ final class AppModel {
                 }
             }
         }
+        // Hiding the active microphone would leave no way to see which one is
+        // in use, so it stays listed and shows as hidden, matching outputs.
         inputDevices = store.sorted(
-            inputs.filter { showAll || !store.isHidden($0) },
+            inputs.filter {
+                showAll
+                    || !store.isHidden($0)
+                    || ($0.isConnected && $0.platformID == currentInputID)
+            },
             role: .input
         )
         (speakerDevices, hiddenSpeakerDevices) = split(outputs, .speaker)
@@ -237,7 +243,7 @@ final class AppModel {
     ) -> (visible: [AudioDevice], hidden: [AudioDevice]) {
         let members = outputs.filter { store.category(for: $0) == category }
         // Hiding whatever is currently playing would leave no way to see where
-        // the sound is going, so it stays listed and shows as excluded.
+        // the sound is going, so it stays listed and shows as hidden.
         func isVisible(_ device: AudioDevice) -> Bool {
             showAll
                 || !store.isHidden(device, in: category)

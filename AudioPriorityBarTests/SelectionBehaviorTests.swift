@@ -119,8 +119,8 @@ func checkingDoesNotDeferDevicesAlreadyRuledOut() {
     let store = PriorityStore(defaults: defaults)
     let speaker = output(1, "speaker")
     let jabra = output(2, "jabra", "Jabra Link 380")
-    // Excluded by the user, so its link state is irrelevant and waiting for it
-    // would stall selection for nothing.
+    // Never-auto-select by the user, so its link state is irrelevant and
+    // waiting for it would stall selection for nothing.
     store.setNeverUse(jabra, true)
     let audio = FakeAudio()
     audio.catalog = [speaker, jabra]
@@ -310,7 +310,7 @@ func automaticOutputFailureDoesNotMoveItsMicrophone() {
 
 @Test
 @MainActor
-func automaticInputDoesNotPairAnExcludedCurrentOutput() {
+func automaticInputDoesNotPairANeverAutoSelectCurrentOutput() {
     let defaults = isolatedDefaults()
     let store = PriorityStore(defaults: defaults)
     let paired = dualRole()

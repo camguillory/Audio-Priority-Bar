@@ -54,7 +54,8 @@ struct SettingsView: View {
                 title: "Hide new HDMI and DisplayPort outputs",
                 explanation: """
                     A monitor or TV plays sound but is rarely where you want it. \
-                    Newly detected ones start excluded. Use Show all to include one.
+                    Newly detected ones start hidden. Use Show hidden and \
+                    disconnected devices to show one.
                     """,
                 isOn: Binding(
                     get: { model.hideNewDisplayOutputs },

@@ -371,7 +371,7 @@ func liftedRowHandlesSameSectionEmptyTargetAndInvalidTarget() {
 
 @Test
 @MainActor
-func changingCategoryKeepsAnExcludedDeviceVisible() {
+func changingCategoryKeepsAHiddenDeviceHidden() {
     let defaults = isolatedDefaults()
     let store = PriorityStore(defaults: defaults)
     store.isManualMode = true
@@ -381,8 +381,26 @@ func changingCategoryKeepsAnExcludedDeviceVisible() {
     let model = testModel(audio: audio, defaults: defaults)
     model.start()
 
-    model.hideEntirely(speaker)
+    model.hide(speaker)
     #expect(model.speakerDevices.isEmpty)
+
+    model.setCategory(.headphone, for: speaker)
+
+    #expect(model.headphoneDevices.isEmpty)
+    #expect(model.hiddenHeadphoneDevices == [speaker])
+}
+
+@Test
+@MainActor
+func changingCategoryKeepsAVisibleDeviceVisible() {
+    let defaults = isolatedDefaults()
+    let store = PriorityStore(defaults: defaults)
+    store.isManualMode = true
+    let speaker = output(1, "speaker")
+    let audio = FakeAudio()
+    audio.catalog = [speaker]
+    let model = testModel(audio: audio, defaults: defaults)
+    model.start()
 
     model.setCategory(.headphone, for: speaker)
 
@@ -424,7 +442,7 @@ func settingsFollowTheScreenBeingUsedWithoutNudgingTheWindow() {
 
 @Test
 @MainActor
-func aNewDisplayOutputArrivesExcluded() {
+func aNewDisplayOutputArrivesHidden() {
     let defaults = isolatedDefaults()
     let store = PriorityStore(defaults: defaults)
     store.isManualMode = true
@@ -443,15 +461,15 @@ func aNewDisplayOutputArrivesExcluded() {
 
     model.start()
 
-    // The exclusion is applied while remembering, which happens inside the
-    // same refresh that splits the lists, so one pass has to be enough.
+    // Hiding is applied while remembering, which happens inside the same
+    // refresh that splits the lists, so one pass has to be enough.
     #expect(model.speakerDevices == [speaker])
     #expect(model.hiddenSpeakerDevices == [dell])
 }
 
 @Test
 @MainActor
-func theActiveOutputStaysListedEvenWhenExcluded() {
+func theActiveOutputStaysListedEvenWhenHidden() {
     let defaults = isolatedDefaults()
     let store = PriorityStore(defaults: defaults)
     store.isManualMode = true
@@ -469,11 +487,37 @@ func theActiveOutputStaysListedEvenWhenExcluded() {
 
     model.start()
 
-    // Excluded, but still shown, because hiding the row would leave no way to
+    // Hidden, but still shown, because hiding the row would leave no way to
     // see where the sound is going.
-    #expect(model.isIgnored(dell, category: .speaker))
+    #expect(model.isHidden(dell))
     #expect(model.speakerDevices == [dell])
     #expect(model.hiddenSpeakerDevices.isEmpty)
+}
+
+@Test
+@MainActor
+func theActiveMicrophoneStaysListedEvenWhenHidden() {
+    let defaults = isolatedDefaults()
+    let store = PriorityStore(defaults: defaults)
+    store.isManualMode = true
+    let mic = input(1, "mic")
+    store.hide(mic)
+    let audio = FakeAudio()
+    audio.catalog = [mic]
+    audio.defaults[.input] = mic.platformID
+    let model = testModel(audio: audio, defaults: defaults)
+
+    model.start()
+
+    // Hidden, but still shown, because hiding the row would leave no way to
+    // see which microphone is in use.
+    #expect(model.isHidden(mic))
+    #expect(model.inputDevices == [mic])
+
+    // Automatic selection still refuses a hidden microphone: with the only
+    // candidate hidden, nothing gets selected.
+    model.setManualMode(false)
+    #expect(audio.selections.isEmpty)
 }
 
 @Test

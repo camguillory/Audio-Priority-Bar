@@ -156,7 +156,7 @@ struct PanelView: View {
         }
         let reason = switch skipped.reason {
         case .off: "is off"
-        case .neverAutoSelect: "is excluded from automatic switching"
+        case .neverAutoSelect: "won't be selected automatically"
         }
         return "Using \(current.name) · \(skipped.device.name) \(reason)"
     }
@@ -226,7 +226,7 @@ private struct Footer: View {
     var body: some View {
         HStack(spacing: 10) {
             Toggle(
-                "Show all",
+                "Show hidden and disconnected devices",
                 isOn: Binding(
                     get: { model.showAll },
                     set: {
@@ -237,7 +237,6 @@ private struct Footer: View {
             )
             .toggleStyle(.checkbox)
             .controlSize(.small)
-            .help("Show devices that are excluded or disconnected")
 
             Spacer()
 
