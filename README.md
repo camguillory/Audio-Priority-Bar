@@ -18,16 +18,14 @@ highest-priority connected headphones, speakers, and microphone.
 
 ## Features
 
-- Automatic switching prefers your top available headphones, then speakers
-- Persistent Speakers, Headphones, and Microphones priority lists
-- One-click manual override from the app or macOS Sound Settings
+- Automatic switching to your top available headphones, then speakers, with
+  one-click manual override
+- Persistent priority lists for Speakers, Headphones, and Microphones, with
+  drag reordering
 - Volume control by slider or scroll wheel, with mute and availability status
-- Drag ordering within lists and between output lists, with forbidden-drop feedback
 - Device visibility controls, Never Auto-Select, and remembered devices
 - Output categories taken from what each device reports, in any system language
-- New HDMI and DisplayPort outputs start hidden, since a screen rarely is
-  where you want sound
-- Optional microphone switching with a matching physical USB output
+- Optional microphone switching paired with a matching USB output
 - Settings, right-click quick actions, VoiceOver support, and Open at Login
 - Jabra Link headset power-off detection, asked of the dongle rather than guessed
 
@@ -41,9 +39,6 @@ and Intel Macs.
 ```bash
 brew install --cask camguillory/tap/audio-priority-bar
 ```
-
-The fully qualified command trusts only this cask, not every current and future
-item in the tap.
 
 ### Direct download
 
@@ -100,68 +95,41 @@ Speakers, Headphones, and Microphones remain visible in both modes.
 - Reorder microphones within Microphones.
 - Use each row's actions menu for keyboard-accessible Move Up, Move Down, and
   Move to commands.
-- Hide a device to remove it from its lists, or keep it visible while
-  preventing automatic selection.
+- Hide a device to remove it from Speakers, Headphones, or Microphones, or
+  keep it visible while blocking automatic selection with **Never
+  Auto-Select**.
 - Use **Show hidden and disconnected devices** to manage hidden and
   disconnected remembered devices.
 - Forget a disconnected device to remove its saved settings.
 
-A monitor or TV connected over HDMI or DisplayPort is hidden the first time it
-is seen. Showing one from **Show hidden and disconnected devices** is
-permanent, and the **Hide new HDMI and DisplayPort outputs** setting turns the
-behaviour off for devices seen later. Whatever is currently playing always
-stays listed, even when hidden, so you can see where the sound is going.
+New HDMI and DisplayPort outputs start hidden; showing one is permanent, and
+**Hide new HDMI and DisplayPort outputs** turns this off for future devices.
+The active device always stays listed, even when hidden.
 
 ### Jabra Link monitoring
 
-Jabra Link dongles remain visible to CoreAudio when their wireless headset is
-powered off, so the app asks the dongle directly which remembered device is
-connected and falls back to the next usable output when nothing is.
+The app asks a Jabra Link dongle directly whether its wireless headset is
+powered off, since CoreAudio can't tell, and falls back automatically in
+under a second. Right after replugging, it briefly shows the headset as off
+while the wireless link re-establishes, which is expected, not a bug.
 
-The dongle's simple HID link bit is not sufficient on its own. Roughly 1.8
-seconds after USB enumeration the dongle asserts that a headset is linked,
-identically whether one is powered on or off, and never corrects it. That is
-why the app queries the dongle's vendor management channel instead, and keeps
-the link bit only as a fallback and as a hint that something changed.
+Link 380 is hardware-verified. Link 390 uses the same detection but is
+unverified on hardware
+([details](https://github.com/tobi/AudioPriorityBar/pull/32)). An
+unrecognised dongle fails open rather than being treated as off.
 
-Transitions are not polled. The dongle announces a headset connecting or
-disconnecting about 100ms after it happens, and that announcement triggers a
-fresh query, so powering a headset off is reflected in well under a second. A
-periodic refresh stays in place only for an announcement that never arrives.
-
-A dongle is used this way whenever its HID descriptor exposes the management
-collection and it answers the query, rather than because its model appears in a
-list. Only a complete answer is trusted: a timeout, a malformed record or a
-partial scan leaves the state unknown and the device selectable, so an
-unrecognised dongle degrades instead of misbehaving. Link 380 is locally
-hardware-verified, including USB replug and cold start with the headset off.
-Link 390 is expected to work through the same capability check but has not been
-verified on hardware; it retains the fallback measurements from
-[tobi/AudioPriorityBar#32](https://github.com/tobi/AudioPriorityBar/pull/32).
-
-Right after replugging a dongle while the headset is on, the app briefly
-reports the headset as off. That is accurate: the wireless link takes a couple
-of seconds to re-establish, and until it does audio sent there would not be
-heard.
-
-macOS may request **Input Monitoring** permission. Open at Login may separately
-require approval in **System Settings > General > Login Items**.
+May prompt for **Input Monitoring** permission. Open at Login may separately
+need approval in **System Settings > General > Login Items**.
 
 ### Upgrading from V1
 
-V2 keeps the newer `app.audioprioritybar` bundle identifier and imports
-recognized settings once from the public V1 identifier
-`com.example.AudioPriorityBar`. Existing V2 settings take precedence. Because
-the bundle identity changed, macOS may ask you to approve Input Monitoring or
-Open at Login again.
+V2 imports V1 settings once on first launch (existing V2 values win). The new
+bundle identifier may require re-approving Input Monitoring or Open at Login.
 
 ## Contributing
 
-Issues and pull requests are welcome. `main` reflects the latest release;
-`develop` is the next version in progress.
-
-For anything substantial, open an issue first so the approach can be agreed
-before you spend time on it.
+Issues and pull requests are welcome. Open an issue first for anything
+substantial. `main` is the latest release; `develop` is next.
 
 - Work from a fork rather than pushing to this repository.
 - Branch from `develop` and open the pull request against `develop`. GitHub
