@@ -141,7 +141,7 @@ final class StatusItemController: NSObject, NSWindowDelegate {
 
     private func updateStatus() {
         labelView.layoutSubtreeIfNeeded()
-        statusItem.length = ceil(labelView.fittingSize.width) + 8
+        statusItem.length = ceil(labelView.fittingSize.width)
         statusItem.button?.setAccessibilityValue(statusDescription)
         // Sighted users get the same wording on hover, so the warning glyph
         // does not have to carry the explanation by itself.
@@ -289,24 +289,26 @@ private struct StatusLabel: View {
         HStack(spacing: 2) {
             if model.isActiveInputMuted {
                 Image(systemName: "mic.slash.fill")
-                    .frame(width: 16)
                     .opacity(reduceMotion || model.micFlashState ? 1 : 0.45)
             }
-            Group {
+            // The hidden speaker.wave.2.fill anchor reserves the widest output
+            // glyph's width so the item does not resize as it switches between
+            // speakers, headphones, and muted.
+            ZStack {
+                Image(systemName: "speaker.wave.2.fill").hidden()
                 if model.isActiveOutputMuted {
                     Image(systemName: "speaker.slash.fill")
                 } else if model.activeOutputCategory == .headphone {
                     Image(systemName: "headphones")
                 } else if !model.isVolumeControllable {
-                    Image(systemName: "speaker.wave.3.fill")
+                    Image(systemName: "speaker.wave.2.fill")
                 } else {
                     Image(
-                        systemName: "speaker.wave.3.fill",
+                        systemName: "speaker.wave.2.fill",
                         variableValue: Double(model.volume)
                     )
                 }
             }
-            .frame(width: 24)
 
             // Beside the audio glyph rather than replacing it: that glyph
             // still identifies the app and the active category, while this
@@ -316,6 +318,7 @@ private struct StatusLabel: View {
                 Image(systemName: "exclamationmark.triangle.fill")
             }
         }
+        .padding(.horizontal, 1)
         .accessibilityHidden(true)
     }
 }
