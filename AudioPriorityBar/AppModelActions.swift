@@ -45,7 +45,10 @@ extension AppModel {
     /// Selects one device only, regardless of `selectsPairedDevice`.
     func selectOnly(_ device: AudioDevice) {
         setManualMode(true)
-        select(device, includesPairedDevice: false)
+        selectedOnlyOutputUID = device.role == .output ? device.uid : nil
+        if !select(device, includesPairedDevice: false) {
+            selectedOnlyOutputUID = nil
+        }
     }
 
     func setVolume(_ value: Float) {

@@ -10,24 +10,29 @@ private final class ObservationFlag: @unchecked Sendable {
     var value = false
 }
 
-private func dualRole(isVirtual: Bool = false) -> (
+private func dualRole(
+    isVirtual: Bool = false,
+    serial: String = "serial",
+    outputID: UInt32 = 1,
+    inputID: UInt32 = 101
+) -> (
     output: AudioDevice,
     input: AudioDevice
 ) {
     let name = isVirtual ? "ZoomAudioDevice" : "USB Headset"
     let baseUID = isVirtual
         ? "zoom.us.zoomaudiodevice.001"
-        : "AppleUSBAudioEngine:Unknown Manufacturer:USB Headset:serial"
+        : "AppleUSBAudioEngine:Unknown Manufacturer:USB Headset:\(serial)"
     return (
         AudioDevice(
-            platformID: 1,
+            platformID: outputID,
             uid: isVirtual ? baseUID : "\(baseUID):1",
             name: name,
             role: .output,
             isVirtual: isVirtual
         ),
         AudioDevice(
-            platformID: 101,
+            platformID: inputID,
             uid: isVirtual ? baseUID : "\(baseUID):2",
             name: name,
             role: .input,
@@ -411,6 +416,66 @@ func selectOnlyLeavesOutputAloneWhenPairedSelectionIsEnabled() {
 
     #expect(model.currentInputID == paired.input.platformID)
     #expect(model.currentOutputID == speaker.platformID)
+}
+
+@Test
+@MainActor
+func selectOnlyOutputSurvivesItsDefaultChangeEcho() {
+    let defaults = isolatedDefaults()
+    let store = PriorityStore(defaults: defaults)
+    store.isManualMode = true
+    let paired = dualRole()
+    let speaker = output(2, "speaker")
+    let macMic = input(102, "mac-mic")
+    let audio = FakeAudio()
+    audio.catalog = [paired.output, paired.input, speaker, macMic]
+    audio.defaults[.output] = speaker.platformID
+    audio.defaults[.input] = macMic.platformID
+    let model = testModel(audio: audio, defaults: defaults)
+    model.start()
+
+    model.selectOnly(paired.output)
+    model.handleDefaultChanged(.output)
+
+    #expect(model.currentOutputID == paired.output.platformID)
+    #expect(model.currentInputID == macMic.platformID)
+
+    audio.defaults[.output] = speaker.platformID
+    model.handleDefaultChanged(.output)
+    audio.defaults[.output] = paired.output.platformID
+    model.handleDefaultChanged(.output)
+
+    #expect(model.currentInputID == paired.input.platformID)
+}
+
+@Test
+@MainActor
+func selectOnlyDoesNotSuppressPairingForARecycledDeviceID() {
+    let defaults = isolatedDefaults()
+    let store = PriorityStore(defaults: defaults)
+    store.isManualMode = true
+    let paired = dualRole()
+    let speaker = output(2, "speaker")
+    let audio = FakeAudio()
+    audio.catalog = [paired.output, paired.input, speaker]
+    audio.defaults[.output] = speaker.platformID
+    let model = testModel(audio: audio, defaults: defaults)
+    model.start()
+
+    model.selectOnly(paired.output)
+
+    // CoreAudio reuses platform IDs, so another headset can arrive holding the
+    // one "Output only" was applied to, and it still pairs normally.
+    let replacement = dualRole(
+        serial: "replacement",
+        outputID: paired.output.platformID,
+        inputID: 201
+    )
+    audio.catalog = [replacement.output, replacement.input, speaker]
+    audio.defaults[.output] = replacement.output.platformID
+    model.handleDefaultChanged(.output)
+
+    #expect(model.currentInputID == replacement.input.platformID)
 }
 
 @Test

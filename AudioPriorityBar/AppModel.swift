@@ -69,6 +69,9 @@ final class AppModel {
     private var micFlashTimer: Timer?
     private var muteVolumeRefreshTask: Task<Void, Never>?
     private var hasStarted = false
+    /// Keeps "Output only" intact when CoreAudio echoes our own default change.
+    /// Held by UID because platform IDs are recycled across devices.
+    var selectedOnlyOutputUID: String?
     /// Bumped on every Jabra link verdict so `linkState(for:)` is part of the
     /// Observation graph. `link.state` itself lives outside `@Observable`, so
     /// without this a row only redraws its badge when something else
@@ -158,8 +161,12 @@ final class AppModel {
             return
         }
         if isManualMode {
-            if role == .output, let output = currentOutputDevice {
-                selectPairedDevice(of: output)
+            if role == .output {
+                let output = currentOutputDevice
+                if output?.uid != selectedOnlyOutputUID {
+                    selectedOnlyOutputUID = nil
+                    if let output { selectPairedDevice(of: output) }
+                }
             }
             refreshMute()
             return
@@ -438,6 +445,7 @@ final class AppModel {
     /// output's own decision. The already-current guard below is what stops
     /// an output-to-mic-to-output cycle.
     func selectPairedDevice(of device: AudioDevice, automatically: Bool = false) {
+        selectedOnlyOutputUID = nil
         guard selectsPairedDevice, let partner = pairedDevice(for: device) else { return }
         guard device.role == .output || !automatically else { return }
         let partnerCurrentID = partner.role == .input ? currentInputID : currentOutputID
