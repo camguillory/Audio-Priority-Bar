@@ -25,7 +25,7 @@ highest-priority connected headphones, speakers, and microphone.
 - Volume control by slider or scroll wheel, with mute and availability status
 - Device visibility controls, Never Auto-Select, and remembered devices
 - Output categories taken from what each device reports, in any system language
-- Optional microphone switching paired with a matching USB output
+- Configurable paired selection for a physical USB headset's input and output
 - Settings, right-click quick actions, VoiceOver support, and Open at Login
 - Jabra Link headset power-off detection, asked of the dongle rather than guessed
 
