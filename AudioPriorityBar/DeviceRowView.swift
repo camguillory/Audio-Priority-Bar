@@ -202,6 +202,10 @@ struct DeviceRow: View {
                     highlightedPairedDeviceID = nil
                 }
                 highlightedPartnerID = nil
+                // The override cannot still be hovered once the pointer has
+                // left the row, and it reports nothing when selecting a
+                // device stops it being rendered at all.
+                isHoveringSelectionOverride = false
                 return
             }
             guard model.selectsPairedDevice, isPairedDeviceUsable, !isSelected,
@@ -316,6 +320,7 @@ struct DeviceRow: View {
                         highlightedPairedDeviceID = nil
                     }
                 } else if isHovering, !isSelected {
+                    highlightedPartnerID = partner.id
                     highlightedPairedDeviceID = partner.id
                 }
             } else if hovering {
