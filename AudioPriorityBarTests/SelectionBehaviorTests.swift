@@ -1,6 +1,14 @@
 import AudioPriorityCore
+import Observation
 import Testing
 @testable import AudioPriorityBar
+
+/// Boxes a flag so `withObservationTracking`'s `@Sendable` `onChange` closure
+/// can set it without a strict-concurrency capture error; the model itself is
+/// `@MainActor`, so the mutation is never actually concurrent in this test.
+private final class ObservationFlag: @unchecked Sendable {
+    var value = false
+}
 
 private func dualRole(isVirtual: Bool = false) -> (
     output: AudioDevice,
@@ -102,10 +110,21 @@ func automaticSelectionWaitsWhileADongleIsStillBeingChecked() {
     #expect(model.automaticOutputDecision.target == nil)
     #expect(audio.selections.isEmpty)
 
+    // A row reading `linkState(for:)` must be told to redraw as soon as the
+    // dongle's verdict changes, not only when something unrelated (like
+    // hover) happens to re-run its body afterward.
+    let didInvalidate = ObservationFlag()
+    withObservationTracking {
+        _ = model.linkState(for: jabra)
+    } onChange: {
+        didInvalidate.value = true
+    }
+
     // The answer arrives: the headset really is off, so the speaker wins.
     linkState = .down
-    model.handleDevicesChanged()
+    model.handleLinkChanged()
 
+    #expect(didInvalidate.value)
     #expect(!model.automaticOutputDecision.isDeferred)
     #expect(model.automaticOutputDecision.target == speaker)
     #expect(audio.selections.contains { $0.1 == speaker.platformID })

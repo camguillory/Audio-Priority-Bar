@@ -69,6 +69,11 @@ final class AppModel {
     private var micFlashTimer: Timer?
     private var muteVolumeRefreshTask: Task<Void, Never>?
     private var hasStarted = false
+    /// Bumped on every Jabra link verdict so `linkState(for:)` is part of the
+    /// Observation graph. `link.state` itself lives outside `@Observable`, so
+    /// without this a row only redraws its badge when something else
+    /// (like hover) forces its body to re-run.
+    private var linkRevision = 0
 
     init(
         store: PriorityStore = PriorityStore(),
@@ -125,6 +130,14 @@ final class AppModel {
             return
         }
         applyHighestPriorityDevices()
+    }
+
+    /// The Jabra monitor reached a new verdict for some dongle. Bumping the
+    /// revision first means every view reading `linkState(for:)` invalidates
+    /// immediately rather than waiting for an unrelated redraw.
+    func handleLinkChanged() {
+        linkRevision &+= 1
+        handleDevicesChanged()
     }
 
     func handleDefaultChanged(_ role: DeviceRole) {
@@ -284,7 +297,8 @@ final class AppModel {
     }
 
     func linkState(for device: AudioDevice) -> LinkState? {
-        device.isConnected ? link.state(device) : nil
+        _ = linkRevision
+        return device.isConnected ? link.state(device) : nil
     }
 
     var activeOutputCategory: OutputCategory? {
@@ -326,7 +340,7 @@ final class AppModel {
             }
             // Waiting a moment beats routing audio to this device and then
             // immediately moving away from it once the answer arrives.
-            if link.state(device) == .checking {
+            if linkState(for: device) == .checking {
                 return AutomaticOutputDecision(
                     target: nil,
                     skipped: skipped,

@@ -37,7 +37,7 @@ final class AppRuntime {
             model?.handleMuteOrVolumeChanged()
         }
         jabra.onLinkChange = { [weak model] in
-            model?.handleDevicesChanged()
+            model?.handleLinkChanged()
         }
     }
 
