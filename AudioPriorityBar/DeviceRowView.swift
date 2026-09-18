@@ -18,15 +18,58 @@ struct DeviceRow: View {
     let isLifted: Bool
     let select: () -> Void
     let move: (Int) -> Void
+    /// Set to a device's `id` while the selection override on its paired
+    /// device's row is hovered, so this row can mirror that highlight.
+    @Binding var highlightedPairedDeviceID: String?
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var confirmsForget = false
     @State private var isHovering = false
+    @State private var isHoveringSelectionOverride = false
 
     private var linkState: LinkState? { model.linkState(for: device) }
     private var isUnavailable: Bool { linkState == .down }
     private var isHidden: Bool { model.isHidden(device) }
     private var isNeverUse: Bool { model.isNeverUse(device) }
+    private var pairedDevice: AudioDevice? { model.pairedDevice(for: device) }
+
+    /// Whether this device and its pair are both currently selected, so
+    /// selecting them together has nothing left to do.
+    private var areBothDevicesSelected: Bool {
+        guard let pairedDevice else { return false }
+        let pairedIsCurrent = pairedDevice.role == .input
+            ? model.currentInputID == pairedDevice.platformID
+            : model.currentOutputID == pairedDevice.platformID
+        return isSelected && pairedIsCurrent
+    }
+
+    /// Whether the paired device is connected and not link-down, so
+    /// selecting it could actually take effect.
+    private var isPairedDeviceUsable: Bool {
+        guard let pairedDevice else { return false }
+        return device.isConnected
+            && !isUnavailable
+            && model.linkState(for: pairedDevice) != .down
+    }
+
+    private var canSelectBothDevices: Bool {
+        isPairedDeviceUsable && !areBothDevicesSelected
+    }
+
+    private var selectionOverrideHelp: String {
+        if model.selectsPairedDevice {
+            return device.role == .input
+                ? "Select only this microphone, not its output"
+                : "Select only this output, not its microphone"
+        }
+        return "Use \(device.name) for input and output"
+    }
+
+    /// Whether this row should show a highlight because the selection
+    /// override on its paired device's row is currently hovered.
+    private var isHighlightedPairedDevice: Bool {
+        highlightedPairedDeviceID == device.id
+    }
     private var statuses: [Status] {
         var result: [Status] = []
         if isSelected && isUnavailable {
@@ -128,6 +171,8 @@ struct DeviceRow: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())
 
+            selectionOverride
+
             Image(systemName: "checkmark.circle.fill")
                 .foregroundStyle(isUnavailable ? Color.orange : Color.accentColor)
                 .opacity(isSelected ? 1 : 0)
@@ -149,7 +194,16 @@ struct DeviceRow: View {
             radius: isLifted ? 10 : 0,
             y: isLifted ? 5 : 0
         )
-        .onHover { isHovering = $0 }
+        .onHover { hovering in
+            isHovering = hovering
+            guard model.selectsPairedDevice, isPairedDeviceUsable, !isSelected,
+                  !isHoveringSelectionOverride, let pairedDevice else { return }
+            if hovering {
+                highlightedPairedDeviceID = pairedDevice.id
+            } else if highlightedPairedDeviceID == pairedDevice.id {
+                highlightedPairedDeviceID = nil
+            }
+        }
         .contentShape(Rectangle())
         .onTapGesture {
             if device.isConnected, !isUnavailable, !isSelected { select() }
@@ -195,7 +249,78 @@ struct DeviceRow: View {
     private var rowBackground: Color {
         if isSelected && isUnavailable { return Color.orange.opacity(0.12) }
         if isSelected { return Color.accentColor.opacity(0.14) }
-        return isHovering ? Color.primary.opacity(0.06) : .clear
+        return isHovering || isHighlightedPairedDevice
+            ? Color.primary.opacity(0.06) : .clear
+    }
+
+    /// The override for the current default: offers to select only this
+    /// device while both are normally selected together, or to select both
+    /// while only one is. Shown only while it would change something, so a
+    /// row whose pair is already in the target state, unavailable, or absent
+    /// keeps the layout it had before.
+    @ViewBuilder
+    private var selectionOverride: some View {
+        if let pairedDevice, isPairedDeviceUsable {
+            if model.selectsPairedDevice {
+                if !isSelected {
+                    selectionOverridePill(
+                        partner: pairedDevice,
+                        label: device.role == .input ? "Mic only" : "Output only",
+                        action: { model.selectOnly(device) }
+                    )
+                }
+            } else if canSelectBothDevices {
+                selectionOverridePill(
+                    partner: pairedDevice,
+                    label: "Use both",
+                    action: { model.selectWithPairedDevice(device) }
+                )
+            }
+        }
+    }
+
+    private func selectionOverridePill(
+        partner: AudioDevice,
+        label: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Text(label)
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 6)
+                .frame(height: 18)
+                .background(
+                    Capsule().fill(
+                        Color.primary.opacity(isHoveringSelectionOverride ? 0.12 : 0.06)
+                    )
+                )
+        }
+        .buttonStyle(.plain)
+        .help(selectionOverrideHelp)
+        .accessibilityLabel(selectionOverrideHelp)
+        .onHover { hovering in
+            isHoveringSelectionOverride = hovering
+            if model.selectsPairedDevice {
+                // This override selects only the hovered device, so
+                // suppress the partner highlight while hovering it, and
+                // restore it when returning to the row, which still selects
+                // both.
+                if hovering {
+                    if highlightedPairedDeviceID == partner.id {
+                        highlightedPairedDeviceID = nil
+                    }
+                } else if isHovering, !isSelected {
+                    highlightedPairedDeviceID = partner.id
+                }
+            } else if hovering {
+                // "Use both" is the only control that selects the partner
+                // while selecting one device at a time is the default.
+                highlightedPairedDeviceID = partner.id
+            } else if highlightedPairedDeviceID == partner.id {
+                highlightedPairedDeviceID = nil
+            }
+        }
     }
 
     private var actions: some View {

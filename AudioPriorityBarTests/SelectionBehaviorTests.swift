@@ -332,10 +332,34 @@ func automaticInputDoesNotPairANeverAutoSelectCurrentOutput() {
 
 @Test
 @MainActor
-func pairingNeverMovesOutputFromAnInputSelection() {
+func selectingAMicrophoneAlsoSelectsItsOutputWhenEnabled() {
     let defaults = isolatedDefaults()
     let store = PriorityStore(defaults: defaults)
     store.isManualMode = true
+    let paired = dualRole()
+    let speaker = output(2, "speaker")
+    let audio = FakeAudio()
+    audio.catalog = [paired.output, paired.input, speaker]
+    audio.defaults[.output] = speaker.platformID
+    let model = testModel(audio: audio, defaults: defaults)
+    model.start()
+
+    model.selectManually(paired.input)
+
+    #expect(model.currentInputID == paired.input.platformID)
+    #expect(model.currentOutputID == paired.output.platformID)
+    // Exactly the mic then its output: a returning cycle would fail this
+    // count instead of only hanging.
+    #expect(audio.selections.map(\.0) == [.input, .output])
+}
+
+@Test
+@MainActor
+func selectingAMicrophoneLeavesOutputAloneWhenDisabled() {
+    let defaults = isolatedDefaults()
+    let store = PriorityStore(defaults: defaults)
+    store.isManualMode = true
+    store.selectsPairedDevice = false
     let paired = dualRole()
     let speaker = output(2, "speaker")
     let audio = FakeAudio()
@@ -352,6 +376,95 @@ func pairingNeverMovesOutputFromAnInputSelection() {
 
 @Test
 @MainActor
+func selectOnlyLeavesOutputAloneWhenPairedSelectionIsEnabled() {
+    let defaults = isolatedDefaults()
+    let store = PriorityStore(defaults: defaults)
+    store.isManualMode = true
+    let paired = dualRole()
+    let speaker = output(2, "speaker")
+    let audio = FakeAudio()
+    audio.catalog = [paired.output, paired.input, speaker]
+    audio.defaults[.output] = speaker.platformID
+    let model = testModel(audio: audio, defaults: defaults)
+    model.start()
+
+    model.selectOnly(paired.input)
+
+    #expect(model.currentInputID == paired.input.platformID)
+    #expect(model.currentOutputID == speaker.platformID)
+}
+
+@Test
+@MainActor
+func automaticMicrophonePriorityDoesNotOverrideAnUnrelatedAutomaticOutput() {
+    let defaults = isolatedDefaults()
+    let store = PriorityStore(defaults: defaults)
+    let paired = dualRole()
+    // Forced rather than left to name detection, so this test exercises
+    // priority order rather than headphone-keyword classification.
+    store.setCategory(.speaker, for: paired.output)
+    let macSpeaker = output(2, "mac-speaker")
+    let macMic = input(2, "mac-mic")
+    store.savePriorities([macSpeaker, paired.output], category: .speaker)
+    store.savePriorities([paired.input, macMic], role: .input)
+    let audio = FakeAudio()
+    audio.catalog = [macSpeaker, macMic, paired.output, paired.input]
+    let model = testModel(audio: audio, defaults: defaults)
+
+    model.start()
+
+    // Output and microphone priority lists stay independent unless the
+    // current output is itself the anchor: a microphone chosen purely by its
+    // own priority must not reach back and move an unrelated output that
+    // automatic selection already, separately, decided on.
+    #expect(model.currentOutputID == macSpeaker.platformID)
+    #expect(model.currentInputID == paired.input.platformID)
+}
+
+@Test
+@MainActor
+func explicitPairedSelectionWorksWhenDefaultIsSingleDevice() {
+    let defaults = isolatedDefaults()
+    let store = PriorityStore(defaults: defaults)
+    store.isManualMode = true
+    store.selectsPairedDevice = false
+    let paired = dualRole()
+    let speaker = output(2, "speaker")
+    let audio = FakeAudio()
+    audio.catalog = [paired.output, paired.input, speaker]
+    audio.defaults[.output] = speaker.platformID
+    let model = testModel(audio: audio, defaults: defaults)
+    model.start()
+
+    model.selectWithPairedDevice(paired.input)
+
+    #expect(model.currentOutputID == paired.output.platformID)
+    #expect(model.currentInputID == paired.input.platformID)
+}
+
+@Test
+@MainActor
+func selectWithPairedDeviceStopsAtAFailedOutputSelection() {
+    let defaults = isolatedDefaults()
+    let store = PriorityStore(defaults: defaults)
+    store.isManualMode = true
+    let paired = dualRole()
+    let macMic = input(2, "mac-mic")
+    let audio = FakeAudio()
+    audio.catalog = [paired.output, paired.input, macMic]
+    audio.defaults[.input] = macMic.platformID
+    audio.failedSelectionRoles = [.output]
+    let model = testModel(audio: audio, defaults: defaults)
+    model.start()
+
+    model.selectWithPairedDevice(paired.input)
+
+    #expect(model.currentInputID == macMic.platformID)
+    #expect(audio.selections.isEmpty)
+}
+
+@Test
+@MainActor
 func pairingSkipsMissingHiddenVirtualAndDisabledPartners() {
     let configurations: [(virtual: Bool, hidden: Bool, enabled: Bool)] = [
         (false, true, true),
@@ -362,7 +475,7 @@ func pairingSkipsMissingHiddenVirtualAndDisabledPartners() {
         let defaults = isolatedDefaults()
         let store = PriorityStore(defaults: defaults)
         store.isManualMode = true
-        store.linksMicrophone = configuration.enabled
+        store.selectsPairedDevice = configuration.enabled
         let paired = dualRole(isVirtual: configuration.virtual)
         let macMic = input(2, "mac-mic")
         if configuration.hidden { store.hide(paired.input) }
@@ -448,10 +561,10 @@ func disablingPairingReappliesAutomaticMicrophonePriority() {
     model.start()
     #expect(model.currentInputID == paired.input.platformID)
 
-    model.setLinksMicrophone(false)
+    model.setSelectsPairedDevice(false)
 
-    #expect(!model.linksMicrophone)
-    #expect(!model.store.linksMicrophone)
+    #expect(!model.selectsPairedDevice)
+    #expect(!model.store.selectsPairedDevice)
     #expect(model.currentInputID == macMic.platformID)
 }
 

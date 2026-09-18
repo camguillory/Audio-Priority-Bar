@@ -84,8 +84,8 @@ You can also open `AudioPriorityBar.xcodeproj` in Xcode and build with Command-R
 - Selecting a device in the panel or macOS Sound Settings turns automatic
   switching off so that choice stays active.
 - Turn automatic switching back on to resume priority-based selection.
-- With **Move microphone with output** enabled, matching input and output
-  halves of a physical USB headset switch together.
+- With **Select headset input and output together** enabled, choosing
+  either half of a physical USB headset selects the other too.
 
 Speakers, Headphones, and Microphones remain visible in both modes.
 
@@ -101,6 +101,11 @@ Speakers, Headphones, and Microphones remain visible in both modes.
 - Use **Show hidden and disconnected devices** to manage hidden and
   disconnected remembered devices.
 - Forget a disconnected device to remove its saved settings.
+- A device with a paired counterpart, like a USB headset's input and output
+  halves, shows an override for the current default: **Mic only** or
+  **Output only** while **Select headset input and output together** is on,
+  or **Use both** while it's off. It appears only when picking it would
+  change something.
 
 New HDMI and DisplayPort outputs start hidden; showing one is permanent, and
 **Hide new HDMI and DisplayPort outputs** turns this off for future devices.

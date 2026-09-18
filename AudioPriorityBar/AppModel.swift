@@ -50,7 +50,7 @@ final class AppModel {
     var isVolumeControllable = true
     var showAll = false
     var isManualMode: Bool
-    var linksMicrophone: Bool
+    var selectsPairedDevice: Bool
     var hideNewDisplayOutputs: Bool
     var isActiveOutputMuted = false
     var isActiveInputMuted = false
@@ -83,7 +83,7 @@ final class AppModel {
         self.link = link
         self.reduceMotion = reduceMotion
         isManualMode = store.isManualMode
-        linksMicrophone = store.linksMicrophone
+        selectsPairedDevice = store.selectsPairedDevice
         hideNewDisplayOutputs = store.hideNewDisplayOutputs
     }
 
@@ -146,7 +146,7 @@ final class AppModel {
         }
         if isManualMode {
             if role == .output, let output = currentOutputDevice {
-                syncMicrophone(to: output)
+                selectPairedDevice(of: output)
             }
             refreshMute()
             return
@@ -170,7 +170,7 @@ final class AppModel {
             setManualMode(true)
         }
         if role == .output, let output = currentOutputDevice {
-            syncMicrophone(to: output, automatically: !isManualMode)
+            selectPairedDevice(of: output, automatically: !isManualMode)
         }
         refreshMute()
     }
@@ -379,7 +379,8 @@ final class AppModel {
         if role == .input {
             if let output = currentOutputDevice,
                automaticOutputDecision.target?.id == output.id,
-               let paired = pairedMicrophone(for: output),
+               selectsPairedDevice,
+               let paired = pairedDevice(for: output),
                !store.isNeverUse(paired),
                link.isUsable(paired) {
                 return paired
@@ -395,7 +396,8 @@ final class AppModel {
     @discardableResult
     func select(
         _ device: AudioDevice,
-        automatically: Bool = false
+        automatically: Bool = false,
+        includesPairedDevice: Bool = true
     ) -> Bool {
         let currentID = device.role == .input ? currentInputID : currentOutputID
         if currentID != device.platformID {
@@ -408,28 +410,42 @@ final class AppModel {
                 currentOutputID = device.platformID
             }
         }
-        if device.role == .output {
-            syncMicrophone(to: device, automatically: automatically)
+        if includesPairedDevice {
+            selectPairedDevice(of: device, automatically: automatically)
         }
         return true
     }
 
-    func syncMicrophone(
-        to output: AudioDevice,
-        automatically: Bool = false
-    ) {
-        if let microphone = pairedMicrophone(for: output),
-           !automatically || (
-               !store.isNeverUse(microphone) && link.isUsable(microphone)
-           ) {
-            select(microphone)
-        }
+    /// Selects the paired counterpart of `device`, when `selectsPairedDevice`
+    /// covers both. Reaching from a microphone to its output only happens on
+    /// a direct pick (`automatically == false`): automatic mode already
+    /// anchors microphone selection to the current output above, so letting
+    /// a priority-ranked microphone reach back here would fight that
+    /// output's own decision. The already-current guard below is what stops
+    /// an output-to-mic-to-output cycle.
+    func selectPairedDevice(of device: AudioDevice, automatically: Bool = false) {
+        guard selectsPairedDevice, let partner = pairedDevice(for: device) else { return }
+        guard device.role == .output || !automatically else { return }
+        let partnerCurrentID = partner.role == .input ? currentInputID : currentOutputID
+        guard partner.platformID != partnerCurrentID else { return }
+        guard !automatically
+            || (!store.isNeverUse(partner) && link.isUsable(partner)) else { return }
+        select(partner)
     }
 
-    private func pairedMicrophone(for output: AudioDevice) -> AudioDevice? {
-        guard linksMicrophone, !output.isVirtual else { return nil }
-        return inputDevices.first {
-            $0.pairingKey == output.pairingKey
+    /// The connected counterpart of `device` that shares its physical
+    /// identity (`AudioDevice.pairingKey`), if any: the input half for an
+    /// output, or the output half for an input. Not gated by
+    /// `selectsPairedDevice`, that setting only governs the automatic
+    /// selection in `selectPairedDevice` above; the explicit
+    /// `selectWithPairedDevice`/`selectOnly` actions use this directly.
+    func pairedDevice(for device: AudioDevice) -> AudioDevice? {
+        guard !device.isVirtual else { return nil }
+        let candidates = device.role == .output
+            ? inputDevices
+            : speakerDevices + headphoneDevices
+        return candidates.first {
+            $0.pairingKey == device.pairingKey
                 && $0.isConnected
                 && !$0.isVirtual
                 && !store.isHidden($0)

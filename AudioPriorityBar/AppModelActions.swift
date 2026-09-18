@@ -10,11 +10,11 @@ extension AppModel {
         }
     }
 
-    func setLinksMicrophone(_ enabled: Bool) {
-        linksMicrophone = enabled
-        store.linksMicrophone = enabled
+    func setSelectsPairedDevice(_ enabled: Bool) {
+        selectsPairedDevice = enabled
+        store.selectsPairedDevice = enabled
         if enabled, let output = currentOutputDevice {
-            syncMicrophone(to: output, automatically: !isManualMode)
+            selectPairedDevice(of: output, automatically: !isManualMode)
         } else if !isManualMode {
             applyHighestPriorityInput()
         }
@@ -28,6 +28,24 @@ extension AppModel {
     func selectManually(_ device: AudioDevice) {
         setManualMode(true)
         select(device)
+    }
+
+    /// Selects a device with its paired counterpart, regardless of
+    /// `selectsPairedDevice`. Output goes first so a failed output
+    /// selection, like a plain manual selection, never moves the microphone.
+    func selectWithPairedDevice(_ device: AudioDevice) {
+        guard let pair = pairedDevice(for: device) else { return }
+        let output = device.role == .output ? device : pair
+        let input = device.role == .input ? device : pair
+        setManualMode(true)
+        guard select(output) else { return }
+        select(input)
+    }
+
+    /// Selects one device only, regardless of `selectsPairedDevice`.
+    func selectOnly(_ device: AudioDevice) {
+        setManualMode(true)
+        select(device, includesPairedDevice: false)
     }
 
     func setVolume(_ value: Float) {

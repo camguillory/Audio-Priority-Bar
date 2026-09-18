@@ -8,6 +8,7 @@ public final class PriorityStore {
         static let categories = "deviceCategories"
         static let manualMode = "customMode"
         static let linksMicrophone = "linksMicrophone"
+        static let selectsPairedDevice = "selectsPairedDevice"
         static let hideNewDisplayOutputs = "hideNewDisplayOutputs"
         static let displayDefaultsApplied = "displayDefaultsApplied"
         static let knownDevices = "knownDevices"
@@ -46,6 +47,12 @@ public final class PriorityStore {
     ) {
         self.defaults = defaults
         self.now = now
+        // One-time migration from the pre-rename key: the new key's presence
+        // makes this idempotent, so no marker key is needed.
+        if defaults.object(forKey: Key.selectsPairedDevice) == nil,
+           let legacyValue = defaults.object(forKey: Key.linksMicrophone) as? Bool {
+            defaults.set(legacyValue, forKey: Key.selectsPairedDevice)
+        }
         if legacyDomain != nil || defaults === UserDefaults.standard {
             migrateLegacyBundleIfNeeded(
                 from: legacyDomain ?? defaults.persistentDomain(
@@ -135,9 +142,11 @@ public final class PriorityStore {
         set { defaults.set(newValue, forKey: Key.manualMode) }
     }
 
-    public var linksMicrophone: Bool {
-        get { defaults.object(forKey: Key.linksMicrophone) as? Bool ?? true }
-        set { defaults.set(newValue, forKey: Key.linksMicrophone) }
+    /// Whether choosing one device of a paired pair, a headset's microphone
+    /// or output, selects the other too.
+    public var selectsPairedDevice: Bool {
+        get { defaults.object(forKey: Key.selectsPairedDevice) as? Bool ?? true }
+        set { defaults.set(newValue, forKey: Key.selectsPairedDevice) }
     }
 
     public var hideNewDisplayOutputs: Bool {

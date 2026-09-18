@@ -42,20 +42,20 @@ struct SettingsView: View {
                 .font(.headline)
 
             SettingSwitch(
-                title: "Move microphone with output",
-                explanation: "When an output has its own microphone, switch both together.",
+                title: "Select headset input and output together",
+                explanation: "Choosing either one also selects the other.",
                 isOn: Binding(
-                    get: { model.linksMicrophone },
-                    set: { model.setLinksMicrophone($0) }
+                    get: { model.selectsPairedDevice },
+                    set: { model.setSelectsPairedDevice($0) }
                 )
             )
 
             SettingSwitch(
                 title: "Hide new HDMI and DisplayPort outputs",
                 explanation: """
-                    A monitor or TV plays sound but is rarely where you want it. \
-                    Newly detected ones start hidden. Use Show hidden and \
-                    disconnected devices to show one.
+                    A monitor or TV's speakers are rarely what you want, so \
+                    these stay hidden until shown from Show hidden and \
+                    disconnected devices.
                     """,
                 isOn: Binding(
                     get: { model.hideNewDisplayOutputs },

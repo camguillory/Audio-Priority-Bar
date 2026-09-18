@@ -19,6 +19,7 @@ struct DeviceSectionView: View {
     let currentID: UInt32?
     let layout: PanelLayout
     @Binding var drag: DeviceDrag?
+    @Binding var highlightedPairedDeviceID: String?
 
     private var category: OutputCategory? { section.category }
 
@@ -62,7 +63,8 @@ struct DeviceSectionView: View {
                         category: category,
                         isLifted: lifted,
                         select: { select(device) },
-                        move: { target in move(index, target) }
+                        move: { target in move(index, target) },
+                        highlightedPairedDeviceID: $highlightedPairedDeviceID
                     )
                     .overlay(alignment: .topTrailing) {
                         if lifted, drag?.isForbidden == true {

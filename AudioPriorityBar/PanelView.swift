@@ -9,6 +9,10 @@ struct PanelView: View {
 
     /// Held here rather than per section so a row can be dragged between lists.
     @State private var drag: DeviceDrag?
+    /// The id of the device whose row should show a highlight because the
+    /// selection override on its paired device's row is hovered, held here
+    /// since the two rows can be in different sections.
+    @State private var highlightedPairedDeviceID: String?
 
     private var layout: PanelLayout {
         PanelLayout(sections: [
@@ -78,7 +82,8 @@ struct PanelView: View {
                         devices: model.speakerDevices,
                         currentID: model.currentOutputID,
                         layout: layout,
-                        drag: $drag
+                        drag: $drag,
+                        highlightedPairedDeviceID: $highlightedPairedDeviceID
                     )
                     .zIndex(drag?.section == .speaker ? 1 : 0)
                     DeviceSectionView(
@@ -90,7 +95,8 @@ struct PanelView: View {
                         devices: model.headphoneDevices,
                         currentID: model.currentOutputID,
                         layout: layout,
-                        drag: $drag
+                        drag: $drag,
+                        highlightedPairedDeviceID: $highlightedPairedDeviceID
                     )
                     .zIndex(drag?.section == .headphone ? 1 : 0)
                     DeviceSectionView(
@@ -102,7 +108,8 @@ struct PanelView: View {
                         devices: model.inputDevices,
                         currentID: model.currentInputID,
                         layout: layout,
-                        drag: $drag
+                        drag: $drag,
+                        highlightedPairedDeviceID: $highlightedPairedDeviceID
                     )
                     .zIndex(drag?.section == .input ? 1 : 0)
                 }

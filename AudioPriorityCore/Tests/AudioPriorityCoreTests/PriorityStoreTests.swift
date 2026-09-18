@@ -328,14 +328,30 @@ func neverUseIsScopedByRole() throws {
 }
 
 @Test
-func microphoneLinkingDefaultsOnAndPersistsOff() throws {
+func selectsPairedDeviceDefaultsOnAndPersistsOff() throws {
     try withDefaults { defaults in
         let store = PriorityStore(defaults: defaults)
-        #expect(store.linksMicrophone)
+        #expect(store.selectsPairedDevice)
 
-        store.linksMicrophone = false
+        store.selectsPairedDevice = false
 
-        #expect(!PriorityStore(defaults: defaults).linksMicrophone)
+        #expect(!PriorityStore(defaults: defaults).selectsPairedDevice)
+    }
+}
+
+@Test
+func selectsPairedDeviceMigratesFromThePreRenameKeyOnce() throws {
+    try withDefaults { defaults in
+        defaults.set(false, forKey: "linksMicrophone")
+
+        let store = PriorityStore(defaults: defaults)
+
+        #expect(!store.selectsPairedDevice)
+
+        // Migrating once means a later legacy write must not override the
+        // now-authoritative value.
+        defaults.set(true, forKey: "linksMicrophone")
+        #expect(!PriorityStore(defaults: defaults).selectsPairedDevice)
     }
 }
 
