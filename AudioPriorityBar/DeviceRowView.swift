@@ -26,6 +26,7 @@ struct DeviceRow: View {
     @State private var confirmsForget = false
     @State private var isHovering = false
     @State private var isHoveringSelectionOverride = false
+    @State private var highlightedPartnerID: String?
 
     private var linkState: LinkState? { model.linkState(for: device) }
     private var isUnavailable: Bool { linkState == .down }
@@ -196,13 +197,17 @@ struct DeviceRow: View {
         )
         .onHover { hovering in
             isHovering = hovering
+            if !hovering {
+                if highlightedPairedDeviceID == highlightedPartnerID {
+                    highlightedPairedDeviceID = nil
+                }
+                highlightedPartnerID = nil
+                return
+            }
             guard model.selectsPairedDevice, isPairedDeviceUsable, !isSelected,
                   !isHoveringSelectionOverride, let pairedDevice else { return }
-            if hovering {
-                highlightedPairedDeviceID = pairedDevice.id
-            } else if highlightedPairedDeviceID == pairedDevice.id {
-                highlightedPairedDeviceID = nil
-            }
+            highlightedPartnerID = pairedDevice.id
+            highlightedPairedDeviceID = pairedDevice.id
         }
         .contentShape(Rectangle())
         .onTapGesture {

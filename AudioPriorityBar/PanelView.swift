@@ -127,6 +127,12 @@ struct PanelView: View {
             if let drag, !ids.contains(drag.device.id) {
                 self.drag = nil
             }
+            // A row removed while hovered never reports the pointer leaving, so
+            // its partner's highlight would outlive both rows.
+            if let highlightedPairedDeviceID,
+               !ids.contains(highlightedPairedDeviceID) {
+                self.highlightedPairedDeviceID = nil
+            }
         }
         .onReceive(
             NotificationCenter.default.publisher(
