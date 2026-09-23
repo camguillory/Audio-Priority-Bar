@@ -40,6 +40,7 @@ private final class PanelWindow: NSPanel {
 final class StatusItemController: NSObject, NSWindowDelegate {
     private let model: AppModel
     private let settings: SettingsWindowController
+    private let updates: UpdateChecker
     private let statusItem: NSStatusItem
     private let panel = PanelWindow(
         contentRect: .zero,
@@ -48,16 +49,23 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         defer: false
     )
     private let menu = NSMenu()
+    private let updatesItem = NSMenuItem(
+        title: "Check for Updates…",
+        action: nil,
+        keyEquivalent: ""
+    )
     private let labelView: PassthroughHostingView<StatusLabel>
     private var suppressNextClickAt: TimeInterval?
 
     init(
         model: AppModel,
         settings: SettingsWindowController,
+        updates: UpdateChecker,
         statusBar: NSStatusBar = .system
     ) {
         self.model = model
         self.settings = settings
+        self.updates = updates
         statusItem = statusBar.statusItem(withLength: NSStatusItem.variableLength)
         labelView = PassthroughHostingView(
             rootView: StatusLabel(model: model)
@@ -90,9 +98,15 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         let hostingController = NSHostingController(
             rootView: PanelView(
                 model: model,
+                updates: updates,
                 showSettings: { [weak self] in
                     self?.hidePanel()
                     self?.showSettings()
+                },
+                downloadUpdate: { [weak self] in
+                    self?.hidePanel()
+                    guard let url = self?.updates.downloadURL else { return }
+                    NSWorkspace.shared.open(url)
                 }
             )
         )
@@ -112,6 +126,10 @@ final class StatusItemController: NSObject, NSWindowDelegate {
     }
 
     private func configureMenu() {
+        updatesItem.target = self
+        updatesItem.action = #selector(handleUpdatesItem)
+        menu.addItem(updatesItem)
+        menu.addItem(.separator())
         let settingsItem = menu.addItem(
             withTitle: "Settings…",
             action: #selector(showSettings),
@@ -195,6 +213,11 @@ final class StatusItemController: NSObject, NSWindowDelegate {
 
     private func showMenu() {
         hidePanel()
+        // The item is read fresh here rather than kept in sync continuously,
+        // since it is only ever visible for the moment the menu is open.
+        updatesItem.title = updates.availableVersion == nil
+            ? "Check for Updates…"
+            : "Download Update…"
         statusItem.menu = menu
         statusItem.button?.performClick(nil)
         statusItem.menu = nil
@@ -204,6 +227,15 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         // The status item lives in the menu bar of the screen being used, which
         // is the same screen the panel is positioned against.
         settings.showSettings(on: statusItem.button?.window?.screen)
+    }
+
+    @objc private func handleUpdatesItem() {
+        if let downloadURL = updates.downloadURL, updates.availableVersion != nil {
+            NSWorkspace.shared.open(downloadURL)
+        } else {
+            showSettings()
+            updates.checkManually()
+        }
     }
 
     private func hidePanel(suppressNextClick: Bool = false) {

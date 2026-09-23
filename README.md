@@ -29,6 +29,7 @@ highest-priority connected headphones, speakers, and microphone.
   Output only overrides
 - Settings, right-click quick actions, VoiceOver support, and Open at Login
 - Jabra Link headset power-off detection, asked of the dongle rather than guessed
+- Automatic update checks on launch and daily, with a manual check and an opt-out in Settings
 
 ## Install
 

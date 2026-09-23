@@ -4,6 +4,7 @@ import SwiftUI
 struct SettingsView: View {
     @Bindable var model: AppModel
     @Bindable var launchAtLogin: LaunchAtLoginController
+    @Bindable var updates: UpdateChecker
 
     private var version: String {
         Bundle.main.object(
@@ -78,6 +79,41 @@ struct SettingsView: View {
                     Text(appDisplayName).font(.headline)
                     Text("Version \(version)").foregroundStyle(.secondary)
                 }
+
+                if let availableVersion = updates.availableVersion,
+                   let downloadURL = updates.downloadURL {
+                    Spacer()
+                    Button("Download \(availableVersion)") {
+                        NSWorkspace.shared.open(downloadURL)
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
+            }
+
+            SettingSwitch(
+                title: "Automatically check for updates",
+                explanation: "Checks GitHub on launch and once a day while running.",
+                isOn: Binding(
+                    get: { updates.automaticChecksEnabled },
+                    set: { updates.setAutomaticChecksEnabled($0) }
+                )
+            )
+
+            HStack(spacing: 8) {
+                Button("Check for Updates…") { updates.checkManually() }
+                    .disabled(updates.manualCheckResult == .checking)
+                switch updates.manualCheckResult {
+                case .upToDate:
+                    Text("You're up to date.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                case .failed:
+                    Text("Couldn't check for updates. Try again.")
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                case .checking, nil:
+                    EmptyView()
+                }
             }
 
             Divider()
@@ -139,7 +175,11 @@ enum SettingsPlacement {
 
 @MainActor
 final class SettingsWindowController: NSWindowController {
-    init(model: AppModel, launchAtLogin: LaunchAtLoginController) {
+    init(
+        model: AppModel,
+        launchAtLogin: LaunchAtLoginController,
+        updates: UpdateChecker
+    ) {
         let window = NSWindow(
             contentRect: .zero,
             styleMask: [.titled, .closable, .resizable],
@@ -150,7 +190,8 @@ final class SettingsWindowController: NSWindowController {
         let hostingController = NSHostingController(
             rootView: SettingsView(
                 model: model,
-                launchAtLogin: launchAtLogin
+                launchAtLogin: launchAtLogin,
+                updates: updates
             )
         )
         // Gives the window its real size before it is ever placed, so the

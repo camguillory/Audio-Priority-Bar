@@ -5,7 +5,9 @@ import SwiftUI
 
 struct PanelView: View {
     @Bindable var model: AppModel
+    @Bindable var updates: UpdateChecker
     let showSettings: () -> Void
+    let downloadUpdate: () -> Void
 
     /// Held here rather than per section so a row can be dragged between lists.
     @State private var drag: DeviceDrag?
@@ -44,6 +46,15 @@ struct PanelView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            if let availableVersion = updates.availableVersion {
+                UpdateBanner(
+                    version: availableVersion,
+                    download: downloadUpdate,
+                    dismiss: { updates.dismissThisVersion() }
+                )
+                Divider().padding(.horizontal, 10)
+            }
+
             VStack(alignment: .leading, spacing: 6) {
                 Toggle(
                     "Automatic switching",
@@ -229,6 +240,41 @@ private struct VolumeControl: View {
         model.isVolumeControllable
             ? "\(Int(model.volume * 100)) percent"
             : "Unavailable"
+    }
+}
+
+/// Shown at the top of the panel, the most-opened surface in the app, so an
+/// available update is obvious without visiting Settings or the right-click
+/// menu.
+private struct UpdateBanner: View {
+    let version: String
+    let download: () -> Void
+    let dismiss: () -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "arrow.down.circle.fill")
+                .font(.system(size: 16))
+                .foregroundStyle(.tint)
+                .accessibilityHidden(true)
+            Text("Version \(version) is available")
+                .font(.system(size: 12, weight: .semibold))
+            Spacer()
+            Button("Download", action: download)
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+            Button(action: dismiss) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 10, weight: .bold))
+            }
+            .buttonStyle(.plain)
+            .frame(width: 20, height: 20)
+            .help("Dismiss until next launch")
+            .accessibilityLabel("Dismiss version \(version) until next launch")
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(Color.accentColor.opacity(0.12))
     }
 }
 

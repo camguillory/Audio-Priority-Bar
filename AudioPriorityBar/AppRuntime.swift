@@ -3,6 +3,7 @@ import AudioPriorityCore
 @MainActor
 final class AppRuntime {
     let model: AppModel
+    let updates = UpdateChecker()
     private let audioObserver: CoreAudioObserver
     private let jabra: JabraHIDMonitor
 
@@ -46,6 +47,7 @@ final class AppRuntime {
         jabra.start()
         let isListening = audioObserver.startListening()
         model.start()
+        updates.start()
         return isListening
     }
 
@@ -55,5 +57,6 @@ final class AppRuntime {
         jabra.stop()
         audioObserver.stopListening()
         model.stop()
+        updates.stop()
     }
 }

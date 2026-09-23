@@ -33,6 +33,7 @@
 		A10000000000000000000024 /* DeviceInteractionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000026 /* DeviceInteractionTests.swift */; };
 		A10000000000000000000025 /* DeviceDrag.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000027 /* DeviceDrag.swift */; };
 		A10000000000000000000026 /* SelectionBehaviorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000028 /* SelectionBehaviorTests.swift */; };
+		A10000000000000000000027 /* UpdateChecker.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000029 /* UpdateChecker.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -74,6 +75,7 @@
 		B10000000000000000000026 /* DeviceInteractionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceInteractionTests.swift; sourceTree = "<group>"; };
 		B10000000000000000000027 /* DeviceDrag.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceDrag.swift; sourceTree = "<group>"; };
 		B10000000000000000000028 /* SelectionBehaviorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectionBehaviorTests.swift; sourceTree = "<group>"; };
+		B10000000000000000000029 /* UpdateChecker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateChecker.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -126,6 +128,7 @@
 				B10000000000000000000021 /* PanelView.swift */,
 				B10000000000000000000022 /* LaunchAtLoginController.swift */,
 				B10000000000000000000023 /* SettingsView.swift */,
+				B10000000000000000000029 /* UpdateChecker.swift */,
 				B10000000000000000000004 /* Assets.xcassets */,
 				B10000000000000000000003 /* Info.plist */,
 			);
@@ -276,6 +279,7 @@
 				A10000000000000000000019 /* PanelView.swift in Sources */,
 				A10000000000000000000020 /* LaunchAtLoginController.swift in Sources */,
 				A10000000000000000000021 /* SettingsView.swift in Sources */,
+				A10000000000000000000027 /* UpdateChecker.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -352,7 +356,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 2.2.0;
+				MARKETING_VERSION = 2.3.0;
 				PRODUCT_BUNDLE_IDENTIFIER = app.audioprioritybar;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_STRICT_CONCURRENCY = complete;
@@ -373,7 +377,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 2.2.0;
+				MARKETING_VERSION = 2.3.0;
 				PRODUCT_BUNDLE_IDENTIFIER = app.audioprioritybar;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_STRICT_CONCURRENCY = complete;
