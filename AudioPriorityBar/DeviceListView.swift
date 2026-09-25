@@ -2,7 +2,7 @@ import AudioPriorityCore
 import SwiftUI
 
 enum DeviceRowMetrics {
-    static let height: CGFloat = 36
+    static let height: CGFloat = 30
     static let spacing: CGFloat = 3
     static let pitch = height + spacing
     static let sectionHeader: CGFloat = 18
@@ -14,8 +14,7 @@ struct DeviceSectionView: View {
     let section: DeviceSection
     let title: String
     let emptyText: String
-    let icon: String
-    /// Draws a full-width separator in the gap above this section.
+    /// Draws a separator in the gap above this section.
     var showsSeparator = false
     let devices: [AudioDevice]
     let currentID: UInt32?
@@ -31,13 +30,10 @@ struct DeviceSectionView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: DeviceRowMetrics.spacing) {
-            Label(title, systemImage: icon)
-                .font(.callout.weight(.semibold))
-                .textCase(.uppercase)
+            Text(title)
+                .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(.secondary)
                 .frame(height: DeviceRowMetrics.sectionHeader, alignment: .leading)
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(title)
                 .accessibilityAddTraits(.isHeader)
 
             if devices.isEmpty {
@@ -95,7 +91,6 @@ struct DeviceSectionView: View {
         .overlay(alignment: .top) {
             if showsSeparator {
                 Divider()
-                    .padding(.horizontal, -PanelLayout.horizontalPadding)
                     .offset(y: PanelLayout.separatorInset - PanelLayout.sectionGap)
                     .accessibilityHidden(true)
             }

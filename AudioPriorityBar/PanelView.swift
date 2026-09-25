@@ -46,25 +46,20 @@ struct PanelView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            Text("Audio Priority Bar")
-                .font(.system(size: 13, weight: .semibold))
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 12)
-                .accessibilityAddTraits(.isHeader)
-
-            Divider()
-
             if let availableVersion = updates.availableVersion {
                 UpdateBanner(
                     version: availableVersion,
                     download: downloadUpdate,
                     dismiss: { updates.dismissThisVersion() }
                 )
-                Divider()
+                Divider().padding(.horizontal, 12)
             }
 
-            VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text("Automatic switching")
+                    .font(.system(size: 13, weight: .semibold))
+                    .accessibilityHidden(true)
+                Spacer()
                 Toggle(
                     "Automatic switching",
                     isOn: Binding(
@@ -72,24 +67,14 @@ struct PanelView: View {
                         set: { model.setManualMode(!$0) }
                     )
                 )
+                .labelsHidden()
                 .toggleStyle(.switch)
-                .controlSize(.small)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .help("Use device priorities as availability changes")
             }
+            .help("Use device priorities as availability changes")
             .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-
-            Divider()
+            .padding(.top, 10)
 
             VStack(alignment: .leading, spacing: 6) {
-                Text("Volume")
-                    .font(.callout.weight(.semibold))
-                    .textCase(.uppercase)
-                    .foregroundStyle(.secondary)
-                    .frame(height: DeviceRowMetrics.sectionHeader, alignment: .leading)
-                    .accessibilityAddTraits(.isHeader)
-                    .padding(.bottom, 10)
                 VolumeControl(model: model)
                 Text(modeDescription)
                     .font(.caption)
@@ -100,10 +85,9 @@ struct PanelView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 12)
-            .padding(.top, 8)
-            .padding(.bottom, 14)
+            .padding(.vertical, 10)
 
-            Divider()
+            Divider().padding(.horizontal, 12)
 
             ScrollView(
                 .vertical,
@@ -115,7 +99,6 @@ struct PanelView: View {
                         section: .speaker,
                         title: "Speakers",
                         emptyText: "No speakers shown",
-                        icon: "speaker.wave.2.fill",
                         devices: model.speakerDevices,
                         currentID: model.currentOutputID,
                         layout: layout,
@@ -128,7 +111,6 @@ struct PanelView: View {
                         section: .headphone,
                         title: "Headphones",
                         emptyText: "No headphones shown",
-                        icon: "headphones",
                         showsSeparator: true,
                         devices: model.headphoneDevices,
                         currentID: model.currentOutputID,
@@ -142,7 +124,6 @@ struct PanelView: View {
                         section: .input,
                         title: "Microphones",
                         emptyText: "No microphones shown",
-                        icon: "mic.fill",
                         showsSeparator: true,
                         devices: model.inputDevices,
                         currentID: model.currentInputID,
@@ -159,7 +140,7 @@ struct PanelView: View {
             }
             .frame(height: listHeight)
 
-            Divider()
+            Divider().padding(.horizontal, 12)
             Footer(model: model, showSettings: showSettings)
         }
         .frame(width: 380)
@@ -201,18 +182,17 @@ struct PanelView: View {
             return "No output selected"
         }
         if model.isManualMode {
-            return "\(current.name) (manually selected)"
+            return "\(current.name) (manual)"
         }
-        let selected = "\(current.name) (automatically selected)"
         guard let skipped = model.automaticOutputDecision.skipped,
               skipped.device.id != current.id else {
-            return selected
+            return current.name
         }
         let reason = switch skipped.reason {
         case .off: "is off"
         case .neverAutoSelect: "won't be selected automatically"
         }
-        return "\(selected) · \(skipped.device.name) \(reason)"
+        return "\(current.name) · \(skipped.device.name) \(reason)"
     }
 }
 
@@ -331,7 +311,7 @@ private struct Footer: View {
     @State private var isHoveringSettings = false
 
     var body: some View {
-        HStack(spacing: 10) {
+        VStack(spacing: 0) {
             Toggle(
                 "Show hidden and disconnected devices",
                 isOn: Binding(
@@ -343,18 +323,19 @@ private struct Footer: View {
                 )
             )
             .toggleStyle(.checkbox)
-            .controlSize(.small)
+            .font(.system(size: 13))
+            .frame(maxWidth: .infinity, minHeight: 30, alignment: .leading)
+            .padding(.horizontal, 12)
 
-            Spacer()
+            Divider().padding(.horizontal, 12)
 
             Button(action: showSettings) {
                 // A plain button only hits its visible pixels, so give the
-                // label a full square to click.
-                Image(systemName: "gearshape")
-                    .font(.system(size: 15))
-                    .foregroundStyle(isHoveringSettings ? .primary : .secondary)
-                    .frame(width: 36, height: 36)
-                    // Shows the whole target while hovered.
+                // label the whole row to click.
+                Text("Audio Priority Bar Settings…")
+                    .font(.system(size: 13))
+                    .frame(maxWidth: .infinity, minHeight: 26, alignment: .leading)
+                    .padding(.horizontal, 8)
                     .background(
                         Color.primary.opacity(isHoveringSettings ? 0.1 : 0),
                         in: RoundedRectangle(cornerRadius: 6)
@@ -364,13 +345,9 @@ private struct Footer: View {
             .buttonStyle(.plain)
             .onHover { isHoveringSettings = $0 }
             .animation(.easeInOut(duration: 0.12), value: isHoveringSettings)
-            .help("Open settings")
-            .accessibilityLabel("Settings")
+            .padding(.horizontal, 4)
+            .padding(.vertical, 4)
         }
-        .font(.system(size: 12, weight: .medium))
-        .foregroundStyle(.secondary)
-        .padding(.horizontal, 16)
-        .frame(height: 48)
     }
 }
 

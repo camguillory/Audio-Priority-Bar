@@ -51,7 +51,7 @@ struct PanelLayout {
     static let space = "deviceLists"
     /// Room above a section for its separator, which sits `separatorInset`
     /// below the previous section, leaving the rest as padding under it.
-    static let sectionGap: CGFloat = 22
+    static let sectionGap: CGFloat = 16
     static let separatorInset: CGFloat = 8
     static let horizontalPadding: CGFloat = 12
     /// Matches the room between a section separator and the next heading.

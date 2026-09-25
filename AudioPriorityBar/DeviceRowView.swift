@@ -129,21 +129,12 @@ struct DeviceRow: View {
     var body: some View {
         HStack(spacing: 6) {
             ZStack(alignment: .leading) {
-                // The checkmark takes the priority number's place, so the
-                // active row needs no other highlight. Both give way to the
-                // drag handle while the row is hovered or dragged.
-                Group {
-                    if isSelected {
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundStyle(selectionTint)
-                    } else {
-                        Text("\(index + 1)")
-                            .font(.caption.monospacedDigit().weight(.semibold))
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                .opacity(showsDragHandle ? 0 : 1)
+                // The priority number gives way to the drag handle while the
+                // row is hovered or dragged.
+                Text("\(index + 1)")
+                    .font(.caption.monospacedDigit().weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .opacity(showsDragHandle ? 0 : 1)
                 Image(systemName: "line.3.horizontal")
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(.secondary)
@@ -155,16 +146,20 @@ struct DeviceRow: View {
             .contentShape(Rectangle())
             .accessibilityHidden(true)
 
-            HStack(spacing: 6) {
+            HStack(spacing: 8) {
                 Image(systemName: device.hardwareIcon(category: category))
                     .font(.system(size: 12))
-                    .foregroundStyle(isSelected ? selectionTint : .secondary)
-                    .frame(width: 18)
+                    .foregroundStyle(isSelected ? Color.white : Color.secondary)
+                    .frame(width: 26, height: 26)
+                    .background(
+                        isSelected ? selectionTint : Color.primary.opacity(0.1),
+                        in: Circle()
+                    )
                     .accessibilityHidden(true)
                 Text(device.name)
                     .lineLimit(1)
                     .strikethrough(isNeverUse, color: .secondary)
-                    .help(device.name)
+                    .help(isNeverUse ? "\(device.name) · Never auto-select" : device.name)
                     .foregroundStyle(nameColor)
                     .layoutPriority(1)
                 if !statuses.isEmpty {
@@ -272,8 +267,7 @@ struct DeviceRow: View {
     private var showsDragHandle: Bool { isHovering || isLifted }
 
     private var nameColor: Color {
-        if !device.isConnected || isUnavailable || isNeverUse { return .secondary }
-        return isSelected ? .accentColor : .primary
+        !device.isConnected || isUnavailable || isNeverUse ? .secondary : .primary
     }
 
     private var rowBackground: Color {
