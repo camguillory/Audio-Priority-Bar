@@ -4,14 +4,15 @@ import CoreAudio
 extension AudioDevice {
     /// The SF Symbol for the kind of hardware, like the macOS Sound menu shows.
     /// Names are checked before the transport type, since a webcam or display
-    /// usually connects over USB.
+    /// usually connects over USB. `category` is the user's choice, so it
+    /// decides headphones over any guess from the name.
     func hardwareIcon(category: OutputCategory?) -> String {
         let name = name.lowercased()
 
         if name.contains("airpods max") { return "airpodsmax" }
         if name.contains("airpods pro") { return "airpodspro" }
         if name.contains("airpods") { return "airpods" }
-        if name.contains("beats") { return "beats.headphones" }
+        if category == .headphone, name.contains("beats") { return "beats.headphones" }
         if name.contains("iphone") { return "iphone" }
         if name.contains("ipad") { return "ipad" }
         if Self.cameraKeywords.contains(where: name.contains) { return "web.camera" }
@@ -36,9 +37,7 @@ extension AudioDevice {
         }
 
         if role == .input { return "mic" }
-        if category == .headphone || HeadphoneDetection.isHeadphone(self.name) {
-            return "headphones"
-        }
+        if category == .headphone { return "headphones" }
         if transportType == kAudioDeviceTransportTypeBluetooth
             || transportType == kAudioDeviceTransportTypeBluetoothLE {
             return "hifispeaker"
@@ -53,5 +52,9 @@ extension AudioDevice {
     private static let cameraKeywords = [
         "camera", "webcam", "brio", "c920", "c922", "kiyo", "facecam", "opal",
     ]
-    private static let displayKeywords = ["display", "monitor", "lg ultrafine", "tv"]
+
+    /// Keywords for displays that use USB.
+    /// Note that `isDisplayOutput` covers HDMI and DisplayPort.
+    /// This list does not include "monitor" because studio monitors are speakers.
+    private static let displayKeywords = ["display", "lg ultrafine"]
 }
