@@ -34,6 +34,9 @@ public struct AudioDevice: Identifiable, Equatable, Hashable, Sendable {
     public var declaredCategory: OutputCategory?
     /// A monitor or TV reached over a video cable, from its transport type.
     public var isDisplayOutput = false
+    /// CoreAudio's `kAudioDeviceTransportType*` value, used to pick an icon.
+    /// Zero when unknown, as it is for a disconnected device.
+    public var transportType: UInt32 = 0
 
     public var id: String { roleIdentifier }
     public var roleIdentifier: String { "\(role.rawValue):\(uid)" }
@@ -60,7 +63,8 @@ public struct AudioDevice: Identifiable, Equatable, Hashable, Sendable {
         isConnected: Bool = true,
         isVirtual: Bool = false,
         declaredCategory: OutputCategory? = nil,
-        isDisplayOutput: Bool = false
+        isDisplayOutput: Bool = false,
+        transportType: UInt32 = 0
     ) {
         self.platformID = platformID
         self.uid = uid
@@ -70,6 +74,7 @@ public struct AudioDevice: Identifiable, Equatable, Hashable, Sendable {
         self.isVirtual = isVirtual
         self.declaredCategory = declaredCategory
         self.isDisplayOutput = isDisplayOutput
+        self.transportType = transportType
     }
 
 }

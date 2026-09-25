@@ -127,7 +127,7 @@ func layoutResolvesRawTargetSection() {
     let layout = PanelLayout(sections: [
         (.speaker, 2), (.headphone, 1), (.input, 2),
     ])
-    let speakerTop = PanelLayout.verticalPadding
+    let speakerTop = PanelLayout.topPadding
     let headphoneTop = speakerTop
         + DeviceRowMetrics.sectionHeader + 2 * DeviceRowMetrics.pitch
         + PanelLayout.sectionGap

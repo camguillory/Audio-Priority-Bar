@@ -2,7 +2,7 @@ import AudioPriorityCore
 import SwiftUI
 
 enum DeviceRowMetrics {
-    static let height: CGFloat = 36
+    static let height: CGFloat = 30
     static let spacing: CGFloat = 3
     static let pitch = height + spacing
     static let sectionHeader: CGFloat = 18
@@ -14,7 +14,8 @@ struct DeviceSectionView: View {
     let section: DeviceSection
     let title: String
     let emptyText: String
-    let icon: String
+    /// Draws a separator in the gap above this section.
+    var showsSeparator = false
     let devices: [AudioDevice]
     let currentID: UInt32?
     let layout: PanelLayout
@@ -29,12 +30,10 @@ struct DeviceSectionView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: DeviceRowMetrics.spacing) {
-            Label(title, systemImage: icon)
-                .font(.callout.weight(.semibold))
+            Text(title)
+                .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(.secondary)
                 .frame(height: DeviceRowMetrics.sectionHeader, alignment: .leading)
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(title)
                 .accessibilityAddTraits(.isHeader)
 
             if devices.isEmpty {
@@ -42,13 +41,15 @@ struct DeviceSectionView: View {
                     .font(.callout)
                     .italic()
                     .foregroundStyle(.tertiary)
-                    .padding(.leading, 32)
                     .frame(height: DeviceRowMetrics.height, alignment: .leading)
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    // Overhangs the text like a row's highlight does.
+                    .padding(.horizontal, 8)
                     .background(
                         Color.accentColor.opacity(isTargeted ? 0.12 : 0),
                         in: RoundedRectangle(cornerRadius: 8)
                     )
+                    .padding(.horizontal, -8)
             } else {
                 ForEach(Array(devices.enumerated()), id: \.element.id) {
                     index, device in
@@ -85,6 +86,15 @@ struct DeviceSectionView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        // Applied before the offset below, so the separator moves with the
+        // section when a drag opens or closes a row above it.
+        .overlay(alignment: .top) {
+            if showsSeparator {
+                Divider()
+                    .offset(y: PanelLayout.separatorInset - PanelLayout.sectionGap)
+                    .accessibilityHidden(true)
+            }
+        }
         .offset(y: drag.map {
             layout.sectionOffset(for: section, drag: $0)
         } ?? 0)
