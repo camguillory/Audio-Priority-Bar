@@ -6,6 +6,10 @@ struct SettingsView: View {
     @Bindable var launchAtLogin: LaunchAtLoginController
     @Bindable var updates: UpdateChecker
 
+    private static let homePageURL = URL(
+        string: "https://github.com/camguillory/Audio-Priority-Bar/"
+    )!
+
     private var version: String {
         Bundle.main.object(
             forInfoDictionaryKey: "CFBundleShortVersionString"
@@ -78,6 +82,8 @@ struct SettingsView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(appDisplayName).font(.headline)
                     Text("Version \(version)").foregroundStyle(.secondary)
+                    Link("Project Home Page", destination: Self.homePageURL)
+                        .font(.caption)
                 }
 
                 if let availableVersion = updates.availableVersion,
