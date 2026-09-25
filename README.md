@@ -1,35 +1,71 @@
-# Audio Priority Bar
-
 <p align="center">
   <img src="AudioPriorityBar/Assets.xcassets/AppIcon.appiconset/icon_512x512@2x.png" width="128" height="128" alt="Audio Priority Bar icon">
 </p>
 
-A native macOS menu bar app that automatically switches to your
-highest-priority connected headphones, speakers, and microphone.
+<h1 align="center">Audio Priority Bar</h1>
 
-![macOS 14+](https://img.shields.io/badge/macOS-14%2B-blue)
-![Swift 6](https://img.shields.io/badge/Swift-6-orange)
-![MIT License](https://img.shields.io/badge/license-MIT-green)
+<p align="center">
+  A native macOS menu bar app that automatically switches to your
+  highest-priority connected headphones, speakers, and microphone.
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/macOS-14%2B-blue" alt="macOS 14+">
+  <img src="https://img.shields.io/badge/Swift-6-orange" alt="Swift 6">
+  <img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License">
+</p>
+
+<p align="center">
+  <a href="#install">Install</a> ·
+  <a href="#features">Features</a> ·
+  <a href="#use">Use</a> ·
+  <a href="#contributing">Contributing</a>
+</p>
 
 <p align="center">
   <img src="screenshot-light.png" width="49%" alt="Audio Priority Bar light panel showing automatic switching, volume, and three device priority lists">
   <img src="screenshot-dark.png" width="49%" alt="Audio Priority Bar dark panel showing automatic switching, volume, and three device priority lists">
 </p>
 
+## Why
+
+Connect a display and your sound can move to its speakers. Undock or power on a
+headset, and you pick devices by hand again. Audio Priority Bar keeps a ranked
+list for each kind of device and uses the highest one that is connected.
+
 ## Features
 
-- Automatic switching to your top available headphones, then speakers, with
-  one-click manual override
-- Persistent priority lists for Speakers, Headphones, and Microphones, with
-  drag reordering
-- Volume control by slider or scroll wheel, with mute and availability status
-- Device visibility controls, Never Auto-Select, and remembered devices
+**Switching**
+
+- Uses your top available headphones first, then speakers, and your top
+  microphone
+- One click in the panel picks a device by hand; turn automatic switching back
+  on to resume
+- A USB headset's input and output are selected together, with per-row
+  **Mic only** and **Output only** overrides
+
+**Device lists**
+
+- Separate ranked lists for Speakers, Headphones, and Microphones, reordered by
+  dragging
+- Hide a device, keep one visible but never picked automatically, and remember
+  disconnected devices
 - Output categories taken from what each device reports, in any system language
-- Headset input and output selected together, with per-row Mic only and
-  Output only overrides
-- Settings, right-click quick actions, VoiceOver support, and Open at Login
-- Jabra Link headset power-off detection, asked of the dongle rather than guessed
-- Automatic update checks on launch and daily, with a manual check and an opt-out in Settings
+
+**Panel and menu bar**
+
+- A panel laid out like the macOS Sound menu, with an icon for every device
+- The menu bar icon shows the current output, like AirPods or headphones
+- Liquid Glass on macOS 26, VoiceOver support, and keyboard-accessible actions
+- Volume by slider or scroll wheel, with mute and availability status
+
+**Other**
+
+- Jabra Link headset power-off detection, asked of the dongle rather than
+  guessed
+- Right-click the menu bar icon for Settings, Check for Updates, and Quit
+- Open at Login
+- Update checks on launch and daily, with a manual check and an opt-out
 
 ## Install
 
@@ -44,22 +80,26 @@ brew install --cask camguillory/tap/audio-priority-bar
 
 ### Direct download
 
-Download `AudioPriorityBar.zip` and `AudioPriorityBar.zip.sha256` from the
-[latest release](https://github.com/camguillory/Audio-Priority-Bar/releases/latest)
-into the same folder. Verify the archive before unzipping it:
+1. Download `AudioPriorityBar.zip` and `AudioPriorityBar.zip.sha256` from the
+   [latest release](https://github.com/camguillory/Audio-Priority-Bar/releases/latest)
+   into the same folder.
+2. Verify the archive before unzipping it:
 
-```bash
-cd ~/Downloads
-shasum -a 256 -c AudioPriorityBar.zip.sha256
-```
+   ```bash
+   cd ~/Downloads
+   shasum -a 256 -c AudioPriorityBar.zip.sha256
+   ```
 
-Move `AudioPriorityBar.app` to `/Applications`.
+3. Move `AudioPriorityBar.app` to `/Applications`.
 
-### Gatekeeper
+### First launch
 
 Audio Priority Bar is ad-hoc signed, not signed with an Apple Developer ID or
 notarized. If macOS blocks the first launch, open
 **System Settings > Privacy & Security** and click **Open Anyway**.
+
+<details>
+<summary>Or remove the quarantine attribute</summary>
 
 Advanced users may instead remove only this app's quarantine attribute:
 
@@ -67,7 +107,10 @@ Advanced users may instead remove only this app's quarantine attribute:
 xattr -d com.apple.quarantine /Applications/AudioPriorityBar.app
 ```
 
-### Build from source
+</details>
+
+<details>
+<summary>Build from source</summary>
 
 ```bash
 git clone https://github.com/camguillory/Audio-Priority-Bar.git
@@ -78,7 +121,12 @@ cd Audio-Priority-Bar
 The universal, ad-hoc-signed app is written to `dist/AudioPriorityBar.app`.
 You can also open `AudioPriorityBar.xcodeproj` in Xcode and build with Command-R.
 
+</details>
+
 ## Use
+
+Click the icon in the menu bar to open the panel. Your devices are listed by
+priority, and the active one is highlighted.
 
 ### Automatic and manual switching
 
@@ -128,10 +176,13 @@ unrecognised dongle fails open rather than being treated as off.
 May prompt for **Input Monitoring** permission. Open at Login may separately
 need approval in **System Settings > General > Login Items**.
 
-### Upgrading from V1
+<details>
+<summary>Upgrading from V1</summary>
 
 V2 imports V1 settings once on first launch (existing V2 values win). The new
 bundle identifier may require re-approving Input Monitoring or Open at Login.
+
+</details>
 
 ## Contributing
 
