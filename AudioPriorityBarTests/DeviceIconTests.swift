@@ -99,17 +99,12 @@ private let branches: [IconCase] = [
     // Studio monitors are speakers, not displays.
     .output("KRK Studio Monitor", usb, .speaker, "speaker.wave.2"),
     .output("SoundLink Flex", kAudioDeviceTransportTypeBluetoothLE, .speaker, "hifispeaker"),
+    // The Headphones section decides over the transport too.
+    .output("External Headphones", builtIn, .headphone, "headphones"),
+    .output("krisp speaker", kAudioDeviceTransportTypeVirtual, .headphone, "headphones"),
 ]
 
 @Test(arguments: realDevices + branches)
 func hardwareIconMatchesTheDevice(_ icon: IconCase) {
     #expect(icon.device.hardwareIcon(category: icon.category) == icon.expected)
-}
-
-@Test
-func headphoneJackShowsHeadphones() {
-    let jack = IconCase.output("External Headphones", builtIn, .headphone, "headphones")
-    withKnownIssue("Built-in outputs return the speaker icon before checking the category") {
-        #expect(jack.device.hardwareIcon(category: jack.category) == jack.expected)
-    }
 }

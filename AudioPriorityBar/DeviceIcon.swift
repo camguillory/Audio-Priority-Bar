@@ -5,7 +5,7 @@ extension AudioDevice {
     /// The SF Symbol for the kind of hardware, like the macOS Sound menu shows.
     /// Names are checked before the transport type, since a webcam or display
     /// usually connects over USB. `category` is the user's choice, so it
-    /// decides headphones over any guess from the name.
+    /// decides headphones over any guess from the name or transport.
     func hardwareIcon(category: OutputCategory?) -> String {
         let name = name.lowercased()
 
@@ -19,6 +19,8 @@ extension AudioDevice {
         if isDisplayOutput || Self.displayKeywords.contains(where: name.contains) {
             return "display"
         }
+
+        if category == .headphone { return "headphones" }
 
         switch transportType {
         case kAudioDeviceTransportTypeAirPlay:
@@ -37,7 +39,6 @@ extension AudioDevice {
         }
 
         if role == .input { return "mic" }
-        if category == .headphone { return "headphones" }
         if transportType == kAudioDeviceTransportTypeBluetooth
             || transportType == kAudioDeviceTransportTypeBluetoothLE {
             return "hifispeaker"
