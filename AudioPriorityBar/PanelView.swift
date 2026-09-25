@@ -52,10 +52,14 @@ struct PanelView: View {
                     download: downloadUpdate,
                     dismiss: { updates.dismissThisVersion() }
                 )
-                Divider().padding(.horizontal, 10)
+                Divider().padding(.horizontal, 12)
             }
 
-            VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text("Automatic switching")
+                    .font(.system(size: 13, weight: .semibold))
+                    .accessibilityHidden(true)
+                Spacer()
                 Toggle(
                     "Automatic switching",
                     isOn: Binding(
@@ -63,21 +67,27 @@ struct PanelView: View {
                         set: { model.setManualMode(!$0) }
                     )
                 )
+                .labelsHidden()
                 .toggleStyle(.switch)
-                .controlSize(.small)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .help("Use device priorities as availability changes")
+            }
+            .help("Use device priorities as availability changes")
+            .padding(.horizontal, 12)
+            .padding(.top, 10)
+
+            VStack(alignment: .leading, spacing: 6) {
+                VolumeControl(model: model)
                 Text(modeDescription)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
-                VolumeControl(model: model)
+                    // Lines up with the start of the slider track.
+                    .padding(.leading, VolumeControl.sliderInset)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(Color.primary.opacity(0.02))
+            .padding(.vertical, 10)
 
-            Divider().padding(.horizontal, 10)
+            Divider().padding(.horizontal, 12)
 
             ScrollView(
                 .vertical,
@@ -89,7 +99,6 @@ struct PanelView: View {
                         section: .speaker,
                         title: "Speakers",
                         emptyText: "No speakers shown",
-                        icon: "speaker.wave.2.fill",
                         devices: model.speakerDevices,
                         currentID: model.currentOutputID,
                         layout: layout,
@@ -102,7 +111,7 @@ struct PanelView: View {
                         section: .headphone,
                         title: "Headphones",
                         emptyText: "No headphones shown",
-                        icon: "headphones",
+                        showsSeparator: true,
                         devices: model.headphoneDevices,
                         currentID: model.currentOutputID,
                         layout: layout,
@@ -115,7 +124,7 @@ struct PanelView: View {
                         section: .input,
                         title: "Microphones",
                         emptyText: "No microphones shown",
-                        icon: "mic.fill",
+                        showsSeparator: true,
                         devices: model.inputDevices,
                         currentID: model.currentInputID,
                         layout: layout,
@@ -124,13 +133,14 @@ struct PanelView: View {
                     )
                     .zIndex(drag?.section == .input ? 1 : 0)
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, PanelLayout.verticalPadding)
+                .padding(.horizontal, PanelLayout.horizontalPadding)
+                .padding(.top, PanelLayout.topPadding)
+                .padding(.bottom, PanelLayout.bottomPadding)
                 .coordinateSpace(name: PanelLayout.space)
             }
             .frame(height: listHeight)
 
-            Divider().padding(.horizontal, 10)
+            Divider().padding(.horizontal, 12)
             Footer(model: model, showSettings: showSettings)
         }
         .frame(width: 380)
@@ -156,15 +166,7 @@ struct PanelView: View {
             }
             drag = nil
         }
-        .background(
-            Color(nsColor: .windowBackgroundColor),
-            in: RoundedRectangle(cornerRadius: 12, style: .continuous)
-        )
-        .overlay {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(Color.primary.opacity(0.16), lineWidth: 1)
-        }
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .modifier(PanelBackground())
     }
 
     private var modeDescription: String {
@@ -172,28 +174,33 @@ struct PanelView: View {
             return "No output selected"
         }
         if model.isManualMode {
-            return "Using \(current.name) manually"
+            return "\(current.name) (manual)"
         }
         guard let skipped = model.automaticOutputDecision.skipped,
               skipped.device.id != current.id else {
-            return "Using \(current.name)"
+            return current.name
         }
         let reason = switch skipped.reason {
         case .off: "is off"
         case .neverAutoSelect: "won't be selected automatically"
         }
-        return "Using \(current.name) · \(skipped.device.name) \(reason)"
+        return "\(current.name) · \(skipped.device.name) \(reason)"
     }
 }
 
 private struct VolumeControl: View {
+    private static let iconWidth: CGFloat = 20
+    private static let spacing: CGFloat = 10
+    /// Where the slider begins, for aligning content below it.
+    static let sliderInset = iconWidth + spacing
+
     @Bindable var model: AppModel
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: Self.spacing) {
             Image(systemName: icon)
                 .foregroundStyle(.tint)
-                .frame(width: 20)
+                .frame(width: Self.iconWidth)
                 .accessibilityHidden(true)
                 .animation(.easeInOut(duration: 0.15), value: icon)
             Slider(
@@ -207,14 +214,20 @@ private struct VolumeControl: View {
             .disabled(!model.isVolumeControllable)
             .accessibilityLabel("Output volume")
             .accessibilityValue(valueDescription)
-            Text(
-                model.isVolumeControllable
-                    ? "\(Int(model.volume * 100))%"
-                    : "—"
-            )
-            .font(.caption.monospacedDigit())
+            // Sized to the widest value, so it sits close to the slider
+            // without the slider resizing as the digits change.
+            ZStack(alignment: .leading) {
+                Text("100%").hidden()
+                Text(
+                    model.isVolumeControllable
+                        ? "\(Int(model.volume * 100))%"
+                        : "—"
+                )
+            }
+            .font(.callout.monospacedDigit())
             .foregroundStyle(.secondary)
-            .frame(width: 36, alignment: .trailing)
+            .fixedSize()
+            .padding(.leading, 6 - Self.spacing)
             .accessibilityHidden(true)
         }
         .background(ScrollWheelReceiver { delta in
@@ -223,11 +236,16 @@ private struct VolumeControl: View {
         })
     }
 
+    /// The current output's hardware icon, so it is clear which device the
+    /// slider controls. A generic speaker shows the volume level instead.
     private var icon: String {
         if !model.isVolumeControllable { return "speaker.wave.3.fill" }
-        if model.activeOutputCategory == .headphone {
-            return "headphones"
-        }
+        let hardware = model.currentOutputDevice.map {
+            $0.hardwareIcon(category: model.activeOutputCategory)
+        } ?? (model.activeOutputCategory == .headphone
+            ? "headphones"
+            : AudioDevice.genericSpeakerIcon)
+        guard hardware == AudioDevice.genericSpeakerIcon else { return hardware }
         return switch model.volume {
         case ...0: "speaker.fill"
         case ..<0.33: "speaker.wave.1.fill"
@@ -282,8 +300,10 @@ private struct Footer: View {
     @Bindable var model: AppModel
     let showSettings: () -> Void
 
+    @State private var isHoveringSettings = false
+
     var body: some View {
-        HStack(spacing: 10) {
+        VStack(spacing: 0) {
             Toggle(
                 "Show hidden and disconnected devices",
                 isOn: Binding(
@@ -295,22 +315,31 @@ private struct Footer: View {
                 )
             )
             .toggleStyle(.checkbox)
-            .controlSize(.small)
+            .font(.system(size: 13))
+            .frame(maxWidth: .infinity, minHeight: 30, alignment: .leading)
+            .padding(.horizontal, 12)
 
-            Spacer()
+            Divider().padding(.horizontal, 12)
 
             Button(action: showSettings) {
-                Image(systemName: "gearshape")
+                // A plain button only hits its visible pixels, so give the
+                // label the whole row to click.
+                Text("Audio Priority Bar Settings…")
+                    .font(.system(size: 13))
+                    .frame(maxWidth: .infinity, minHeight: 26, alignment: .leading)
+                    .padding(.horizontal, 8)
+                    .background(
+                        Color.primary.opacity(isHoveringSettings ? 0.1 : 0),
+                        in: RoundedRectangle(cornerRadius: 6)
+                    )
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .frame(width: 28, height: 28)
-            .help("Open settings")
-            .accessibilityLabel("Settings")
+            .onHover { isHoveringSettings = $0 }
+            .animation(.easeInOut(duration: 0.12), value: isHoveringSettings)
+            .padding(.horizontal, 4)
+            .padding(.vertical, 4)
         }
-        .font(.system(size: 12, weight: .medium))
-        .foregroundStyle(.secondary)
-        .padding(.horizontal, 10)
-        .frame(height: 30)
     }
 }
 
@@ -341,5 +370,69 @@ private struct ScrollWheelReceiver: NSViewRepresentable {
         override func scrollWheel(with event: NSEvent) {
             onScroll(event.deltaY)
         }
+    }
+}
+
+/// Matches the menu bar's own menus: Liquid Glass on macOS 26 and later, and
+/// the menu material blurred over whatever is behind the panel before that.
+private struct PanelBackground: ViewModifier {
+    private let cornerRadius: CGFloat = 12
+
+    private var shape: RoundedRectangle {
+        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+    }
+
+    func body(content: Content) -> some View {
+        if #available(macOS 26, *) {
+            content
+                .clipShape(shape)
+                .glassEffect(.regular, in: shape)
+        } else {
+            content
+                .background(MenuMaterial(cornerRadius: cornerRadius))
+                .overlay {
+                    shape.stroke(Color.primary.opacity(0.12), lineWidth: 1)
+                }
+                .clipShape(shape)
+        }
+    }
+}
+
+private struct MenuMaterial: NSViewRepresentable {
+    let cornerRadius: CGFloat
+
+    func makeNSView(context: Context) -> NSVisualEffectView {
+        let view = NSVisualEffectView()
+        view.material = .menu
+        view.blendingMode = .behindWindow
+        // The app remains inactive when this nonactivating panel becomes key,
+        // so following the window state would render the material as inactive.
+        view.state = .active
+        view.maskImage = maskImage
+        return view
+    }
+
+    func updateNSView(_ view: NSVisualEffectView, context: Context) {}
+
+    /// A clip shape alone leaves the behind-window blur square at the corners.
+    private var maskImage: NSImage {
+        let edge = cornerRadius * 2 + 1
+        let image = NSImage(size: NSSize(width: edge, height: edge), flipped: false) { rect in
+            NSColor.black.setFill()
+            NSBezierPath(
+                roundedRect: rect,
+                xRadius: cornerRadius,
+                yRadius: cornerRadius
+            ).fill()
+            return true
+        }
+        image.capInsets = NSEdgeInsets(
+            top: cornerRadius,
+            left: cornerRadius,
+            bottom: cornerRadius,
+            right: cornerRadius
+        )
+        image.resizingMode = .stretch
+        return image
     }
 }
