@@ -50,6 +50,14 @@ extension AudioDevice {
     /// volume control can swap in its level-based speaker instead.
     static let genericSpeakerIcon = "speaker.wave.2"
 
+    /// Every symbol `hardwareIcon` can return, so the menu bar can reserve
+    /// room for the widest one.
+    static let hardwareIcons = [
+        "airpodsmax", "airpodspro", "airpods", "beats.headphones", "iphone",
+        "ipad", "web.camera", "display", "airplayaudio", "waveform", "mic",
+        "headphones", "hifispeaker", genericSpeakerIcon,
+    ]
+
     private static let cameraKeywords = [
         "camera", "webcam", "brio", "c920", "c922", "kiyo", "facecam", "opal",
     ]

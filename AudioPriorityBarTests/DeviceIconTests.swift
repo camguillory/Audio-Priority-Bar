@@ -108,3 +108,8 @@ private let branches: [IconCase] = [
 func hardwareIconMatchesTheDevice(_ icon: IconCase) {
     #expect(icon.device.hardwareIcon(category: icon.category) == icon.expected)
 }
+
+@Test(arguments: realDevices + branches)
+func hardwareIconsListsEveryIconTheMenuBarMayShow(_ icon: IconCase) {
+    #expect(AudioDevice.hardwareIcons.contains(icon.expected))
+}

@@ -1,3 +1,4 @@
+import AudioPriorityCore
 import AppKit
 import Observation
 import SwiftUI
@@ -323,15 +324,17 @@ private struct StatusLabel: View {
                 Image(systemName: "mic.slash.fill")
                     .opacity(reduceMotion || model.micFlashState ? 1 : 0.45)
             }
-            // The hidden speaker.wave.2.fill anchor reserves the widest output
-            // glyph's width so the item does not resize as it switches between
-            // speakers, headphones, and muted.
+            // Every possible output glyph sits hidden underneath, so the item
+            // keeps the widest one's width instead of resizing as the output
+            // changes.
             ZStack {
-                Image(systemName: "speaker.wave.2.fill").hidden()
+                ForEach(Self.reservedIcons, id: \.self) {
+                    Image(systemName: $0).hidden()
+                }
                 if model.isActiveOutputMuted {
                     Image(systemName: "speaker.slash.fill")
-                } else if model.activeOutputCategory == .headphone {
-                    Image(systemName: "headphones")
+                } else if let hardwareIcon {
+                    Image(systemName: Self.filled(hardwareIcon))
                 } else if !model.isVolumeControllable {
                     Image(systemName: "speaker.wave.2.fill")
                 } else {
@@ -352,6 +355,28 @@ private struct StatusLabel: View {
         }
         .padding(.horizontal, 1)
         .accessibilityHidden(true)
+    }
+
+    /// The current output's hardware icon, or nil for a generic speaker,
+    /// which shows the volume level instead. Falls back to the category
+    /// while no output is known.
+    private var hardwareIcon: String? {
+        let icon = model.currentOutputDevice.map {
+            $0.hardwareIcon(category: model.activeOutputCategory)
+        } ?? (model.activeOutputCategory == .headphone ? "headphones" : nil)
+        return icon == AudioDevice.genericSpeakerIcon ? nil : icon
+    }
+
+    private static let reservedIcons = (
+        AudioDevice.hardwareIcons + ["speaker.wave.2", "speaker.slash"]
+    ).map(filled)
+
+    /// The menu bar uses filled glyphs; not every hardware symbol has one.
+    nonisolated private static func filled(_ name: String) -> String {
+        let fill = name + ".fill"
+        return NSImage(systemSymbolName: fill, accessibilityDescription: nil) == nil
+            ? name
+            : fill
     }
 }
 
