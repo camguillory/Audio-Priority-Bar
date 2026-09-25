@@ -116,9 +116,6 @@ struct DeviceRow: View {
         if isHidden {
             result.append(Status(icon: "eye.slash", text: "Hidden"))
         }
-        if isNeverUse {
-            result.append(Status(icon: "nosign", text: "Never auto-select"))
-        }
         if model.isMuted(device) {
             result.append(Status(
                 icon: device.role == .input ? "mic.slash.fill" : "speaker.slash.fill",
@@ -131,30 +128,45 @@ struct DeviceRow: View {
 
     var body: some View {
         HStack(spacing: 6) {
-            HStack(spacing: 4) {
-                Text("\(index + 1)")
-                    .font(.caption.monospacedDigit().weight(.semibold))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 18, alignment: .trailing)
+            ZStack(alignment: .leading) {
+                // The checkmark takes the priority number's place, so the
+                // active row needs no other highlight. Both give way to the
+                // drag handle while the row is hovered or dragged.
+                Group {
+                    if isSelected {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(selectionTint)
+                    } else {
+                        Text("\(index + 1)")
+                            .font(.caption.monospacedDigit().weight(.semibold))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .opacity(showsDragHandle ? 0 : 1)
                 Image(systemName: "line.3.horizontal")
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(.secondary)
-                    .opacity(isHovering ? 1 : 0.65)
+                    .opacity(showsDragHandle ? 1 : 0)
             }
-            .frame(width: 32, height: 30)
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.12), value: showsDragHandle)
+            .frame(width: 14, height: DeviceRowMetrics.height, alignment: .leading)
+            .padding(.leading, 4)
             .contentShape(Rectangle())
             .accessibilityHidden(true)
 
-            VStack(alignment: .leading, spacing: 1) {
+            HStack(spacing: 6) {
+                Image(systemName: device.hardwareIcon(category: category))
+                    .font(.system(size: 12))
+                    .foregroundStyle(isSelected ? selectionTint : .secondary)
+                    .frame(width: 18)
+                    .accessibilityHidden(true)
                 Text(device.name)
                     .lineLimit(1)
+                    .strikethrough(isNeverUse, color: .secondary)
                     .help(device.name)
-                    .foregroundStyle(
-                        device.isConnected && !isUnavailable
-                            ? .primary
-                            : .secondary
-                    )
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .foregroundStyle(nameColor)
+                    .layoutPriority(1)
                 if !statuses.isEmpty {
                     HStack(spacing: 8) {
                         ForEach(statuses, id: \.text) { status in
@@ -174,16 +186,9 @@ struct DeviceRow: View {
 
             selectionOverride
 
-            Image(systemName: "checkmark.circle.fill")
-                .foregroundStyle(isUnavailable ? Color.orange : Color.accentColor)
-                .opacity(isSelected ? 1 : 0)
-                .frame(width: 18)
-                .accessibilityHidden(true)
-
             actions
         }
         .padding(.horizontal, 8)
-        .padding(.vertical, 3)
         .frame(height: DeviceRowMetrics.height)
         .background {
             RoundedRectangle(cornerRadius: 8)
@@ -217,6 +222,9 @@ struct DeviceRow: View {
         .onTapGesture {
             if device.isConnected, !isUnavailable, !isSelected { select() }
         }
+        // Undo the content inset for layout, so the row's text lines up with
+        // the section heading while its highlight and hover area overhang it.
+        .padding(.horizontal, -8)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(device.name)
         .accessibilityValue(accessibilityValue)
@@ -255,10 +263,21 @@ struct DeviceRow: View {
         }
     }
 
+    /// Orange rather than the accent while the current device is unavailable,
+    /// matching its "Current" status.
+    private var selectionTint: Color {
+        isUnavailable ? .orange : .accentColor
+    }
+
+    private var showsDragHandle: Bool { isHovering || isLifted }
+
+    private var nameColor: Color {
+        if !device.isConnected || isUnavailable || isNeverUse { return .secondary }
+        return isSelected ? .accentColor : .primary
+    }
+
     private var rowBackground: Color {
-        if isSelected && isUnavailable { return Color.orange.opacity(0.12) }
-        if isSelected { return Color.accentColor.opacity(0.14) }
-        return isHovering || isHighlightedPairedDevice
+        isHovering || isHighlightedPairedDevice
             ? Color.primary.opacity(0.06) : .clear
     }
 
@@ -438,6 +457,8 @@ struct DeviceRow: View {
         var values = ["Priority \(index + 1) of \(count)"]
         if isSelected, !isUnavailable { values.append("Active") }
         values.append(contentsOf: statuses.map(\.text))
+        // Shown only as strikethrough, so it needs saying here.
+        if isNeverUse { values.append("Never auto-select") }
         return values.joined(separator: ", ")
     }
 }

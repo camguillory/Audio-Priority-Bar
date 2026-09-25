@@ -148,7 +148,8 @@ enum CoreAudioProperties {
             declaredCategory: role == .output
                 ? declaredCategory(streams: streams)
                 : nil,
-            isDisplayOutput: role == .output && Self.isDisplayTransport(transport)
+            isDisplayOutput: role == .output && Self.isDisplayTransport(transport),
+            transportType: transport
         )
     }
 

@@ -46,13 +46,22 @@ struct PanelView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            Text("Audio Priority Bar")
+                .font(.system(size: 13, weight: .semibold))
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 12)
+                .accessibilityAddTraits(.isHeader)
+
+            Divider()
+
             if let availableVersion = updates.availableVersion {
                 UpdateBanner(
                     version: availableVersion,
                     download: downloadUpdate,
                     dismiss: { updates.dismissThisVersion() }
                 )
-                Divider().padding(.horizontal, 10)
+                Divider()
             }
 
             VStack(alignment: .leading, spacing: 6) {
@@ -67,17 +76,34 @@ struct PanelView: View {
                 .controlSize(.small)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .help("Use device priorities as availability changes")
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+
+            Divider()
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Volume")
+                    .font(.callout.weight(.semibold))
+                    .textCase(.uppercase)
+                    .foregroundStyle(.secondary)
+                    .frame(height: DeviceRowMetrics.sectionHeader, alignment: .leading)
+                    .accessibilityAddTraits(.isHeader)
+                    .padding(.bottom, 10)
+                VolumeControl(model: model)
                 Text(modeDescription)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
-                VolumeControl(model: model)
+                    // Lines up with the start of the slider track.
+                    .padding(.leading, VolumeControl.sliderInset)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(Color.primary.opacity(0.02))
+            .padding(.top, 8)
+            .padding(.bottom, 14)
 
-            Divider().padding(.horizontal, 10)
+            Divider()
 
             ScrollView(
                 .vertical,
@@ -103,6 +129,7 @@ struct PanelView: View {
                         title: "Headphones",
                         emptyText: "No headphones shown",
                         icon: "headphones",
+                        showsSeparator: true,
                         devices: model.headphoneDevices,
                         currentID: model.currentOutputID,
                         layout: layout,
@@ -116,6 +143,7 @@ struct PanelView: View {
                         title: "Microphones",
                         emptyText: "No microphones shown",
                         icon: "mic.fill",
+                        showsSeparator: true,
                         devices: model.inputDevices,
                         currentID: model.currentInputID,
                         layout: layout,
@@ -124,13 +152,14 @@ struct PanelView: View {
                     )
                     .zIndex(drag?.section == .input ? 1 : 0)
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, PanelLayout.verticalPadding)
+                .padding(.horizontal, PanelLayout.horizontalPadding)
+                .padding(.top, PanelLayout.topPadding)
+                .padding(.bottom, PanelLayout.bottomPadding)
                 .coordinateSpace(name: PanelLayout.space)
             }
             .frame(height: listHeight)
 
-            Divider().padding(.horizontal, 10)
+            Divider()
             Footer(model: model, showSettings: showSettings)
         }
         .frame(width: 380)
@@ -172,28 +201,34 @@ struct PanelView: View {
             return "No output selected"
         }
         if model.isManualMode {
-            return "Using \(current.name) manually"
+            return "\(current.name) (manually selected)"
         }
+        let selected = "\(current.name) (automatically selected)"
         guard let skipped = model.automaticOutputDecision.skipped,
               skipped.device.id != current.id else {
-            return "Using \(current.name)"
+            return selected
         }
         let reason = switch skipped.reason {
         case .off: "is off"
         case .neverAutoSelect: "won't be selected automatically"
         }
-        return "Using \(current.name) · \(skipped.device.name) \(reason)"
+        return "\(selected) · \(skipped.device.name) \(reason)"
     }
 }
 
 private struct VolumeControl: View {
+    private static let iconWidth: CGFloat = 20
+    private static let spacing: CGFloat = 10
+    /// Where the slider begins, for aligning content below it.
+    static let sliderInset = iconWidth + spacing
+
     @Bindable var model: AppModel
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: Self.spacing) {
             Image(systemName: icon)
                 .foregroundStyle(.tint)
-                .frame(width: 20)
+                .frame(width: Self.iconWidth)
                 .accessibilityHidden(true)
                 .animation(.easeInOut(duration: 0.15), value: icon)
             Slider(
@@ -207,14 +242,20 @@ private struct VolumeControl: View {
             .disabled(!model.isVolumeControllable)
             .accessibilityLabel("Output volume")
             .accessibilityValue(valueDescription)
-            Text(
-                model.isVolumeControllable
-                    ? "\(Int(model.volume * 100))%"
-                    : "—"
-            )
-            .font(.caption.monospacedDigit())
+            // Sized to the widest value, so it sits close to the slider
+            // without the slider resizing as the digits change.
+            ZStack(alignment: .leading) {
+                Text("100%").hidden()
+                Text(
+                    model.isVolumeControllable
+                        ? "\(Int(model.volume * 100))%"
+                        : "—"
+                )
+            }
+            .font(.callout.monospacedDigit())
             .foregroundStyle(.secondary)
-            .frame(width: 36, alignment: .trailing)
+            .fixedSize()
+            .padding(.leading, 6 - Self.spacing)
             .accessibilityHidden(true)
         }
         .background(ScrollWheelReceiver { delta in
@@ -223,11 +264,16 @@ private struct VolumeControl: View {
         })
     }
 
+    /// The current output's hardware icon, so it is clear which device the
+    /// slider controls. A generic speaker shows the volume level instead.
     private var icon: String {
         if !model.isVolumeControllable { return "speaker.wave.3.fill" }
-        if model.activeOutputCategory == .headphone {
-            return "headphones"
-        }
+        let hardware = model.currentOutputDevice.map {
+            $0.hardwareIcon(category: model.activeOutputCategory)
+        } ?? (model.activeOutputCategory == .headphone
+            ? "headphones"
+            : AudioDevice.genericSpeakerIcon)
+        guard hardware == AudioDevice.genericSpeakerIcon else { return hardware }
         return switch model.volume {
         case ...0: "speaker.fill"
         case ..<0.33: "speaker.wave.1.fill"
@@ -282,6 +328,8 @@ private struct Footer: View {
     @Bindable var model: AppModel
     let showSettings: () -> Void
 
+    @State private var isHoveringSettings = false
+
     var body: some View {
         HStack(spacing: 10) {
             Toggle(
@@ -300,17 +348,29 @@ private struct Footer: View {
             Spacer()
 
             Button(action: showSettings) {
+                // A plain button only hits its visible pixels, so give the
+                // label a full square to click.
                 Image(systemName: "gearshape")
+                    .font(.system(size: 15))
+                    .foregroundStyle(isHoveringSettings ? .primary : .secondary)
+                    .frame(width: 36, height: 36)
+                    // Shows the whole target while hovered.
+                    .background(
+                        Color.primary.opacity(isHoveringSettings ? 0.1 : 0),
+                        in: RoundedRectangle(cornerRadius: 6)
+                    )
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .frame(width: 28, height: 28)
+            .onHover { isHoveringSettings = $0 }
+            .animation(.easeInOut(duration: 0.12), value: isHoveringSettings)
             .help("Open settings")
             .accessibilityLabel("Settings")
         }
         .font(.system(size: 12, weight: .medium))
         .foregroundStyle(.secondary)
-        .padding(.horizontal, 10)
-        .frame(height: 30)
+        .padding(.horizontal, 16)
+        .frame(height: 48)
     }
 }
 

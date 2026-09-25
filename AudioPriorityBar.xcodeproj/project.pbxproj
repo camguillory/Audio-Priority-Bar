@@ -34,6 +34,7 @@
 		A10000000000000000000025 /* DeviceDrag.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000027 /* DeviceDrag.swift */; };
 		A10000000000000000000026 /* SelectionBehaviorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000028 /* SelectionBehaviorTests.swift */; };
 		A10000000000000000000027 /* UpdateChecker.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000029 /* UpdateChecker.swift */; };
+		A10000000000000000000028 /* DeviceIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000030 /* DeviceIcon.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -76,6 +77,7 @@
 		B10000000000000000000027 /* DeviceDrag.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceDrag.swift; sourceTree = "<group>"; };
 		B10000000000000000000028 /* SelectionBehaviorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectionBehaviorTests.swift; sourceTree = "<group>"; };
 		B10000000000000000000029 /* UpdateChecker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateChecker.swift; sourceTree = "<group>"; };
+		B10000000000000000000030 /* DeviceIcon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceIcon.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -124,6 +126,7 @@
 				B10000000000000000000018 /* AppRuntime.swift */,
 				B10000000000000000000020 /* DeviceListView.swift */,
 				B10000000000000000000025 /* DeviceRowView.swift */,
+				B10000000000000000000030 /* DeviceIcon.swift */,
 				B10000000000000000000027 /* DeviceDrag.swift */,
 				B10000000000000000000021 /* PanelView.swift */,
 				B10000000000000000000022 /* LaunchAtLoginController.swift */,
@@ -275,6 +278,7 @@
 				A10000000000000000000016 /* AppRuntime.swift in Sources */,
 				A10000000000000000000018 /* DeviceListView.swift in Sources */,
 				A10000000000000000000023 /* DeviceRowView.swift in Sources */,
+				A10000000000000000000028 /* DeviceIcon.swift in Sources */,
 				A10000000000000000000025 /* DeviceDrag.swift in Sources */,
 				A10000000000000000000019 /* PanelView.swift in Sources */,
 				A10000000000000000000020 /* LaunchAtLoginController.swift in Sources */,

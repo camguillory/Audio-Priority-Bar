@@ -49,8 +49,14 @@ struct DeviceDrag {
 /// opening a gap would move the rows the target is calculated from.
 struct PanelLayout {
     static let space = "deviceLists"
-    static let sectionGap: CGFloat = 10
-    static let verticalPadding: CGFloat = 8
+    /// Room above a section for its separator, which sits `separatorInset`
+    /// below the previous section, leaving the rest as padding under it.
+    static let sectionGap: CGFloat = 22
+    static let separatorInset: CGFloat = 8
+    static let horizontalPadding: CGFloat = 12
+    /// Matches the room between a section separator and the next heading.
+    static let topPadding: CGFloat = sectionGap - separatorInset
+    static let bottomPadding: CGFloat = 8
 
     let sections: [(section: DeviceSection, count: Int)]
 
@@ -77,13 +83,13 @@ struct PanelLayout {
     }
 
     var contentHeight: CGFloat {
-        let chrome = Self.verticalPadding * 2
+        let chrome = Self.topPadding + Self.bottomPadding
             + CGFloat(max(sections.count - 1, 0)) * Self.sectionGap
         return sections.reduce(chrome) { $0 + height($1.count) }
     }
 
     func sectionTop(of section: DeviceSection) -> CGFloat? {
-        var top = Self.verticalPadding
+        var top = Self.topPadding
         for entry in sections {
             if entry.section == section { return top }
             top += height(entry.count) + Self.sectionGap
@@ -176,7 +182,7 @@ struct PanelLayout {
 
     /// The list and row gap under `point`, before applying device-role rules.
     func target(at point: CGPoint) -> DropTarget? {
-        var top = Self.verticalPadding
+        var top = Self.topPadding
         for entry in sections {
             let bottom = top + height(entry.count) + Self.sectionGap
             if point.y < bottom {

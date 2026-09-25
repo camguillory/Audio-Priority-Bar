@@ -15,6 +15,8 @@ struct DeviceSectionView: View {
     let title: String
     let emptyText: String
     let icon: String
+    /// Draws a full-width separator in the gap above this section.
+    var showsSeparator = false
     let devices: [AudioDevice]
     let currentID: UInt32?
     let layout: PanelLayout
@@ -31,6 +33,7 @@ struct DeviceSectionView: View {
         VStack(alignment: .leading, spacing: DeviceRowMetrics.spacing) {
             Label(title, systemImage: icon)
                 .font(.callout.weight(.semibold))
+                .textCase(.uppercase)
                 .foregroundStyle(.secondary)
                 .frame(height: DeviceRowMetrics.sectionHeader, alignment: .leading)
                 .accessibilityElement(children: .ignore)
@@ -42,13 +45,15 @@ struct DeviceSectionView: View {
                     .font(.callout)
                     .italic()
                     .foregroundStyle(.tertiary)
-                    .padding(.leading, 32)
                     .frame(height: DeviceRowMetrics.height, alignment: .leading)
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    // Overhangs the text like a row's highlight does.
+                    .padding(.horizontal, 8)
                     .background(
                         Color.accentColor.opacity(isTargeted ? 0.12 : 0),
                         in: RoundedRectangle(cornerRadius: 8)
                     )
+                    .padding(.horizontal, -8)
             } else {
                 ForEach(Array(devices.enumerated()), id: \.element.id) {
                     index, device in
@@ -85,6 +90,16 @@ struct DeviceSectionView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        // Applied before the offset below, so the separator moves with the
+        // section when a drag opens or closes a row above it.
+        .overlay(alignment: .top) {
+            if showsSeparator {
+                Divider()
+                    .padding(.horizontal, -PanelLayout.horizontalPadding)
+                    .offset(y: PanelLayout.separatorInset - PanelLayout.sectionGap)
+                    .accessibilityHidden(true)
+            }
+        }
         .offset(y: drag.map {
             layout.sectionOffset(for: section, drag: $0)
         } ?? 0)
