@@ -156,10 +156,8 @@ struct PanelView: View {
             }
             drag = nil
         }
-        .modifier(PanelBackground(cornerRadius: Self.cornerRadius))
+        .modifier(PanelBackground())
     }
-
-    private static let cornerRadius: CGFloat = 12
 
     private var modeDescription: String {
         guard let current = model.currentOutputDevice else {
@@ -341,7 +339,7 @@ private struct ScrollWheelReceiver: NSViewRepresentable {
 /// Matches the menu bar's own menus: Liquid Glass on macOS 26 and later, and
 /// the menu material blurred over whatever is behind the panel before that.
 private struct PanelBackground: ViewModifier {
-    let cornerRadius: CGFloat
+    private let cornerRadius: CGFloat = 12
 
     private var shape: RoundedRectangle {
         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
@@ -370,16 +368,14 @@ private struct MenuMaterial: NSViewRepresentable {
         let view = NSVisualEffectView()
         view.material = .menu
         view.blendingMode = .behindWindow
-        // The panel never becomes the active window, so follow-window-state
-        // would always render it in the dimmed inactive appearance.
+        // The app remains inactive when this nonactivating panel becomes key,
+        // so following the window state would render the material as inactive.
         view.state = .active
         view.maskImage = maskImage
         return view
     }
 
-    func updateNSView(_ view: NSVisualEffectView, context: Context) {
-        view.maskImage = maskImage
-    }
+    func updateNSView(_ view: NSVisualEffectView, context: Context) {}
 
     /// A clip shape alone leaves the behind-window blur square at the corners.
     private var maskImage: NSImage {
