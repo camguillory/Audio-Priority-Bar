@@ -53,16 +53,33 @@ func aHeadsetSwitchingBothHalvesReadsAsOneDevice() {
     let jabraOut = output(1, "jabra:1", "Jabra Link 380")
     let jabraIn = input(2, "jabra:2", "Jabra Link 380")
     let mic = input(3, "builtin", "MacBook Pro Microphone")
-    #expect(NoticeContent.switchText([jabraOut]) == "Output: Jabra Link 380")
-    #expect(NoticeContent.switchText([jabraOut, jabraIn])
-        == "Output and microphone: Jabra Link 380")
-    #expect(NoticeContent.switchText([jabraOut, mic])
-        == "Output: Jabra Link 380, microphone: MacBook Pro Microphone")
+    func notice(_ devices: [AudioDevice]) -> NoticeContent {
+        NoticeContent.switched(to: devices) { $0.role == .input ? "mic" : "headphones" }
+    }
+    #expect(notice([jabraOut]) == NoticeContent(
+        lines: [.init(icon: "headphones", text: "Jabra Link 380")],
+        announcement: "Output: Jabra Link 380"
+    ))
+    #expect(notice([jabraOut, jabraIn]) == NoticeContent(
+        lines: [.init(icon: "headphones", text: "Jabra Link 380")],
+        announcement: "Output and microphone: Jabra Link 380"
+    ))
+    // The icons carry the role on screen; VoiceOver still hears it spoken.
+    #expect(notice([jabraOut, mic]) == NoticeContent(
+        lines: [
+            .init(icon: "headphones", text: "Jabra Link 380"),
+            .init(icon: "mic", text: "MacBook Pro Microphone"),
+        ],
+        announcement: "Output: Jabra Link 380, Microphone: MacBook Pro Microphone"
+    ))
 }
 
 @Test
 func aSwitchNoticeOutranksTheMutedReminderButNeverCoversThePanel() {
-    let notice = NoticeContent(icon: "airpodspro", text: "Output: AirPods Pro")
+    let notice = NoticeContent(
+        lines: [.init(icon: "airpodspro", text: "AirPods Pro")],
+        announcement: "Output: AirPods Pro"
+    )
     #expect(NoticeContent.current(
         switchNotice: notice, showsMutedReminder: true, isSuppressed: false
     ) == notice)

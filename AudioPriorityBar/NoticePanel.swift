@@ -4,12 +4,19 @@ import SwiftUI
 
 /// What the floating notice under the menu bar icon shows.
 struct NoticeContent: Equatable {
-    let icon: String
-    let text: String
+    struct Line: Equatable {
+        let icon: String
+        let text: String
+    }
+
+    let lines: [Line]
+    /// What VoiceOver reads, which names each device's role since the icons
+    /// only show it visually.
+    let announcement: String
 
     static let mutedWhileRecording = NoticeContent(
-        icon: "mic.slash.fill",
-        text: "Microphone muted"
+        lines: [Line(icon: "mic.slash.fill", text: "Microphone muted")],
+        announcement: "Microphone muted"
     )
 
     /// A switch notice wins for its moment, then the muted reminder returns
@@ -23,20 +30,25 @@ struct NoticeContent: Equatable {
         return switchNotice ?? (showsMutedReminder ? mutedWhileRecording : nil)
     }
 
-    /// Describes one automatic switch. Both halves of a USB headset switching
-    /// together read as one device rather than two separate changes.
-    static func switchText(_ devices: [AudioDevice]) -> String {
-        func label(_ device: AudioDevice) -> String {
-            device.role == .input ? "Microphone" : "Output"
+    /// Describes one automatic switch, one line per device: its icon and
+    /// name. Both halves of a USB headset switching together read as one
+    /// device rather than two separate changes.
+    static func switched(
+        to devices: [AudioDevice],
+        icon: (AudioDevice) -> String
+    ) -> NoticeContent {
+        if devices.count == 2, devices[0].name == devices[1].name {
+            return NoticeContent(
+                lines: [Line(icon: icon(devices[0]), text: devices[0].name)],
+                announcement: "Output and microphone: \(devices[0].name)"
+            )
         }
-        guard let first = devices.first else { return "" }
-        guard devices.count > 1 else { return "\(label(first)): \(first.name)" }
-        let second = devices[1]
-        if first.name == second.name {
-            return "Output and microphone: \(first.name)"
-        }
-        return "\(label(first)): \(first.name), "
-            + "\(label(second).lowercased()): \(second.name)"
+        return NoticeContent(
+            lines: devices.map { Line(icon: icon($0), text: $0.name) },
+            announcement: devices.map {
+                "\($0.role == .input ? "Microphone" : "Output"): \($0.name)"
+            }.joined(separator: ", ")
+        )
     }
 }
 
@@ -136,7 +148,7 @@ final class NoticePanel {
             element: NSApp as Any,
             notification: .announcementRequested,
             userInfo: [
-                .announcement: content.text,
+                .announcement: content.announcement,
                 .priority: NSAccessibilityPriorityLevel.high.rawValue,
             ]
         )
@@ -147,15 +159,28 @@ private struct NoticeView: View {
     let content: NoticeContent
 
     var body: some View {
-        HStack(spacing: 8) {
-            Image(systemName: content.icon)
-            Text(content.text)
-                .font(.system(size: 13, weight: .medium))
-                .lineLimit(1)
+        VStack(alignment: .leading, spacing: 6) {
+            ForEach(content.lines, id: \.text) { line in
+                HStack(spacing: 8) {
+                    // A shared width keeps the text of every line aligned.
+                    Image(systemName: line.icon)
+                        .frame(width: 18)
+                    Text(line.text)
+                        .font(.system(size: 13, weight: .medium))
+                        .lineLimit(1)
+                }
+            }
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
-        .background(.regularMaterial, in: Capsule())
+        .background(.regularMaterial, in: shape)
         .fixedSize()
+    }
+
+    /// A capsule for one line; two lines would make its ends look swollen.
+    private var shape: AnyShape {
+        content.lines.count > 1
+            ? AnyShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            : AnyShape(Capsule())
     }
 }

@@ -112,6 +112,25 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         observeStatus()
         observeNotice()
         model.onAutomaticSwitch = { [weak self] in self?.showSwitchNotice($0) }
+        // Launch with `--args -previewNotices YES` to see both notices without
+        // changing any hardware.
+        if UserDefaults.standard.bool(forKey: "previewNotices") { previewNotices() }
+    }
+
+    private func previewNotices() {
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(1))
+            guard let self else { return }
+            showSwitchNotice(
+                [model.currentOutputDevice, model.currentInputDevice].compactMap { $0 }
+            )
+            try? await Task.sleep(for: .seconds(2.5))
+            notice.showsMutedReminder = true
+            try? await Task.sleep(for: .seconds(3))
+            notice.showsMutedReminder = model.remindsWhenMuted
+                && model.isMicrophoneMuted
+                && model.isInputRecording
+        }
     }
 
     private func configureStatusItem() {
@@ -336,12 +355,12 @@ final class StatusItemController: NSObject, NSWindowDelegate {
     }
 
     private func showSwitchNotice(_ devices: [AudioDevice]) {
-        guard model.showsSwitchNotice, let first = devices.first else { return }
-        let category = first.role == .output ? model.store.category(for: first) : nil
-        notice.showSwitch(NoticeContent(
-            icon: first.hardwareIcon(category: category),
-            text: NoticeContent.switchText(devices)
-        ))
+        guard model.showsSwitchNotice, !devices.isEmpty else { return }
+        notice.showSwitch(NoticeContent.switched(to: devices) { device in
+            device.hardwareIcon(
+                category: device.role == .output ? model.store.category(for: device) : nil
+            )
+        })
     }
 
     func windowDidResize(_ notification: Notification) {
