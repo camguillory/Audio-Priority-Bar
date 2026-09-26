@@ -87,7 +87,6 @@ struct PanelView: View {
                     name: "Output",
                     deviceName: model.currentOutputDevice?.name,
                     icon: model.isActiveOutputMuted ? "speaker.slash.fill" : outputIcon,
-                    mutedStyle: AnyShapeStyle(.secondary),
                     isMuted: model.isActiveOutputMuted,
                     level: model.volume,
                     isControllable: model.isVolumeControllable,
@@ -99,7 +98,6 @@ struct PanelView: View {
                         name: "Microphone",
                         deviceName: model.currentInputDevice?.name,
                         icon: model.isMicrophoneMuted ? "mic.slash.fill" : "mic.fill",
-                        mutedStyle: AnyShapeStyle(.red),
                         isMuted: model.isMicrophoneMuted,
                         level: model.microphoneLevel,
                         isControllable: model.isMicrophoneLevelControllable,
@@ -236,7 +234,7 @@ struct PanelView: View {
 /// One row for the current output or microphone: the icon mutes, the slider
 /// sets the level. Both rows share it so they look and behave alike.
 private struct LevelControl: View {
-    private static let iconWidth: CGFloat = 20
+    private static let buttonSize: CGFloat = 26
     private static let spacing: CGFloat = 10
 
     let name: String
@@ -244,23 +242,27 @@ private struct LevelControl: View {
     /// rather than taking a line of its own.
     let deviceName: String?
     let icon: String
-    let mutedStyle: AnyShapeStyle
     let isMuted: Bool
     let level: Float
     let isControllable: Bool
     let toggleMute: () -> Void
     let setLevel: (Float) -> Void
 
+    @State private var isHoveringMute = false
+
     var body: some View {
         HStack(spacing: Self.spacing) {
             Button(action: toggleMute) {
                 Image(systemName: icon)
-                    .foregroundStyle(isMuted ? mutedStyle : AnyShapeStyle(.tint))
-                    .frame(width: Self.iconWidth)
-                    .contentShape(Rectangle())
+                    .foregroundStyle(isMuted ? AnyShapeStyle(.red) : AnyShapeStyle(.tint))
+                    .frame(width: Self.buttonSize, height: Self.buttonSize)
+                    .background(Circle().fill(muteBackground))
+                    .contentShape(Circle())
                     .animation(.easeInOut(duration: 0.15), value: icon)
             }
             .buttonStyle(.plain)
+            .onHover { isHoveringMute = $0 }
+            .animation(.easeInOut(duration: 0.12), value: isHoveringMute)
             .help(muteTitle)
             .accessibilityLabel(muteTitle)
             Slider(
@@ -296,6 +298,13 @@ private struct LevelControl: View {
 
     private var muteTitle: String {
         "\(isMuted ? "Unmute" : "Mute") \(deviceName ?? name)"
+    }
+
+    /// Always filled so the icon reads as a button, and tinted while muted.
+    private var muteBackground: AnyShapeStyle {
+        isMuted
+            ? AnyShapeStyle(Color.red.opacity(isHoveringMute ? 0.3 : 0.2))
+            : AnyShapeStyle(Color.primary.opacity(isHoveringMute ? 0.16 : 0.08))
     }
 
     private var valueDescription: String {
