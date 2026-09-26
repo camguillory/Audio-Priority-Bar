@@ -14,6 +14,10 @@ final class FakeAudio {
     var failedSelectionRoles: Set<DeviceRole> = []
     var volumeReadCount = 0
     var muteReadCount = 0
+    /// Microphones without a settable mute property, like ZoomAudioDevice.
+    var noMuteProperty: Set<UInt32> = []
+    var inputVolumes: [UInt32: Float] = [:]
+    var running: Set<UInt32> = []
 
     var operations: AudioOperations {
         AudioOperations(
@@ -39,7 +43,23 @@ final class FakeAudio {
             isMuted: {
                 self.muteReadCount += 1
                 return self.muted.contains("\($0.rawValue):\($1)")
-            }
+            },
+            setMute: { role, id, muted in
+                guard !self.noMuteProperty.contains(id) else { return false }
+                if muted {
+                    self.muted.insert("\(role.rawValue):\(id)")
+                } else {
+                    self.muted.remove("\(role.rawValue):\(id)")
+                }
+                return true
+            },
+            inputVolume: { self.inputVolumes[$0] },
+            setInputVolume: {
+                guard self.inputVolumes[$0] != nil else { return false }
+                self.inputVolumes[$0] = $1
+                return true
+            },
+            isRunning: { self.running.contains($0) }
         )
     }
 }
@@ -496,4 +516,261 @@ func reduceMotionKeepsMutedMicrophoneIndicatorSteady() {
     #expect(model.micFlashState)
     model.stop()
     #expect(!model.micFlashState)
+}
+
+// Jabra Link 380 and the MacBook Pro microphone both expose a settable input
+// mute on the main element (macOS 26, probed 2026-09-26), which FakeAudio
+// models by default. ZoomAudioDevice has none and rests at zero volume.
+
+@Test
+@MainActor
+func microphoneMuteMovesToTheNewMicrophone() {
+    let audio = FakeAudio()
+    let headset = input(1, "headset", "Jabra Link 380")
+    let builtIn = input(2, "builtin", "MacBook Pro Microphone")
+    audio.catalog = [headset, builtIn]
+    let model = testModel(audio: audio, defaults: isolatedDefaults())
+    model.start()
+
+    model.setMicrophoneMuted(true)
+    #expect(audio.muted == ["input:1"])
+
+    audio.catalog = [builtIn]
+    model.handleDevicesChanged()
+    #expect(model.currentInputID == 2)
+    #expect(model.isMicrophoneMuted)
+    #expect(audio.muted.contains("input:2"))
+
+    audio.catalog = [headset, builtIn]
+    model.handleDevicesChanged()
+    #expect(model.currentInputID == 1)
+    #expect(audio.muted == ["input:1"])
+
+    model.selectManually(builtIn)
+    model.handleDefaultChanged(.input)
+    #expect(audio.muted == ["input:2"])
+    #expect(model.isActiveInputMuted)
+}
+
+@Test
+@MainActor
+func muteFallsBackToZeroVolumeAndRestoresTheLevel() {
+    let audio = FakeAudio()
+    audio.catalog = [input(1, "zoom", "ZoomAudioDevice")]
+    audio.noMuteProperty = [1]
+    audio.inputVolumes = [1: 0.627]
+    let defaults = isolatedDefaults()
+    let model = testModel(audio: audio, defaults: defaults)
+    model.start()
+
+    model.setMicrophoneMuted(true)
+    #expect(audio.inputVolumes[1] == 0)
+    #expect(model.isActiveInputMuted)
+    #expect(PriorityStore(defaults: defaults).appliedMicrophoneMutes["zoom"] != nil)
+
+    model.setMicrophoneMuted(false)
+    #expect(audio.inputVolumes[1] == 0.627)
+    #expect(!model.isActiveInputMuted)
+    #expect(PriorityStore(defaults: defaults).appliedMicrophoneMutes.isEmpty)
+}
+
+@Test
+@MainActor
+func aVirtualMicrophoneRestingAtZeroVolumeIsNotShownMuted() {
+    let audio = FakeAudio()
+    audio.catalog = [input(1, "zoom", "ZoomAudioDevice")]
+    audio.noMuteProperty = [1]
+    audio.inputVolumes = [1: 0]
+    let model = testModel(audio: audio, defaults: isolatedDefaults())
+
+    model.start()
+
+    #expect(!model.isMicrophoneMuted)
+    #expect(!model.isActiveInputMuted)
+}
+
+@Test
+@MainActor
+func unmutingElsewhereClearsTheMute() {
+    let audio = FakeAudio()
+    audio.catalog = [input(1, "mic")]
+    let defaults = isolatedDefaults()
+    let model = testModel(audio: audio, defaults: defaults)
+    model.start()
+    model.setMicrophoneMuted(true)
+
+    audio.muted.remove("input:1")
+    model.refreshMute()
+
+    #expect(!model.isMicrophoneMuted)
+    #expect(PriorityStore(defaults: defaults).appliedMicrophoneMutes.isEmpty)
+}
+
+@Test
+@MainActor
+func aHeadsetMuteButtonIsFollowed() {
+    let audio = FakeAudio()
+    audio.catalog = [input(1, "headset")]
+    let model = testModel(audio: audio, defaults: isolatedDefaults())
+    model.start()
+
+    audio.muted.insert("input:1")
+    model.refreshMute()
+
+    #expect(model.isMicrophoneMuted)
+}
+
+@Test
+@MainActor
+func aMicrophoneMutedWhileUnpluggedComesBackUnmuted() {
+    let audio = FakeAudio()
+    let headset = input(1, "headset")
+    let builtIn = input(2, "builtin")
+    audio.catalog = [headset, builtIn]
+    let model = testModel(audio: audio, defaults: isolatedDefaults())
+    model.start()
+    model.setMicrophoneMuted(true)
+
+    audio.catalog = [builtIn]
+    model.handleDevicesChanged()
+    model.setMicrophoneMuted(false)
+    audio.catalog = [headset, builtIn]
+    model.handleDevicesChanged()
+
+    #expect(model.currentInputID == 1)
+    #expect(audio.muted.isEmpty)
+    #expect(!model.isMicrophoneMuted)
+}
+
+@Test
+@MainActor
+func quittingRestoresAppliedMutes() {
+    let audio = FakeAudio()
+    audio.catalog = [input(1, "mic")]
+    let defaults = isolatedDefaults()
+    let model = testModel(audio: audio, defaults: defaults)
+    model.start()
+    model.setMicrophoneMuted(true)
+
+    model.stop()
+
+    #expect(audio.muted.isEmpty)
+    #expect(PriorityStore(defaults: defaults).appliedMicrophoneMutes.isEmpty)
+}
+
+@Test
+@MainActor
+func recordingIsReportedForTheCurrentMicrophoneOnly() {
+    let audio = FakeAudio()
+    audio.catalog = [input(1, "mic"), input(2, "other")]
+    let model = testModel(audio: audio, defaults: isolatedDefaults())
+    model.start()
+    audio.running = [2]
+    model.refreshMute()
+    #expect(!model.isInputRecording)
+
+    audio.running = [1]
+    model.refreshMute()
+    #expect(model.isInputRecording)
+}
+
+@Test
+@MainActor
+func aConnectedHeadsetTriggersOneSwitchNotice() {
+    let audio = FakeAudio()
+    let speaker = output(1, "speaker")
+    let headphones = output(2, "headphones", "AirPods Pro")
+    audio.catalog = [speaker]
+    let model = testModel(audio: audio, defaults: isolatedDefaults())
+    model.start()
+    var notices: [[AudioDevice]] = []
+    model.onAutomaticSwitch = { notices.append($0) }
+
+    audio.catalog = [speaker, headphones]
+    model.handleDevicesChanged()
+    model.handleDefaultChanged(.output)
+
+    #expect(notices.map { $0.map(\.uid) } == [["headphones"]])
+}
+
+@Test
+@MainActor
+func manualSelectionShowsNoSwitchNotice() {
+    let audio = FakeAudio()
+    let speaker = output(1, "speaker")
+    audio.catalog = [speaker, output(2, "headphones", "AirPods Pro")]
+    let model = testModel(audio: audio, defaults: isolatedDefaults())
+    model.start()
+    var notices: [[AudioDevice]] = []
+    model.onAutomaticSwitch = { notices.append($0) }
+
+    model.selectManually(speaker)
+    model.handleDefaultChanged(.output)
+
+    #expect(notices.isEmpty)
+}
+
+@Test
+@MainActor
+func startupShowsNoSwitchNotice() {
+    let audio = FakeAudio()
+    audio.catalog = [input(1, "mic"), output(2, "speaker")]
+    let model = testModel(audio: audio, defaults: isolatedDefaults())
+    var notices: [[AudioDevice]] = []
+    model.onAutomaticSwitch = { notices.append($0) }
+
+    model.start()
+
+    #expect(notices.isEmpty)
+}
+
+@Test
+@MainActor
+func movingTheMicrophoneLevelWhileMutedUnmutes() {
+    let audio = FakeAudio()
+    audio.catalog = [input(1, "mic")]
+    audio.inputVolumes = [1: 0.627]
+    let model = testModel(audio: audio, defaults: isolatedDefaults())
+    model.start()
+    model.setMicrophoneMuted(true)
+
+    model.setMicrophoneLevel(0.4)
+
+    #expect(!model.isMicrophoneMuted)
+    #expect(audio.muted.isEmpty)
+    #expect(audio.inputVolumes[1] == 0.4)
+    #expect(model.microphoneLevel == 0.4)
+}
+
+@Test
+@MainActor
+func aZeroVolumeMuteShowsTheLevelItWillRestore() {
+    let audio = FakeAudio()
+    audio.catalog = [input(1, "zoom", "ZoomAudioDevice")]
+    audio.noMuteProperty = [1]
+    audio.inputVolumes = [1: 0.627]
+    let model = testModel(audio: audio, defaults: isolatedDefaults())
+    model.start()
+
+    model.setMicrophoneMuted(true)
+
+    #expect(audio.inputVolumes[1] == 0)
+    #expect(model.microphoneLevel == 0.627)
+}
+
+@Test
+@MainActor
+func outputMuteTogglesAndRaisingTheVolumeUnmutes() {
+    let audio = FakeAudio()
+    audio.catalog = [output(1, "speaker")]
+    audio.volume = 0.43
+    let model = testModel(audio: audio, defaults: isolatedDefaults())
+    model.start()
+
+    model.setOutputMuted(true)
+    #expect(model.isActiveOutputMuted)
+
+    model.setVolume(0.5)
+    #expect(!model.isActiveOutputMuted)
+    #expect(audio.muted.isEmpty)
 }

@@ -3,7 +3,7 @@ import AppKit
 import Observation
 import SwiftUI
 
-enum StatusItemClickAction: Equatable { case togglePanel, showMenu }
+enum StatusItemClickAction: Equatable { case togglePanel, showMenu, toggleMute }
 
 enum ClickRouting {
     private static let suppressionLifetime: TimeInterval = 2
@@ -16,6 +16,9 @@ enum ClickRouting {
             || (eventType == .leftMouseUp && modifiers.contains(.control)) {
             return .showMenu
         }
+        if eventType == .leftMouseUp && modifiers.contains(.option) {
+            return .toggleMute
+        }
         return .togglePanel
     }
 
@@ -25,6 +28,24 @@ enum ClickRouting {
     ) -> Bool {
         guard let suppressedAt else { return false }
         return now - suppressedAt < suppressionLifetime
+    }
+}
+
+enum PanelPlacement {
+    /// Centers a window under the status item, kept 4 points inside the
+    /// visible part of the screen.
+    static func origin(
+        buttonRect: NSRect,
+        size: NSSize,
+        visibleFrame visible: NSRect
+    ) -> NSPoint {
+        let maxX = max(visible.maxX - size.width - 4, visible.minX + 4)
+        let x = min(
+            max(buttonRect.midX - size.width / 2, visible.minX + 4),
+            maxX
+        )
+        let y = max(buttonRect.minY - size.height - 4, visible.minY + 4)
+        return NSPoint(x: x, y: y)
     }
 }
 
@@ -55,8 +76,21 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         action: nil,
         keyEquivalent: ""
     )
+    private let muteItem = NSMenuItem(
+        title: "Mute Microphone",
+        action: nil,
+        keyEquivalent: ""
+    )
     private let labelView: PassthroughHostingView<StatusLabel>
     private var suppressNextClickAt: TimeInterval?
+    /// The status item's center when the panel opened. The item widens and
+    /// narrows with its glyphs, like the muted microphone, and re-centering on
+    /// it would slide the open panel sideways.
+    private var panelAnchorX: CGFloat?
+    private lazy var notice = NoticePanel { [weak self] size in
+        guard let self, let button = statusItem.button else { return nil }
+        return origin(under: button, size: size)
+    }
 
     init(
         model: AppModel,
@@ -76,6 +110,8 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         configurePanel()
         configureMenu()
         observeStatus()
+        observeNotice()
+        model.onAutomaticSwitch = { [weak self] in self?.showSwitchNotice($0) }
     }
 
     private func configureStatusItem() {
@@ -91,7 +127,7 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         ])
         button.setAccessibilityLabel(appDisplayName)
         button.setAccessibilityHelp(
-            "Activate to show audio devices; open the context menu for Settings and Quit"
+            "Activate to show audio devices; open the context menu to mute the microphone, or for Settings and Quit"
         )
     }
 
@@ -127,6 +163,11 @@ final class StatusItemController: NSObject, NSWindowDelegate {
     }
 
     private func configureMenu() {
+        menu.autoenablesItems = false
+        muteItem.target = self
+        muteItem.action = #selector(toggleMute)
+        menu.addItem(muteItem)
+        menu.addItem(.separator())
         updatesItem.target = self
         updatesItem.action = #selector(handleUpdatesItem)
         menu.addItem(updatesItem)
@@ -185,7 +226,12 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         switch action {
         case .togglePanel: togglePanel()
         case .showMenu: showMenu()
+        case .toggleMute: toggleMute()
         }
+    }
+
+    @objc private func toggleMute() {
+        model.setMicrophoneMuted(!model.isMicrophoneMuted)
     }
 
     private func togglePanel() {
@@ -206,10 +252,14 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         guard let content = panel.contentViewController?.view else { return }
         content.layoutSubtreeIfNeeded()
         panel.setContentSize(content.fittingSize)
+        panelAnchorX = button.window.map {
+            $0.convertToScreen(button.convert(button.bounds, to: nil)).midX
+        }
         positionPanel(relativeTo: button)
         panel.orderFrontRegardless()
         panel.makeKey()
         button.highlight(true)
+        notice.isSuppressed = true
     }
 
     private func showMenu() {
@@ -219,6 +269,10 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         updatesItem.title = updates.availableVersion == nil
             ? "Check for Updates…"
             : "Download Update…"
+        muteItem.title = model.isMicrophoneMuted
+            ? "Unmute Microphone"
+            : "Mute Microphone"
+        muteItem.isEnabled = model.currentInputID != nil
         statusItem.menu = menu
         statusItem.button?.performClick(nil)
         statusItem.menu = nil
@@ -246,20 +300,48 @@ final class StatusItemController: NSObject, NSWindowDelegate {
             suppressNextClickAt = ProcessInfo.processInfo.systemUptime
         }
         panel.orderOut(nil)
+        panelAnchorX = nil
+        notice.isSuppressed = false
     }
 
     private func positionPanel(relativeTo button: NSStatusBarButton) {
-        guard let window = button.window, let screen = window.screen else { return }
-        let buttonRect = window.convertToScreen(button.convert(button.bounds, to: nil))
-        let visible = screen.visibleFrame
-        let size = panel.frame.size
-        let maxX = max(visible.maxX - size.width - 4, visible.minX + 4)
-        let x = min(
-            max(buttonRect.midX - size.width / 2, visible.minX + 4),
-            maxX
+        if let origin = origin(under: button, size: panel.frame.size, centeredAt: panelAnchorX) {
+            panel.setFrameOrigin(origin)
+        }
+    }
+
+    private func origin(
+        under button: NSStatusBarButton,
+        size: NSSize,
+        centeredAt anchorX: CGFloat? = nil
+    ) -> NSPoint? {
+        guard let window = button.window, let screen = window.screen else { return nil }
+        var buttonRect = window.convertToScreen(button.convert(button.bounds, to: nil))
+        if let anchorX { buttonRect.origin.x = anchorX - buttonRect.width / 2 }
+        return PanelPlacement.origin(
+            buttonRect: buttonRect,
+            size: size,
+            visibleFrame: screen.visibleFrame
         )
-        let y = max(buttonRect.minY - size.height - 4, visible.minY + 4)
-        panel.setFrameOrigin(NSPoint(x: x, y: y))
+    }
+
+    private func observeNotice() {
+        withObservationTracking {
+            notice.showsMutedReminder = model.remindsWhenMuted
+                && model.isMicrophoneMuted
+                && model.isInputRecording
+        } onChange: { [weak self] in
+            Task { @MainActor [weak self] in self?.observeNotice() }
+        }
+    }
+
+    private func showSwitchNotice(_ devices: [AudioDevice]) {
+        guard model.showsSwitchNotice, let first = devices.first else { return }
+        let category = first.role == .output ? model.store.category(for: first) : nil
+        notice.showSwitch(NoticeContent(
+            icon: first.hardwareIcon(category: category),
+            text: NoticeContent.switchText(devices)
+        ))
     }
 
     func windowDidResize(_ notification: Notification) {

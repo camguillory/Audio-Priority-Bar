@@ -104,7 +104,7 @@ func listenerStartRollsBackPartialRegistration() {
 
 @Test
 @MainActor
-func listenerStartRegistersMuteElementsAndVolumePerDevice() {
+func listenerStartRegistersMuteVolumeAndActivityPerDevice() {
     let log = ListenerLog()
     let sut = lifecycle(log: log, deviceIDs: { [10, 20] })
 
@@ -116,11 +116,15 @@ func listenerStartRegistersMuteElementsAndVolumePerDevice() {
         .mute(id: 10, role: .input, element: kAudioObjectPropertyElementMain),
         .mute(id: 10, role: .input, element: 1),
         .volume(id: 10),
+        .inputVolume(id: 10),
+        .running(id: 10),
         .mute(id: 20, role: .output, element: kAudioObjectPropertyElementMain),
         .mute(id: 20, role: .output, element: 1),
         .mute(id: 20, role: .input, element: kAudioObjectPropertyElementMain),
         .mute(id: 20, role: .input, element: 1),
         .volume(id: 20),
+        .inputVolume(id: 20),
+        .running(id: 20),
     ]
     #expect(Set(log.deviceAdds) == expected)
 }
@@ -135,8 +139,8 @@ func recycledDeviceIDStillForcesRemoveThenReadd() {
 
     sut.rebuildDeviceListeners()
 
-    #expect(log.deviceRemoves.count == 5)
-    #expect(log.deviceAdds.count == 5)
+    #expect(log.deviceRemoves.count == 7)
+    #expect(log.deviceAdds.count == 7)
     #expect(Set(log.deviceRemoves) == Set(log.deviceAdds))
 }
 
@@ -150,7 +154,7 @@ func stopIsIdempotentAndAllowsRestart() {
     sut.stop()
     sut.stop()
 
-    #expect(log.deviceRemoves.count == 5)
+    #expect(log.deviceRemoves.count == 7)
     #expect(log.systemRemoves == [.devices, .defaultInput, .defaultOutput])
     #expect(!sut.isListening)
     #expect(sut.start())

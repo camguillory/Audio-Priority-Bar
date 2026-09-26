@@ -25,6 +25,37 @@ extension AppModel {
         store.hideNewDisplayOutputs = enabled
     }
 
+    func setShowsSwitchNotice(_ enabled: Bool) {
+        showsSwitchNotice = enabled
+        store.showsSwitchNotice = enabled
+    }
+
+    func setRemindsWhenMuted(_ enabled: Bool) {
+        remindsWhenMuted = enabled
+        store.remindsWhenMuted = enabled
+    }
+
+    func setMicrophoneMuted(_ muted: Bool) {
+        isMicrophoneMuted = muted
+        refreshMute()
+        refreshVolume()
+    }
+
+    /// Moving the level while muted unmutes, as the macOS volume keys do.
+    func setMicrophoneLevel(_ value: Float) {
+        guard let id = currentInputID else { return }
+        if isMicrophoneMuted { setMicrophoneMuted(false) }
+        guard audio.setInputVolume(id, value) else { return }
+        microphoneLevel = value
+    }
+
+    func setOutputMuted(_ muted: Bool) {
+        guard let id = currentOutputID, audio.setMute(.output, id, muted) else {
+            return
+        }
+        refreshMute()
+    }
+
     func selectManually(_ device: AudioDevice) {
         setManualMode(true)
         select(device)
@@ -54,6 +85,7 @@ extension AppModel {
     func setVolume(_ value: Float) {
         guard audio.setOutputVolume(value) else { return }
         volume = value
+        if isActiveOutputMuted, value > 0 { setOutputMuted(false) }
     }
 
     func setCategory(_ category: OutputCategory, for device: AudioDevice) {

@@ -355,6 +355,32 @@ func selectsPairedDeviceMigratesFromThePreRenameKeyOnce() throws {
     }
 }
 
+@Test
+func appliedMicrophoneMutesAndNoticePreferencesPersist() throws {
+    try withDefaults { defaults in
+        let store = PriorityStore(defaults: defaults)
+        #expect(store.appliedMicrophoneMutes.isEmpty)
+        #expect(store.showsSwitchNotice)
+        #expect(store.remindsWhenMuted)
+
+        // 0.627 is the MacBook Pro microphone level read on macOS 26.
+        store.appliedMicrophoneMutes = [
+            "mic": 0.627,
+            "jabra": PriorityStore.mutedByProperty,
+        ]
+        store.showsSwitchNotice = false
+        store.remindsWhenMuted = false
+
+        let reloaded = PriorityStore(defaults: defaults)
+        #expect(reloaded.appliedMicrophoneMutes == [
+            "mic": 0.627,
+            "jabra": PriorityStore.mutedByProperty,
+        ])
+        #expect(!reloaded.showsSwitchNotice)
+        #expect(!reloaded.remindsWhenMuted)
+    }
+}
+
 private func monitor(
     _ uid: String = "dell",
     _ name: String = "DELL U2518D"

@@ -117,6 +117,64 @@ enum CoreAudioProperties {
         return role == .output && deviceVolume(id) < 0.01
     }
 
+    /// Sets the mute property, trying the main element before channel 1.
+    /// False when the device has no settable mute, so the caller can fall back
+    /// to zero input volume.
+    static func setMute(
+        _ id: AudioObjectID,
+        role: DeviceRole,
+        _ muted: Bool
+    ) -> Bool {
+        let scope = role == .input
+            ? kAudioDevicePropertyScopeInput
+            : kAudioDevicePropertyScopeOutput
+        var value: UInt32 = muted ? 1 : 0
+        for element in [kAudioObjectPropertyElementMain, 1] {
+            if write(
+                id,
+                selector: kAudioDevicePropertyMute,
+                scope: scope,
+                element: element,
+                value: &value
+            ) == noErr {
+                return true
+            }
+        }
+        return false
+    }
+
+    static func inputVolume(_ id: AudioObjectID) -> Float? {
+        var volume: Float32 = 0
+        let status = read(
+            id,
+            selector: kAudioHardwareServiceDeviceProperty_VirtualMainVolume,
+            scope: kAudioDevicePropertyScopeInput,
+            into: &volume
+        )
+        return status == noErr ? volume : nil
+    }
+
+    static func setInputVolume(_ id: AudioObjectID, _ value: Float) -> Bool {
+        var value = value
+        return write(
+            id,
+            selector: kAudioHardwareServiceDeviceProperty_VirtualMainVolume,
+            scope: kAudioDevicePropertyScopeInput,
+            value: &value
+        ) == noErr
+    }
+
+    /// Whether any process is using the device, which for a microphone means
+    /// some app is recording from it.
+    static func isRunningSomewhere(_ id: AudioObjectID) -> Bool {
+        var running: UInt32 = 0
+        return read(
+            id,
+            selector: kAudioDevicePropertyDeviceIsRunningSomewhere,
+            into: &running
+        ) == noErr && running != 0
+    }
+
     private static func makeDevice(
         id: AudioObjectID,
         role: DeviceRole

@@ -55,37 +55,62 @@ struct PanelView: View {
                 Divider().padding(.horizontal, 12)
             }
 
-            HStack {
-                Text("Automatic switching")
-                    .font(.system(size: 13, weight: .semibold))
-                    .accessibilityHidden(true)
-                Spacer()
-                Toggle(
-                    "Automatic switching",
-                    isOn: Binding(
-                        get: { !model.isManualMode },
-                        set: { model.setManualMode(!$0) }
+            VStack(alignment: .leading, spacing: 2) {
+                HStack {
+                    Text("Automatic switching")
+                        .font(.system(size: 13, weight: .semibold))
+                        .accessibilityHidden(true)
+                    Spacer()
+                    Toggle(
+                        "Automatic switching",
+                        isOn: Binding(
+                            get: { !model.isManualMode },
+                            set: { model.setManualMode(!$0) }
+                        )
                     )
-                )
-                .labelsHidden()
-                .toggleStyle(.switch)
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+                }
+                .help("Use device priorities as availability changes")
+                if let automationNote {
+                    Text(automationNote)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
             }
-            .help("Use device priorities as availability changes")
             .padding(.horizontal, 12)
             .padding(.top, 10)
 
-            VStack(alignment: .leading, spacing: 6) {
-                VolumeControl(model: model)
-                Text(modeDescription)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-                    // Lines up with the start of the slider track.
-                    .padding(.leading, VolumeControl.sliderInset)
+            VStack(spacing: 8) {
+                LevelControl(
+                    name: "Output",
+                    deviceName: model.currentOutputDevice?.name,
+                    icon: model.isActiveOutputMuted ? "speaker.slash.fill" : outputIcon,
+                    mutedStyle: AnyShapeStyle(.secondary),
+                    isMuted: model.isActiveOutputMuted,
+                    level: model.volume,
+                    isControllable: model.isVolumeControllable,
+                    toggleMute: { model.setOutputMuted(!model.isActiveOutputMuted) },
+                    setLevel: model.setVolume
+                )
+                if model.currentInputID != nil {
+                    LevelControl(
+                        name: "Microphone",
+                        deviceName: model.currentInputDevice?.name,
+                        icon: model.isMicrophoneMuted ? "mic.slash.fill" : "mic.fill",
+                        mutedStyle: AnyShapeStyle(.red),
+                        isMuted: model.isMicrophoneMuted,
+                        level: model.microphoneLevel,
+                        isControllable: model.isMicrophoneLevelControllable,
+                        toggleMute: { model.setMicrophoneMuted(!model.isMicrophoneMuted) },
+                        setLevel: model.setMicrophoneLevel
+                    )
+                }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 12)
-            .padding(.vertical, 10)
+            .padding(.top, 8)
+            .padding(.bottom, 10)
 
             Divider().padding(.horizontal, 12)
 
@@ -169,76 +194,9 @@ struct PanelView: View {
         .modifier(PanelBackground())
     }
 
-    private var modeDescription: String {
-        guard let current = model.currentOutputDevice else {
-            return "No output selected"
-        }
-        if model.isManualMode {
-            return "\(current.name) (manual)"
-        }
-        guard let skipped = model.automaticOutputDecision.skipped,
-              skipped.device.id != current.id else {
-            return current.name
-        }
-        let reason = switch skipped.reason {
-        case .off: "is off"
-        case .neverAutoSelect: "won't be selected automatically"
-        }
-        return "\(current.name) · \(skipped.device.name) \(reason)"
-    }
-}
-
-private struct VolumeControl: View {
-    private static let iconWidth: CGFloat = 20
-    private static let spacing: CGFloat = 10
-    /// Where the slider begins, for aligning content below it.
-    static let sliderInset = iconWidth + spacing
-
-    @Bindable var model: AppModel
-
-    var body: some View {
-        HStack(spacing: Self.spacing) {
-            Image(systemName: icon)
-                .foregroundStyle(.tint)
-                .frame(width: Self.iconWidth)
-                .accessibilityHidden(true)
-                .animation(.easeInOut(duration: 0.15), value: icon)
-            Slider(
-                value: Binding(
-                    get: { Double(model.volume) },
-                    set: { model.setVolume(Float($0)) }
-                ),
-                in: 0...1
-            )
-            .controlSize(.small)
-            .disabled(!model.isVolumeControllable)
-            .accessibilityLabel("Output volume")
-            .accessibilityValue(valueDescription)
-            // Sized to the widest value, so it sits close to the slider
-            // without the slider resizing as the digits change.
-            ZStack(alignment: .leading) {
-                Text("100%").hidden()
-                Text(
-                    model.isVolumeControllable
-                        ? "\(Int(model.volume * 100))%"
-                        : "—"
-                )
-            }
-            .font(.callout.monospacedDigit())
-            .foregroundStyle(.secondary)
-            .fixedSize()
-            .padding(.leading, 6 - Self.spacing)
-            .accessibilityHidden(true)
-        }
-        .background(ScrollWheelReceiver { delta in
-            guard model.isVolumeControllable else { return }
-            model.setVolume(max(0, min(1, model.volume + Float(delta * 0.02))))
-        })
-    }
-
     /// The current output's hardware icon, so it is clear which device the
     /// slider controls. A generic speaker shows the volume level instead.
-    private var icon: String {
+    private var outputIcon: String {
         if !model.isVolumeControllable { return "speaker.wave.3.fill" }
         let hardware = model.currentOutputDevice.map {
             $0.hardwareIcon(category: model.activeOutputCategory)
@@ -254,10 +212,97 @@ private struct VolumeControl: View {
         }
     }
 
+    /// Why automatic switching chose what it did, shown only when there is
+    /// something the lists and the toggle do not already say.
+    private var automationNote: String? {
+        guard let current = model.currentOutputDevice else {
+            return "No output selected"
+        }
+        if model.isManualMode {
+            return "Your choice stays until you turn this on"
+        }
+        guard let skipped = model.automaticOutputDecision.skipped,
+              skipped.device.id != current.id else {
+            return nil
+        }
+        let reason = switch skipped.reason {
+        case .off: "headset off"
+        case .neverAutoSelect: "never auto-selected"
+        }
+        return "Skipping \(skipped.device.name): \(reason)"
+    }
+}
+
+/// One row for the current output or microphone: the icon mutes, the slider
+/// sets the level. Both rows share it so they look and behave alike.
+private struct LevelControl: View {
+    private static let iconWidth: CGFloat = 20
+    private static let spacing: CGFloat = 10
+
+    let name: String
+    /// The device the row controls, named in the tooltip and for VoiceOver
+    /// rather than taking a line of its own.
+    let deviceName: String?
+    let icon: String
+    let mutedStyle: AnyShapeStyle
+    let isMuted: Bool
+    let level: Float
+    let isControllable: Bool
+    let toggleMute: () -> Void
+    let setLevel: (Float) -> Void
+
+    var body: some View {
+        HStack(spacing: Self.spacing) {
+            Button(action: toggleMute) {
+                Image(systemName: icon)
+                    .foregroundStyle(isMuted ? mutedStyle : AnyShapeStyle(.tint))
+                    .frame(width: Self.iconWidth)
+                    .contentShape(Rectangle())
+                    .animation(.easeInOut(duration: 0.15), value: icon)
+            }
+            .buttonStyle(.plain)
+            .help(muteTitle)
+            .accessibilityLabel(muteTitle)
+            Slider(
+                value: Binding(
+                    get: { Double(level) },
+                    set: { setLevel(Float($0)) }
+                ),
+                in: 0...1
+            )
+            .controlSize(.small)
+            .disabled(!isControllable)
+            .opacity(isMuted ? 0.5 : 1)
+            .help(deviceName ?? name)
+            .accessibilityLabel("\(name) volume")
+            .accessibilityValue(valueDescription)
+            // Sized to the widest value, so it sits close to the slider
+            // without the slider resizing as the digits change.
+            ZStack(alignment: .leading) {
+                Text("100%").hidden()
+                Text(isControllable ? "\(Int(level * 100))%" : "—")
+            }
+            .font(.callout.monospacedDigit())
+            .foregroundStyle(.secondary)
+            .fixedSize()
+            .padding(.leading, 6 - Self.spacing)
+            .accessibilityHidden(true)
+        }
+        .background(ScrollWheelReceiver { delta in
+            guard isControllable else { return }
+            setLevel(max(0, min(1, level + Float(delta * 0.02))))
+        })
+    }
+
+    private var muteTitle: String {
+        "\(isMuted ? "Unmute" : "Mute") \(deviceName ?? name)"
+    }
+
     private var valueDescription: String {
-        model.isVolumeControllable
-            ? "\(Int(model.volume * 100)) percent"
-            : "Unavailable"
+        var values = [isControllable ? "\(Int(level * 100)) percent" : "Unavailable"]
+        if isMuted { values.insert("Muted", at: 0) }
+        if let deviceName { values.append(deviceName) }
+        return values.joined(separator: ", ")
     }
 }
 

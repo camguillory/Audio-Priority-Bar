@@ -140,6 +140,20 @@ final class CoreAudioObserver {
                 kAudioDevicePropertyScopeOutput,
                 kAudioObjectPropertyElementMain
             )
+        case let .inputVolume(id):
+            return (
+                id,
+                kAudioHardwareServiceDeviceProperty_VirtualMainVolume,
+                kAudioDevicePropertyScopeInput,
+                kAudioObjectPropertyElementMain
+            )
+        case let .running(id):
+            return (
+                id,
+                kAudioDevicePropertyDeviceIsRunningSomewhere,
+                kAudioObjectPropertyScopeGlobal,
+                kAudioObjectPropertyElementMain
+            )
         }
     }
 

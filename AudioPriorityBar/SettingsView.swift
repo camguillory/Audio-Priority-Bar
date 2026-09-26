@@ -70,6 +70,29 @@ struct SettingsView: View {
 
             Divider()
 
+            Text("Notices")
+                .font(.headline)
+
+            SettingSwitch(
+                title: "Show a notice when switching automatically",
+                explanation: "Briefly shows the new device below the menu bar icon.",
+                isOn: Binding(
+                    get: { model.showsSwitchNotice },
+                    set: { model.setShowsSwitchNotice($0) }
+                )
+            )
+
+            SettingSwitch(
+                title: "Remind me when an app records while muted",
+                explanation: "Shows Microphone muted below the menu bar icon while the muted microphone is in use.",
+                isOn: Binding(
+                    get: { model.remindsWhenMuted },
+                    set: { model.setRemindsWhenMuted($0) }
+                )
+            )
+
+            Divider()
+
             Text("About")
                 .font(.headline)
 

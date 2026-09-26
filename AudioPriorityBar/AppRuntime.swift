@@ -20,7 +20,11 @@ final class AppRuntime {
                 setDefault: { CoreAudioProperties.setDefault($1, role: $0) },
                 outputVolume: CoreAudioProperties.outputVolume,
                 setOutputVolume: CoreAudioProperties.setOutputVolume,
-                isMuted: { CoreAudioProperties.isMuted($1, role: $0) }
+                isMuted: { CoreAudioProperties.isMuted($1, role: $0) },
+                setMute: { CoreAudioProperties.setMute($1, role: $0, $2) },
+                inputVolume: CoreAudioProperties.inputVolume,
+                setInputVolume: CoreAudioProperties.setInputVolume,
+                isRunning: CoreAudioProperties.isRunningSomewhere
             ),
             link: LinkOperations(
                 isUsable: { $0.isConnected && jabra.isUsable($0) },

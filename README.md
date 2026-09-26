@@ -43,6 +43,19 @@ list for each kind of device and uses the highest one that is connected.
   on to resume
 - A USB headset's input and output are selected together, with per-row
   **Mic only** and **Output only** overrides
+- A brief notice below the menu bar icon shows which device automatic
+  switching just picked
+
+**Microphone mute**
+
+- Output and microphone rows at the top of the panel: click the icon to mute,
+  drag the slider to set the level
+- Mute the microphone from the right-click menu, or by Option-clicking the
+  menu bar icon
+- The mute follows automatic switching to the next microphone, and quitting
+  the app restores it
+- A **Microphone muted** reminder appears when an app starts recording while
+  you are muted
 
 **Device lists**
 
@@ -57,13 +70,15 @@ list for each kind of device and uses the highest one that is connected.
 - A panel laid out like the macOS Sound menu, with an icon for every device
 - The menu bar icon shows the current output, like AirPods or headphones
 - Liquid Glass on macOS 26, VoiceOver support, and keyboard-accessible actions
-- Volume by slider or scroll wheel, with mute and availability status
+- Output volume and microphone level by slider or scroll wheel, with mute and
+  availability status
 
 **Other**
 
 - Jabra Link headset power-off detection, asked of the dongle rather than
   guessed
-- Right-click the menu bar icon for Settings, Check for Updates, and Quit
+- Right-click the menu bar icon to mute the microphone, or for Settings, Check
+  for Updates, and Quit
 - Open at Login
 - Update checks on launch and daily, with a manual check and an opt-out
 

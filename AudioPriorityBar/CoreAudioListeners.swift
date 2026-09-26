@@ -15,6 +15,8 @@ enum DeviceListener: Hashable {
         element: AudioObjectPropertyElement
     )
     case volume(id: AudioObjectID)
+    case inputVolume(id: AudioObjectID)
+    case running(id: AudioObjectID)
 }
 
 @MainActor
@@ -84,6 +86,8 @@ final class CoreAudioListenerLifecycle {
                 ),
                 DeviceListener.mute(id: id, role: .input, element: 1),
                 DeviceListener.volume(id: id),
+                DeviceListener.inputVolume(id: id),
+                DeviceListener.running(id: id),
             ]
         })
         for listener in desired where addDevice(listener) {

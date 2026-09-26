@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		A10000000000000000000001 /* AudioPriorityBarApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000001 /* AudioPriorityBarApp.swift */; };
 		A10000000000000000000002 /* StatusItemController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000002 /* StatusItemController.swift */; };
+		A10000000000000000000030 /* NoticePanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000032 /* NoticePanel.swift */; };
 		A10000000000000000000003 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000004 /* Assets.xcassets */; };
 		A10000000000000000000004 /* LICENSE in Resources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000005 /* LICENSE */; };
 		A10000000000000000000005 /* CoreAudio.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B10000000000000000000009 /* CoreAudio.framework */; };
@@ -51,6 +52,7 @@
 /* Begin PBXFileReference section */
 		B10000000000000000000001 /* AudioPriorityBarApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPriorityBarApp.swift; sourceTree = "<group>"; };
 		B10000000000000000000002 /* StatusItemController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusItemController.swift; sourceTree = "<group>"; };
+		B10000000000000000000032 /* NoticePanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NoticePanel.swift; sourceTree = "<group>"; };
 		B10000000000000000000003 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		B10000000000000000000004 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		B10000000000000000000005 /* LICENSE */ = {isa = PBXFileReference; lastKnownFileType = text; path = LICENSE; sourceTree = "<group>"; };
@@ -119,6 +121,7 @@
 			children = (
 				B10000000000000000000001 /* AudioPriorityBarApp.swift */,
 				B10000000000000000000002 /* StatusItemController.swift */,
+				B10000000000000000000032 /* NoticePanel.swift */,
 				B10000000000000000000010 /* CoreAudioListeners.swift */,
 				B10000000000000000000011 /* CoreAudioProperties.swift */,
 				B10000000000000000000012 /* CoreAudioObserver.swift */,
@@ -272,6 +275,7 @@
 			files = (
 				A10000000000000000000001 /* AudioPriorityBarApp.swift in Sources */,
 				A10000000000000000000002 /* StatusItemController.swift in Sources */,
+				A10000000000000000000030 /* NoticePanel.swift in Sources */,
 				A10000000000000000000008 /* CoreAudioListeners.swift in Sources */,
 				A10000000000000000000009 /* CoreAudioProperties.swift in Sources */,
 				A10000000000000000000010 /* CoreAudioObserver.swift in Sources */,

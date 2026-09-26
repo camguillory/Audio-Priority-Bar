@@ -11,6 +11,10 @@ struct AudioOperations {
     let outputVolume: () -> Float?
     let setOutputVolume: (Float) -> Bool
     let isMuted: (DeviceRole, UInt32) -> Bool
+    let setMute: (DeviceRole, UInt32, Bool) -> Bool
+    let inputVolume: (UInt32) -> Float?
+    let setInputVolume: (UInt32, Float) -> Bool
+    let isRunning: (UInt32) -> Bool
 }
 
 @MainActor
@@ -48,6 +52,10 @@ final class AppModel {
     var currentOutputID: UInt32?
     var volume: Float = 0
     var isVolumeControllable = true
+    /// The current microphone's input level. While it is muted by zeroing,
+    /// this is the level unmuting will restore rather than zero.
+    var microphoneLevel: Float = 0
+    var isMicrophoneLevelControllable = false
     var showAll = false
     var isManualMode: Bool
     var selectsPairedDevice: Bool
@@ -55,12 +63,24 @@ final class AppModel {
     var isActiveOutputMuted = false
     var isActiveInputMuted = false
     var micFlashState = false
+    /// The microphone mute the user asked for, carried to whichever microphone
+    /// is current.
+    var isMicrophoneMuted = false
+    /// Some app is recording from the current microphone.
+    var isInputRecording = false
+    var showsSwitchNotice: Bool
+    var remindsWhenMuted: Bool
+    /// Called with the devices Automatic mode just switched to because the
+    /// hardware changed, output first. Never for the user's own choices.
+    var onAutomaticSwitch: (([AudioDevice]) -> Void)?
 
     let store: PriorityStore
     let audio: AudioOperations
     let link: LinkOperations
     private let reduceMotion: () -> Bool
     private var mutedRoles: Set<String> = []
+    /// The microphone currently carrying `isMicrophoneMuted`, by UID.
+    private var mutedInputUID: String?
     private var connectedInputUIDs: Set<String> = []
     private var connectedOutputUIDs: Set<String> = []
     private var connectedUIDsByID: [DeviceRole: [UInt32: String]] = [:]
@@ -93,6 +113,8 @@ final class AppModel {
         isManualMode = store.isManualMode
         selectsPairedDevice = store.selectsPairedDevice
         hideNewDisplayOutputs = store.hideNewDisplayOutputs
+        showsSwitchNotice = store.showsSwitchNotice
+        remindsWhenMuted = store.remindsWhenMuted
     }
 
     func start() {
@@ -113,10 +135,17 @@ final class AppModel {
         micFlashTimer?.invalidate()
         micFlashTimer = nil
         micFlashState = false
+        // The muted indicator leaves with the app, so the mute must too.
+        for uid in store.appliedMicrophoneMutes.keys {
+            restoreMicrophone(uid)
+        }
+        mutedInputUID = nil
+        isMicrophoneMuted = false
         hasStarted = false
     }
 
     func handleDevicesChanged() {
+        let before = currentUIDs
         let oldInputs = connectedInputUIDs
         let oldOutputs = connectedOutputUIDs
         refreshDevices()
@@ -133,6 +162,7 @@ final class AppModel {
             return
         }
         applyHighestPriorityDevices()
+        announceAutomaticSwitches(since: before)
     }
 
     /// The Jabra monitor reached a new verdict for some dongle. Bumping the
@@ -144,6 +174,7 @@ final class AppModel {
     }
 
     func handleDefaultChanged(_ role: DeviceRole) {
+        let before = currentUIDs
         let previousID = role == .input ? currentInputID : currentOutputID
         let previousUID = previousID.flatMap { connectedUIDsByID[role]?[$0] }
         let previousUIDs = role == .input
@@ -183,6 +214,7 @@ final class AppModel {
             } == true
         if topologyExplainsChange {
             applyHighestPriorityDevices()
+            announceAutomaticSwitches(since: before)
             return
         }
         if let target = automaticTarget(for: role),
@@ -283,20 +315,138 @@ final class AppModel {
             volume = 0
             isVolumeControllable = false
         }
+        if let id = currentInputID, let level = audio.inputVolume(id) {
+            let uid = connectedUIDsByID[.input]?[id]
+            let saved = uid.flatMap { store.appliedMicrophoneMutes[$0] }
+                .flatMap { $0 == PriorityStore.mutedByProperty ? nil : Float($0) }
+            microphoneLevel = saved ?? level
+            isMicrophoneLevelControllable = true
+        } else {
+            microphoneLevel = 0
+            isMicrophoneLevelControllable = false
+        }
     }
 
     func refreshMute() {
+        reconcileMicrophoneMute()
         let connected = inputDevices + speakerDevices + headphoneDevices
         mutedRoles = Set(connected.lazy.filter {
-            $0.isConnected && self.audio.isMuted($0.role, $0.platformID)
+            $0.isConnected && self.isHardwareMuted($0)
         }.map(\.roleIdentifier))
         isActiveOutputMuted = currentOutputID.map {
             self.audio.isMuted(.output, $0)
         } ?? false
-        isActiveInputMuted = currentInputID.map {
-            self.audio.isMuted(.input, $0)
+        // The current microphone is always listed, even when hidden.
+        isActiveInputMuted = currentInputDevice.map {
+            mutedRoles.contains($0.roleIdentifier)
         } ?? false
+        isInputRecording = currentInputID.map(audio.isRunning) ?? false
         updateMicFlash()
+    }
+
+    /// Keeps the microphone mute on whichever microphone is current, and
+    /// follows mutes and unmutes made outside the app, like System Settings
+    /// or a headset's mute button.
+    private func reconcileMicrophoneMute() {
+        let current = currentInputDevice
+        if let current {
+            let muted = isHardwareMuted(current)
+            if current.uid == mutedInputUID, !muted {
+                isMicrophoneMuted = false
+                mutedInputUID = nil
+                store.appliedMicrophoneMutes[current.uid] = nil
+            } else if mutedInputUID == nil, muted, !isMicrophoneMuted,
+                      store.appliedMicrophoneMutes[current.uid] == nil {
+                isMicrophoneMuted = true
+                mutedInputUID = current.uid
+            }
+        }
+        if isMicrophoneMuted, let current, current.uid != mutedInputUID {
+            if let previous = mutedInputUID { restoreMicrophone(previous) }
+            mutedInputUID = applyMicrophoneMute(current) ? current.uid : nil
+            isMicrophoneMuted = mutedInputUID != nil
+        } else if !isMicrophoneMuted, let previous = mutedInputUID {
+            restoreMicrophone(previous)
+            mutedInputUID = nil
+        }
+        // Anything else still recorded was muted before a crash, or while it
+        // was unplugged, and must not come back silently dead.
+        for uid in store.appliedMicrophoneMutes.keys where uid != mutedInputUID {
+            restoreMicrophone(uid)
+        }
+    }
+
+    /// Mutes through the device's mute property, or by zeroing its input
+    /// volume when it has none. Recorded before touching the hardware, so a
+    /// crash in between still leaves something to restore.
+    private func applyMicrophoneMute(_ device: AudioDevice) -> Bool {
+        let id = device.platformID
+        store.appliedMicrophoneMutes[device.uid] = PriorityStore.mutedByProperty
+        if audio.setMute(.input, id, true) { return true }
+        if let level = audio.inputVolume(id) {
+            store.appliedMicrophoneMutes[device.uid] = Double(level)
+            if audio.setInputVolume(id, 0) { return true }
+        }
+        store.appliedMicrophoneMutes[device.uid] = nil
+        return false
+    }
+
+    /// Undoes a mute the same way it was applied. A disconnected microphone
+    /// stays recorded and is restored once it reconnects.
+    private func restoreMicrophone(_ uid: String) {
+        let level = store.appliedMicrophoneMutes[uid]
+        guard let id = connectedUIDsByID[.input]?.first(where: {
+            $0.value == uid
+        })?.key else {
+            if level == nil {
+                store.appliedMicrophoneMutes[uid] = PriorityStore.mutedByProperty
+            }
+            return
+        }
+        if let level, level != PriorityStore.mutedByProperty {
+            _ = audio.setInputVolume(id, Float(level))
+        } else {
+            _ = audio.setMute(.input, id, false)
+        }
+        store.appliedMicrophoneMutes[uid] = nil
+    }
+
+    /// A zeroed input only counts as muted when this app zeroed it: some
+    /// virtual microphones, like ZoomAudioDevice, rest at zero volume.
+    private func isHardwareMuted(_ device: AudioDevice) -> Bool {
+        if audio.isMuted(device.role, device.platformID) { return true }
+        guard device.role == .input,
+              let level = store.appliedMicrophoneMutes[device.uid],
+              level != PriorityStore.mutedByProperty else {
+            return false
+        }
+        return (audio.inputVolume(device.platformID) ?? 1) < 0.01
+    }
+
+    var currentInputDevice: AudioDevice? {
+        inputDevices.first { $0.isConnected && $0.platformID == currentInputID }
+    }
+
+    private var currentUIDs: [DeviceRole: String] {
+        var uids: [DeviceRole: String] = [:]
+        uids[.input] = currentInputID.flatMap { connectedUIDsByID[.input]?[$0] }
+        uids[.output] = currentOutputID.flatMap { connectedUIDsByID[.output]?[$0] }
+        return uids
+    }
+
+    /// Our own selection updates the current IDs immediately, so CoreAudio's
+    /// echo of it finds nothing new and cannot announce the same switch twice.
+    private func announceAutomaticSwitches(since before: [DeviceRole: String]) {
+        guard hasStarted, !isManualMode, let onAutomaticSwitch else { return }
+        let after = currentUIDs
+        var switched: [AudioDevice] = []
+        if after[.output] != before[.output], let output = currentOutputDevice {
+            switched.append(output)
+        }
+        if after[.input] != before[.input], let input = currentInputDevice {
+            switched.append(input)
+        }
+        if !switched.isEmpty { onAutomaticSwitch(switched) }
     }
 
     func isMuted(_ device: AudioDevice) -> Bool {

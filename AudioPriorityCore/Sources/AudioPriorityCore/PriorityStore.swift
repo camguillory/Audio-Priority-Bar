@@ -21,7 +21,14 @@ public final class PriorityStore {
         static let hiddenInputs = "hiddenMics"
         static let hiddenSpeakers = "hiddenSpeakers"
         static let hiddenHeadphones = "hiddenHeadphones"
+        static let appliedMicrophoneMutes = "appliedMicrophoneMutes"
+        static let showsSwitchNotice = "showsSwitchNotice"
+        static let remindsWhenMuted = "remindsWhenMuted"
     }
+
+    /// Marks a microphone muted through its mute property rather than by
+    /// zeroing its input volume.
+    public static let mutedByProperty: Double = -1
 
     private static let legacyBundleID = "com.example.AudioPriorityBar"
     private static let legacyBundleKeys = [
@@ -154,6 +161,27 @@ public final class PriorityStore {
             defaults.object(forKey: Key.hideNewDisplayOutputs) as? Bool ?? true
         }
         set { defaults.set(newValue, forKey: Key.hideNewDisplayOutputs) }
+    }
+
+    public var showsSwitchNotice: Bool {
+        get { defaults.object(forKey: Key.showsSwitchNotice) as? Bool ?? true }
+        set { defaults.set(newValue, forKey: Key.showsSwitchNotice) }
+    }
+
+    public var remindsWhenMuted: Bool {
+        get { defaults.object(forKey: Key.remindsWhenMuted) as? Bool ?? true }
+        set { defaults.set(newValue, forKey: Key.remindsWhenMuted) }
+    }
+
+    /// Microphones this app muted and has not restored yet, by UID: the input
+    /// volume to restore, or `mutedByProperty`. Persisted so a crash or an
+    /// unplugged microphone never leaves one silently muted.
+    public var appliedMicrophoneMutes: [String: Double] {
+        get {
+            defaults.dictionary(forKey: Key.appliedMicrophoneMutes)
+                as? [String: Double] ?? [:]
+        }
+        set { defaults.set(newValue, forKey: Key.appliedMicrophoneMutes) }
     }
 
     public func category(for device: AudioDevice) -> OutputCategory {
