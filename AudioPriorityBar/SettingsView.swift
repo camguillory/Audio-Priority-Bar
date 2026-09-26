@@ -1,4 +1,5 @@
 import AppKit
+import ServiceManagement
 import SwiftUI
 
 struct SettingsView: View {
@@ -17,170 +18,135 @@ struct SettingsView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Startup")
-                .font(.headline)
-
-            SettingSwitch(
-                title: "Open at Login",
-                explanation: "Open Audio Priority Bar automatically when you log in.",
-                isOn: Binding(
+        Form {
+            Section("Startup") {
+                Toggle(isOn: Binding(
                     get: { launchAtLogin.isEnabled },
                     set: { launchAtLogin.setEnabled($0) }
-                )
-            )
+                )) {
+                    Text("Open at Login")
+                    Text("Open Audio Priority Bar automatically when you log in.")
+                }
 
-            if launchAtLogin.requiresApproval {
-                Text("Approval required in System Settings → General → Login Items.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                if launchAtLogin.requiresApproval {
+                    LabeledContent("Approval needed in Login Items") {
+                        Button("Open Login Items") {
+                            SMAppService.openSystemSettingsLoginItems()
+                        }
+                    }
+                }
+                if let error = launchAtLogin.errorMessage {
+                    Text("Open at Login failed: \(error)")
+                        .foregroundStyle(.red)
+                }
             }
-            if let error = launchAtLogin.errorMessage {
-                Text("Open at Login failed: \(error)")
-                    .font(.caption)
-                    .foregroundStyle(.red)
-            }
 
-            Divider()
-
-            Text("Devices")
-                .font(.headline)
-
-            SettingSwitch(
-                title: "Select headset input and output together",
-                explanation: "Choosing either one also selects the other.",
-                isOn: Binding(
+            Section("Devices") {
+                Toggle(isOn: Binding(
                     get: { model.selectsPairedDevice },
                     set: { model.setSelectsPairedDevice($0) }
-                )
-            )
+                )) {
+                    Text("Select headset input and output together")
+                    Text("Choosing either one also selects the other.")
+                }
 
-            SettingSwitch(
-                title: "Hide new HDMI and DisplayPort outputs",
-                explanation: """
-                    A monitor or TV's speakers are rarely what you want, so \
-                    these stay hidden until shown from Show hidden and \
-                    disconnected devices.
-                    """,
-                isOn: Binding(
+                Toggle(isOn: Binding(
                     get: { model.hideNewDisplayOutputs },
                     set: { model.setHideNewDisplayOutputs($0) }
-                )
-            )
+                )) {
+                    Text("Hide new HDMI and DisplayPort outputs")
+                    Text("""
+                        Monitor and TV speakers stay hidden until you turn on \
+                        “Show hidden and disconnected devices” in the panel.
+                        """)
+                }
+            }
 
-            Divider()
-
-            Text("Notices")
-                .font(.headline)
-
-            SettingSwitch(
-                title: "Show a notice when switching automatically",
-                explanation: "Briefly shows the new device below the menu bar icon.",
-                isOn: Binding(
+            Section("Notices") {
+                Toggle(isOn: Binding(
                     get: { model.showsSwitchNotice },
                     set: { model.setShowsSwitchNotice($0) }
-                )
-            )
+                )) {
+                    Text("Show a notice when switching automatically")
+                    Text("Briefly shows the new device below the menu bar icon.")
+                }
 
-            SettingSwitch(
-                title: "Remind me when an app records while muted",
-                explanation: "Shows Microphone muted below the menu bar icon while the muted microphone is in use.",
-                isOn: Binding(
+                Toggle(isOn: Binding(
                     get: { model.remindsWhenMuted },
                     set: { model.setRemindsWhenMuted($0) }
-                )
-            )
+                )) {
+                    Text("Remind me when an app records while muted")
+                    Text("""
+                        Shows “Microphone muted” below the menu bar icon while \
+                        an app uses the muted microphone.
+                        """)
+                }
+            }
 
-            Divider()
-
-            Text("About")
-                .font(.headline)
-
-            HStack(spacing: 10) {
-                Image(nsImage: NSApp.applicationIconImage)
-                    .resizable()
-                    .frame(width: 36, height: 36)
-                    .accessibilityHidden(true)
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(appDisplayName).font(.headline)
-                    Text("Version \(version)").foregroundStyle(.secondary)
-                    Link("Project Home Page", destination: Self.homePageURL)
-                        .font(.caption)
+            Section("Updates") {
+                Toggle(isOn: Binding(
+                    get: { updates.automaticChecksEnabled },
+                    set: { updates.setAutomaticChecksEnabled($0) }
+                )) {
+                    Text("Automatically check for updates")
+                    Text("Checks GitHub on launch and once a day while running.")
                 }
 
                 if let availableVersion = updates.availableVersion,
                    let downloadURL = updates.downloadURL {
-                    Spacer()
-                    Button("Download \(availableVersion)") {
-                        NSWorkspace.shared.open(downloadURL)
+                    LabeledContent("Version \(availableVersion) is available") {
+                        Button("Download \(availableVersion)") {
+                            NSWorkspace.shared.open(downloadURL)
+                        }
+                        .buttonStyle(.borderedProminent)
                     }
-                    .buttonStyle(.borderedProminent)
+                } else {
+                    HStack(spacing: 8) {
+                        Button("Check for Updates…") { updates.checkManually() }
+                            .disabled(updates.manualCheckResult == .checking)
+                        switch updates.manualCheckResult {
+                        case .checking:
+                            ProgressView().controlSize(.small)
+                        case .upToDate:
+                            Text("You're up to date.")
+                                .foregroundStyle(.secondary)
+                        case .failed:
+                            Text("Couldn't check for updates. Try again.")
+                                .foregroundStyle(.red)
+                        case nil:
+                            EmptyView()
+                        }
+                    }
                 }
             }
 
-            SettingSwitch(
-                title: "Automatically check for updates",
-                explanation: "Checks GitHub on launch and once a day while running.",
-                isOn: Binding(
-                    get: { updates.automaticChecksEnabled },
-                    set: { updates.setAutomaticChecksEnabled($0) }
-                )
-            )
+            Section {
+                HStack(spacing: 10) {
+                    Image(nsImage: NSApp.applicationIconImage)
+                        .resizable()
+                        .frame(width: 36, height: 36)
+                        .accessibilityHidden(true)
 
-            HStack(spacing: 8) {
-                Button("Check for Updates…") { updates.checkManually() }
-                    .disabled(updates.manualCheckResult == .checking)
-                switch updates.manualCheckResult {
-                case .upToDate:
-                    Text("You're up to date.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                case .failed:
-                    Text("Couldn't check for updates. Try again.")
-                        .font(.caption)
-                        .foregroundStyle(.red)
-                case .checking, nil:
-                    EmptyView()
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(appDisplayName).font(.headline)
+                        Text("Version \(version)").foregroundStyle(.secondary)
+                        Link("Project Home Page", destination: Self.homePageURL)
+                    }
+
+                    Spacer()
+
+                    Button("Quit Audio Priority Bar") { NSApp.terminate(nil) }
                 }
             }
-
-            Divider()
-
-            Button("Quit Audio Priority Bar") { NSApp.terminate(nil) }
         }
-        .padding(20)
-        .frame(minWidth: 380, idealWidth: 420)
+        .formStyle(.grouped)
+        .toggleStyle(.switch)
+        .frame(width: 460)
         .onAppear { launchAtLogin.refresh() }
-    }
-}
-
-/// A switch whose explanation wraps instead of being squeezed into whatever
-/// room is left beside the control, which truncated the longer descriptions.
-private struct SettingSwitch: View {
-    let title: String
-    let explanation: String
-    @Binding var isOn: Bool
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text(title)
-                Text(explanation)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            // The switch carries both strings, so reading them again here
-            // would announce everything twice.
-            .accessibilityHidden(true)
-
-            Toggle(title, isOn: $isOn)
-                .labelsHidden()
-                .toggleStyle(.switch)
-                .accessibilityHint(explanation)
-        }
+        // Approving in System Settings happens while this window stays open.
+        .onReceive(NotificationCenter.default.publisher(
+            for: NSApplication.didBecomeActiveNotification
+        )) { _ in launchAtLogin.refresh() }
     }
 }
 
@@ -211,7 +177,7 @@ final class SettingsWindowController: NSWindowController {
     ) {
         let window = NSWindow(
             contentRect: .zero,
-            styleMask: [.titled, .closable, .resizable],
+            styleMask: [.titled, .closable],
             backing: .buffered,
             defer: false
         )
