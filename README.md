@@ -23,8 +23,8 @@
 </p>
 
 <p align="center">
-  <img src="screenshot-light.png" width="49%" alt="Audio Priority Bar light panel showing automatic switching, volume, and three device priority lists">
-  <img src="screenshot-dark.png" width="49%" alt="Audio Priority Bar dark panel showing automatic switching, volume, and three device priority lists">
+  <img src="screenshot-light.png" width="49%" alt="Audio Priority Bar light panel showing automatic switching, output and microphone levels with mute buttons, and three device priority lists">
+  <img src="screenshot-dark.png" width="49%" alt="Audio Priority Bar dark panel showing automatic switching, output and microphone levels with mute buttons, and three device priority lists">
 </p>
 
 ## Why
@@ -48,14 +48,15 @@ list for each kind of device and uses the highest one that is connected.
 
 **Microphone mute**
 
-- Output and microphone rows at the top of the panel: click the icon to mute,
-  drag the slider to set the level
+- Output and microphone rows at the top of the panel: click the round icon
+  button to mute, and it turns red while muted. Drag the slider to set the
+  level
 - Mute the microphone from the right-click menu, or by Option-clicking the
   menu bar icon
 - The mute follows automatic switching to the next microphone, and quitting
   the app restores it
 - A **Microphone muted** reminder appears when an app starts recording while
-  you are muted
+  you are muted. It and the switch notices can each be turned off in Settings
 
 **Device lists**
 
@@ -189,7 +190,8 @@ unverified on hardware
 unrecognised dongle fails open rather than being treated as off.
 
 May prompt for **Input Monitoring** permission. Open at Login may separately
-need approval in **System Settings > General > Login Items**.
+need approval in **System Settings > General > Login Items**, which Settings
+opens for you while approval is pending.
 
 <details>
 <summary>Upgrading from V1</summary>
