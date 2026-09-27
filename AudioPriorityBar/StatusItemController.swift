@@ -168,6 +168,12 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         )
         hostingController.sizingOptions = [.preferredContentSize]
         panel.contentViewController = hostingController
+        // Liquid Glass leaves the window square to the shadow, which draws a
+        // rectangle around the rounded panel. Matches `PanelBackground`.
+        hostingController.view.wantsLayer = true
+        hostingController.view.layer?.cornerRadius = 12
+        hostingController.view.layer?.cornerCurve = .continuous
+        hostingController.view.layer?.masksToBounds = true
         panel.setAccessibilityLabel(appDisplayName)
         panel.initialFirstResponder = hostingController.view
         panel.level = .popUpMenu
