@@ -25,7 +25,7 @@
     <key>SUFeedURL</key>
     <string>$(SPARKLE_FEED_URL)</string>
     <key>SUPublicEDKey</key>
-    <string>tDh0C7BbX9+D9RI4/J52AAkGxXgGvYlaxo/0ugWQto4=</string>
+    <string>mIdkQhMgGdQQQUFaXR5hIr7+c794iH+BzvrEl2GD35g=</string>
     <key>SUEnableAutomaticChecks</key>
     <true/>
     <key>SUAutomaticallyUpdate</key>
