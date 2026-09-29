@@ -53,12 +53,14 @@ final class FakeAudio {
                 }
                 return true
             },
+            canSetMute: { !self.noMuteProperty.contains($1) },
             inputVolume: { self.inputVolumes[$0] },
             setInputVolume: {
                 guard self.inputVolumes[$0] != nil else { return false }
                 self.inputVolumes[$0] = $1
                 return true
             },
+            canSetInputVolume: { self.inputVolumes[$0] != nil },
             isRunning: { self.running.contains($0) }
         )
     }

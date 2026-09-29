@@ -101,6 +101,8 @@ struct PanelView: View {
                         isMuted: model.isMicrophoneMuted,
                         level: model.microphoneLevel,
                         isControllable: model.isMicrophoneLevelControllable,
+                        uncontrollableNote: "This mic does not allow volume control",
+                        canToggleMute: model.isMicrophoneMutable,
                         toggleMute: { model.setMicrophoneMuted(!model.isMicrophoneMuted) },
                         setLevel: model.setMicrophoneLevel
                     )
@@ -245,6 +247,12 @@ private struct LevelControl: View {
     let isMuted: Bool
     let level: Float
     let isControllable: Bool
+    /// Shown in place of the slider when the level cannot be set, so a
+    /// disabled slider is not mistaken for a broken one.
+    var uncontrollableNote: String?
+    /// False when muting cannot work, so the button ignores clicks rather
+    /// than pressing and doing nothing.
+    var canToggleMute = true
     let toggleMute: () -> Void
     let setLevel: (Float) -> Void
 
@@ -265,35 +273,52 @@ private struct LevelControl: View {
             .animation(.easeInOut(duration: 0.12), value: isHoveringMute)
             .help(muteTitle)
             .accessibilityLabel(muteTitle)
-            Slider(
-                value: Binding(
-                    get: { Double(level) },
-                    set: { setLevel(Float($0)) }
-                ),
-                in: 0...1
-            )
-            .controlSize(.small)
-            .disabled(!isControllable)
-            .opacity(isMuted ? 0.5 : 1)
-            .help(deviceName ?? name)
-            .accessibilityLabel("\(name) volume")
-            .accessibilityValue(valueDescription)
-            // Sized to the widest value, so it sits close to the slider
-            // without the slider resizing as the digits change.
-            ZStack(alignment: .leading) {
-                Text("100%").hidden()
-                Text(isControllable ? "\(Int(level * 100))%" : "—")
+            .allowsHitTesting(canToggleMute)
+            .accessibilityHidden(!canToggleMute)
+            if !isControllable, let uncontrollableNote {
+                Text(uncontrollableNote)
+                    .font(.callout)
+                    .foregroundStyle(.tertiary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .help(deviceName ?? name)
+            } else {
+                slider
             }
-            .font(.callout.monospacedDigit())
-            .foregroundStyle(.secondary)
-            .fixedSize()
-            .padding(.leading, 6 - Self.spacing)
-            .accessibilityHidden(true)
         }
         .background(ScrollWheelReceiver { delta in
             guard isControllable else { return }
             setLevel(max(0, min(1, level + Float(delta * 0.02))))
         })
+    }
+
+    @ViewBuilder
+    private var slider: some View {
+        Slider(
+            value: Binding(
+                get: { Double(level) },
+                set: { setLevel(Float($0)) }
+            ),
+            in: 0...1
+        )
+        .controlSize(.small)
+        .disabled(!isControllable)
+        .opacity(isMuted ? 0.5 : 1)
+        .help(deviceName ?? name)
+        .accessibilityLabel("\(name) volume")
+        .accessibilityValue(valueDescription)
+        // Sized to the widest value, so it sits close to the slider
+        // without the slider resizing as the digits change.
+        ZStack(alignment: .leading) {
+            Text("100%").hidden()
+            Text(isControllable ? "\(Int(level * 100))%" : "—")
+        }
+        .font(.callout.monospacedDigit())
+        .foregroundStyle(.secondary)
+        .fixedSize()
+        .padding(.leading, 6 - Self.spacing)
+        .accessibilityHidden(true)
     }
 
     private var muteTitle: String {
