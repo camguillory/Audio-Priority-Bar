@@ -289,7 +289,7 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         muteItem.title = model.isMicrophoneMuted
             ? "Unmute Microphone"
             : "Mute Microphone"
-        muteItem.isEnabled = model.currentInputID != nil
+        muteItem.isEnabled = model.isMicrophoneMutable
         statusItem.menu = menu
         statusItem.button?.performClick(nil)
         statusItem.menu = nil

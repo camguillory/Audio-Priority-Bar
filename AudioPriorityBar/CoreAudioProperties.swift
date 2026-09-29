@@ -164,6 +164,22 @@ enum CoreAudioProperties {
         ) == noErr
     }
 
+    /// Whether the mute property can be set, on the main element or channel 1,
+    /// matching where `setMute` writes it.
+    static func canSetMute(_ id: AudioObjectID, role: DeviceRole) -> Bool {
+        let scope = role == .input
+            ? kAudioDevicePropertyScopeInput
+            : kAudioDevicePropertyScopeOutput
+        return [kAudioObjectPropertyElementMain, 1].contains { element in
+            var address = property(
+                kAudioDevicePropertyMute, scope: scope, element: element
+            )
+            var settable: DarwinBoolean = false
+            return AudioObjectIsPropertySettable(id, &address, &settable) == noErr
+                && settable.boolValue
+        }
+    }
+
     /// Whether any process is using the device, which for a microphone means
     /// some app is recording from it.
     static func isRunningSomewhere(_ id: AudioObjectID) -> Bool {

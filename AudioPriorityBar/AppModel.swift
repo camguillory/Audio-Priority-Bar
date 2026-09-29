@@ -12,6 +12,7 @@ struct AudioOperations {
     let setOutputVolume: (Float) -> Bool
     let isMuted: (DeviceRole, UInt32) -> Bool
     let setMute: (DeviceRole, UInt32, Bool) -> Bool
+    let canSetMute: (DeviceRole, UInt32) -> Bool
     let inputVolume: (UInt32) -> Float?
     let setInputVolume: (UInt32, Float) -> Bool
     let isRunning: (UInt32) -> Bool
@@ -56,6 +57,9 @@ final class AppModel {
     /// this is the level unmuting will restore rather than zero.
     var microphoneLevel: Float = 0
     var isMicrophoneLevelControllable = false
+    /// The current microphone can be muted, by its mute property or by
+    /// zeroing its level.
+    var isMicrophoneMutable = false
     var showAll = false
     var isManualMode: Bool
     var selectsPairedDevice: Bool
@@ -325,6 +329,8 @@ final class AppModel {
             microphoneLevel = 0
             isMicrophoneLevelControllable = false
         }
+        isMicrophoneMutable = isMicrophoneLevelControllable
+            || currentInputID.map { audio.canSetMute(.input, $0) } ?? false
     }
 
     func refreshMute() {
