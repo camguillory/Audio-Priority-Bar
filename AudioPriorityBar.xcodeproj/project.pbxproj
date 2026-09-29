@@ -14,6 +14,7 @@
 		A10000000000000000000004 /* LICENSE in Resources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000005 /* LICENSE */; };
 		A10000000000000000000005 /* CoreAudio.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B10000000000000000000009 /* CoreAudio.framework */; };
 		A10000000000000000000006 /* AudioPriorityCore in Frameworks */ = {isa = PBXBuildFile; productRef = M100000000000000000000001 /* AudioPriorityCore */; };
+		A10000000000000000000031 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = M100000000000000000000002 /* Sparkle */; };
 		A10000000000000000000007 /* AppIdentityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000008 /* AppIdentityTests.swift */; };
 		A10000000000000000000008 /* CoreAudioListeners.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000010 /* CoreAudioListeners.swift */; };
 		A10000000000000000000009 /* CoreAudioProperties.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000011 /* CoreAudioProperties.swift */; };
@@ -92,6 +93,7 @@
 				A10000000000000000000005 /* CoreAudio.framework in Frameworks */,
 				A10000000000000000000013 /* IOKit.framework in Frameworks */,
 				A10000000000000000000006 /* AudioPriorityCore in Frameworks */,
+				A10000000000000000000031 /* Sparkle in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -193,6 +195,7 @@
 			name = AudioPriorityBar;
 			packageProductDependencies = (
 				M100000000000000000000001 /* AudioPriorityCore */,
+				M100000000000000000000002 /* Sparkle */,
 			);
 			productName = AudioPriorityBar;
 			productReference = B10000000000000000000006 /* AudioPriorityBar.app */;
@@ -245,6 +248,7 @@
 			mainGroup = D100000000000000000000001;
 			packageReferences = (
 				L100000000000000000000001 /* XCLocalSwiftPackageReference "AudioPriorityCore" */,
+				L100000000000000000000002 /* XCRemoteSwiftPackageReference "Sparkle" */,
 			);
 			productRefGroup = D100000000000000000000004 /* Products */;
 			projectDirPath = "";
@@ -371,6 +375,7 @@
 				MARKETING_VERSION = 2.5.0;
 				PRODUCT_BUNDLE_IDENTIFIER = app.audioprioritybar;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				SPARKLE_FEED_URL = "";
 				SWIFT_STRICT_CONCURRENCY = complete;
 				SWIFT_VERSION = 6.0;
 			};
@@ -392,6 +397,7 @@
 				MARKETING_VERSION = 2.5.0;
 				PRODUCT_BUNDLE_IDENTIFIER = app.audioprioritybar;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				SPARKLE_FEED_URL = "";
 				SWIFT_STRICT_CONCURRENCY = complete;
 				SWIFT_VERSION = 6.0;
 			};
@@ -470,11 +476,27 @@
 		};
 /* End XCLocalSwiftPackageReference section */
 
+/* Begin XCRemoteSwiftPackageReference section */
+		L100000000000000000000002 /* XCRemoteSwiftPackageReference "Sparkle" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/sparkle-project/Sparkle";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.10.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
 /* Begin XCSwiftPackageProductDependency section */
 		M100000000000000000000001 /* AudioPriorityCore */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = L100000000000000000000001 /* XCLocalSwiftPackageReference "AudioPriorityCore" */;
 			productName = AudioPriorityCore;
+		};
+		M100000000000000000000002 /* Sparkle */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = L100000000000000000000002 /* XCRemoteSwiftPackageReference "Sparkle" */;
+			productName = Sparkle;
 		};
 /* End XCSwiftPackageProductDependency section */
 

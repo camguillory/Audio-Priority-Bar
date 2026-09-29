@@ -84,39 +84,22 @@ struct SettingsView: View {
             }
 
             Section("Updates") {
-                Toggle(isOn: Binding(
-                    get: { updates.automaticChecksEnabled },
-                    set: { updates.setAutomaticChecksEnabled($0) }
-                )) {
-                    Text("Automatically check for updates")
-                    Text("Checks GitHub on launch and once a day while running.")
-                }
+                if updates.isAvailable {
+                    Toggle(isOn: Binding(
+                        get: { updates.automaticUpdatesEnabled },
+                        set: { updates.setAutomaticUpdatesEnabled($0) }
+                    )) {
+                        Text("Install updates automatically")
+                        Text("""
+                            Checks GitHub daily, installs new versions in the \
+                            background, and restarts the app.
+                            """)
+                    }
 
-                if let availableVersion = updates.availableVersion,
-                   let downloadURL = updates.downloadURL {
-                    LabeledContent("Version \(availableVersion) is available") {
-                        Button("Download \(availableVersion)") {
-                            NSWorkspace.shared.open(downloadURL)
-                        }
-                        .buttonStyle(.borderedProminent)
-                    }
+                    Button("Check for Updates…") { updates.checkForUpdates() }
                 } else {
-                    HStack(spacing: 8) {
-                        Button("Check for Updates…") { updates.checkManually() }
-                            .disabled(updates.manualCheckResult == .checking)
-                        switch updates.manualCheckResult {
-                        case .checking:
-                            ProgressView().controlSize(.small)
-                        case .upToDate:
-                            Text("You're up to date.")
-                                .foregroundStyle(.secondary)
-                        case .failed:
-                            Text("Couldn't check for updates. Try again.")
-                                .foregroundStyle(.red)
-                        case nil:
-                            EmptyView()
-                        }
-                    }
+                    Text("Updates are off in development builds.")
+                        .foregroundStyle(.secondary)
                 }
             }
 

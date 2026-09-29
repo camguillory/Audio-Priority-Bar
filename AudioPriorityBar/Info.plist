@@ -22,5 +22,15 @@
     <string>public.app-category.utilities</string>
     <key>LSUIElement</key>
     <true/>
+    <key>SUFeedURL</key>
+    <string>$(SPARKLE_FEED_URL)</string>
+    <key>SUPublicEDKey</key>
+    <string>mIdkQhMgGdQQQUFaXR5hIr7+c794iH+BzvrEl2GD35g=</string>
+    <key>SUEnableAutomaticChecks</key>
+    <true/>
+    <key>SUAutomaticallyUpdate</key>
+    <true/>
+    <key>SUScheduledCheckInterval</key>
+    <integer>86400</integer>
 </dict>
 </plist>

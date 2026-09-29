@@ -60,7 +60,19 @@ jobs:
             CODE_SIGNING_ALLOWED=NO
 
       - name: Build and verify release artifact
-        run: scripts/package-release.sh "$VERSION" "$GITHUB_RUN_NUMBER"
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+          SPARKLE_FEED_URL: https://github.com/${{ github.repository }}/releases/latest/download/appcast.xml
+          DOWNLOAD_URL: https://github.com/${{ github.repository }}/releases/download/${{ inputs.tag }}/AudioPriorityBar.zip
+        run: |
+          if [[ -z "$SPARKLE_PRIVATE_KEY" ]]; then
+            echo "The SPARKLE_PRIVATE_KEY secret is required to sign updates." >&2
+            exit 1
+          fi
+          # The run number is the build number Sparkle compares, so it must
+          # keep rising from one release to the next.
+          scripts/package-release.sh "$VERSION" "$GITHUB_RUN_NUMBER"
+          test -s release/appcast.xml
 
       - name: Validate release notes
         env:
@@ -80,6 +92,7 @@ jobs:
           files: |
             release/AudioPriorityBar.zip
             release/AudioPriorityBar.zip.sha256
+            release/appcast.xml
           draft: true
           prerelease: ${{ inputs.prerelease }}
           # Curated notes above are the complete release body.
