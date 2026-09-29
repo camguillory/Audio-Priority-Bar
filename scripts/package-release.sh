@@ -91,6 +91,12 @@ if [[ -n "$signature" ]]; then
   download_url="${DOWNLOAD_URL:-https://github.com/camguillory/Audio-Priority-Bar/releases/download/v$version/AudioPriorityBar.zip}"
   minimum_system=$(/usr/libexec/PlistBuddy \
     -c "Print :LSMinimumSystemVersion" "$app/Contents/Info.plist")
+  # Shown in the update window; install steps only matter for a first install.
+  notes_file="$root/.github/release-notes/v$version.md"
+  notes=""
+  if [[ -f "$notes_file" ]]; then
+    notes="<description sparkle:format=\"markdown\"><![CDATA[$(sed '/^## Install/,$d' "$notes_file")]]></description>"
+  fi
   cat > "$appcast" <<XML
 <?xml version="1.0" encoding="utf-8"?>
 <rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
@@ -102,6 +108,7 @@ if [[ -n "$signature" ]]; then
       <sparkle:version>$build_number</sparkle:version>
       <sparkle:shortVersionString>$version</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>$minimum_system</sparkle:minimumSystemVersion>
+      $notes
       <enclosure url="$download_url" type="application/octet-stream" $signature/>
     </item>
   </channel>
