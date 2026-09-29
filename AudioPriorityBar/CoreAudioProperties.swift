@@ -164,19 +164,6 @@ enum CoreAudioProperties {
         ) == noErr
     }
 
-    /// Whether the microphone's level can be changed. Some devices report a
-    /// level but refuse to have it set.
-    static func canSetInputVolume(_ id: AudioObjectID) -> Bool {
-        var address = property(
-            kAudioHardwareServiceDeviceProperty_VirtualMainVolume,
-            scope: kAudioDevicePropertyScopeInput,
-            element: kAudioObjectPropertyElementMain
-        )
-        var settable: DarwinBoolean = false
-        return AudioObjectIsPropertySettable(id, &address, &settable) == noErr
-            && settable.boolValue
-    }
-
     /// Whether the mute property can be set, on the main element or channel 1,
     /// matching where `setMute` writes it.
     static func canSetMute(_ id: AudioObjectID, role: DeviceRole) -> Bool {

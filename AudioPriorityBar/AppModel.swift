@@ -15,7 +15,6 @@ struct AudioOperations {
     let canSetMute: (DeviceRole, UInt32) -> Bool
     let inputVolume: (UInt32) -> Float?
     let setInputVolume: (UInt32, Float) -> Bool
-    let canSetInputVolume: (UInt32) -> Bool
     let isRunning: (UInt32) -> Bool
 }
 
@@ -325,7 +324,7 @@ final class AppModel {
             let saved = uid.flatMap { store.appliedMicrophoneMutes[$0] }
                 .flatMap { $0 == PriorityStore.mutedByProperty ? nil : Float($0) }
             microphoneLevel = saved ?? level
-            isMicrophoneLevelControllable = audio.canSetInputVolume(id)
+            isMicrophoneLevelControllable = true
         } else {
             microphoneLevel = 0
             isMicrophoneLevelControllable = false

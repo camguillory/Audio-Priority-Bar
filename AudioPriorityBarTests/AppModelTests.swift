@@ -60,7 +60,6 @@ final class FakeAudio {
                 self.inputVolumes[$0] = $1
                 return true
             },
-            canSetInputVolume: { self.inputVolumes[$0] != nil },
             isRunning: { self.running.contains($0) }
         )
     }
@@ -775,4 +774,18 @@ func outputMuteTogglesAndRaisingTheVolumeUnmutes() {
     model.setVolume(0.5)
     #expect(!model.isActiveOutputMuted)
     #expect(audio.muted.isEmpty)
+}
+
+@Test
+@MainActor
+func aMicrophoneWithNeitherMuteNorLevelCannotBeMuted() {
+    let audio = FakeAudio()
+    audio.catalog = [input(1, "scarlett", "Scarlett Solo USB")]
+    audio.defaults = [.input: 1]
+    audio.noMuteProperty = [1]
+    let model = testModel(audio: audio, defaults: isolatedDefaults())
+    model.start()
+
+    #expect(!model.isMicrophoneLevelControllable)
+    #expect(!model.isMicrophoneMutable)
 }

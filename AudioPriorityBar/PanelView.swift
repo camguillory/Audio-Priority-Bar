@@ -250,7 +250,7 @@ private struct LevelControl: View {
     /// Shown in place of the slider when the level cannot be set, so a
     /// disabled slider is not mistaken for a broken one.
     var uncontrollableNote: String?
-    /// False when muting cannot work, so the button ignores clicks rather
+    /// False when muting cannot work, so the button shows as disabled rather
     /// than pressing and doing nothing.
     var canToggleMute = true
     let toggleMute: () -> Void
@@ -273,8 +273,7 @@ private struct LevelControl: View {
             .animation(.easeInOut(duration: 0.12), value: isHoveringMute)
             .help(muteTitle)
             .accessibilityLabel(muteTitle)
-            .allowsHitTesting(canToggleMute)
-            .accessibilityHidden(!canToggleMute)
+            .disabled(!canToggleMute)
             if !isControllable, let uncontrollableNote {
                 Text(uncontrollableNote)
                     .font(.callout)

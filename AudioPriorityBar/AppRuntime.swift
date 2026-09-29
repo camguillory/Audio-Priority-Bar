@@ -25,7 +25,6 @@ final class AppRuntime {
                 canSetMute: { CoreAudioProperties.canSetMute($1, role: $0) },
                 inputVolume: CoreAudioProperties.inputVolume,
                 setInputVolume: CoreAudioProperties.setInputVolume,
-                canSetInputVolume: CoreAudioProperties.canSetInputVolume,
                 isRunning: CoreAudioProperties.isRunningSomewhere
             ),
             link: LinkOperations(
