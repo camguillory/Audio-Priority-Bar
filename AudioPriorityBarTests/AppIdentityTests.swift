@@ -36,3 +36,20 @@ func launchAtLoginShowsApprovalAndRegistrationErrors() {
     failure.refresh()
     #expect(failure.errorMessage == nil)
 }
+
+@Test
+@MainActor
+func aDownloadedUpdateWaitsUntilTheMicrophoneIsIdle() {
+    var idle = false
+    var installs = 0
+    let updates = UpdateChecker(isIdle: { idle })
+    updates.installWhenIdle { installs += 1 }
+
+    updates.installPendingUpdateIfIdle()
+    #expect(installs == 0)
+
+    idle = true
+    updates.installPendingUpdateIfIdle()
+    updates.installPendingUpdateIfIdle()
+    #expect(installs == 1)
+}

@@ -3,7 +3,7 @@ import AudioPriorityCore
 @MainActor
 final class AppRuntime {
     let model: AppModel
-    let updates = UpdateChecker()
+    let updates: UpdateChecker
     private let audioObserver: CoreAudioObserver
     private let jabra: JabraHIDMonitor
 
@@ -31,6 +31,9 @@ final class AppRuntime {
                 state: { jabra.monitoredState(for: $0) }
             )
         )
+        updates = UpdateChecker(isIdle: { [weak model] in
+            model.map { !$0.isMicrophoneMuted && !$0.isInputRecording } ?? true
+        })
 
         audioObserver.onDevicesChanged = { [weak model] in
             model?.handleDevicesChanged()
