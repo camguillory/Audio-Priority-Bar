@@ -61,6 +61,5 @@ final class AppRuntime {
         jabra.stop()
         audioObserver.stopListening()
         model.stop()
-        updates.stop()
     }
 }

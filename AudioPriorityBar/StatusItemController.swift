@@ -154,15 +154,9 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         let hostingController = NSHostingController(
             rootView: PanelView(
                 model: model,
-                updates: updates,
                 showSettings: { [weak self] in
                     self?.hidePanel()
                     self?.showSettings()
-                },
-                downloadUpdate: { [weak self] in
-                    self?.hidePanel()
-                    guard let url = self?.updates.downloadURL else { return }
-                    NSWorkspace.shared.open(url)
                 }
             )
         )
@@ -289,11 +283,9 @@ final class StatusItemController: NSObject, NSWindowDelegate {
 
     private func showMenu() {
         hidePanel()
-        // The item is read fresh here rather than kept in sync continuously,
-        // since it is only ever visible for the moment the menu is open.
-        updatesItem.title = updates.availableVersion == nil
-            ? "Check for Updates…"
-            : "Download Update…"
+        // The items are read fresh here rather than kept in sync continuously,
+        // since they are only ever visible for the moment the menu is open.
+        updatesItem.isEnabled = updates.isAvailable
         muteItem.title = model.isMicrophoneMuted
             ? "Unmute Microphone"
             : "Mute Microphone"
@@ -310,12 +302,7 @@ final class StatusItemController: NSObject, NSWindowDelegate {
     }
 
     @objc private func handleUpdatesItem() {
-        if let downloadURL = updates.downloadURL, updates.availableVersion != nil {
-            NSWorkspace.shared.open(downloadURL)
-        } else {
-            showSettings()
-            updates.checkManually()
-        }
+        updates.checkForUpdates()
     }
 
     private func hidePanel(suppressNextClick: Bool = false) {

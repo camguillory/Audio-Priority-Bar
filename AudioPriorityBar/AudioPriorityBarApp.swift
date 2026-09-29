@@ -1,5 +1,4 @@
 import AppKit
-import UserNotifications
 let appDisplayName = "Audio Priority Bar"
 
 @main
@@ -28,7 +27,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         configureMainMenu()
-        UNUserNotificationCenter.current().delegate = self
         let runtime = AppRuntime()
         let settings = SettingsWindowController(
             model: runtime.model,
@@ -96,30 +94,5 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func showSettings() {
         settingsController?.showSettings()
-    }
-}
-
-extension AppDelegate: @preconcurrency UNUserNotificationCenterDelegate {
-    // This accessory app has no window of its own to be "foreground", so
-    // without this the update notification would never present.
-    func userNotificationCenter(
-        _ center: UNUserNotificationCenter,
-        willPresent notification: UNNotification,
-        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
-    ) {
-        completionHandler([.banner, .list, .sound])
-    }
-
-    func userNotificationCenter(
-        _ center: UNUserNotificationCenter,
-        didReceive response: UNNotificationResponse,
-        withCompletionHandler completionHandler: @escaping () -> Void
-    ) {
-        if let urlString = response.notification.request.content.userInfo[
-            UpdateChecker.notificationDownloadURLKey
-        ] as? String, let url = URL(string: urlString) {
-            NSWorkspace.shared.open(url)
-        }
-        completionHandler()
     }
 }

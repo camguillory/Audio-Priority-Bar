@@ -81,7 +81,8 @@ list for each kind of device and uses the highest one that is connected.
 - Right-click the menu bar icon to mute the microphone, or for Settings, Check
   for Updates, and Quit
 - Open at Login
-- Update checks on launch and daily, with a manual check and an opt-out
+- Automatic updates: new releases install in the background and the app
+  restarts itself, with a manual check and an opt-out
 
 ## Install
 
@@ -210,7 +211,9 @@ substantial. `main` is the latest release; `develop` is next.
 - Branch from `develop` and open the pull request against `develop`. GitHub
   bases new pull requests on `main`, so switch it before submitting.
 - Every pull request runs both Swift Testing suites and a universal build.
-- Releases are tagged and published manually.
+- Releases are tagged and published manually. The release workflow signs
+  the update feed with the `SPARKLE_PRIVATE_KEY` secret, the Sparkle EdDSA
+  key exported with `generate_keys --account app.audioprioritybar -x`.
 
 ## License
 
