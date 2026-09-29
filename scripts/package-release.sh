@@ -25,6 +25,11 @@ if [[ "$version" != "$project_versions" ]]; then
   echo "Requested version $version does not match project version $project_versions." >&2
   exit 1
 fi
+# Sparkle compares build numbers, so the default of 1 would never be offered.
+if [[ -n "${SPARKLE_PRIVATE_KEY:-}" && -z "${2:-}" ]]; then
+  echo "Pass the build number when signing an update." >&2
+  exit 1
+fi
 
 rm -rf "$derived_data" "$output_dir"
 mkdir -p "$output_dir"
@@ -77,8 +82,6 @@ test -s "$app/Contents/Resources/LICENSE"
 if [[ -n "${SPARKLE_PRIVATE_KEY:-}" ]]; then
   signature=$(printf '%s' "$SPARKLE_PRIVATE_KEY" \
     | "$sparkle_bin/sign_update" --ed-key-file - "$zip")
-elif [[ -n "${SPARKLE_KEY_ACCOUNT:-}" ]]; then
-  signature=$("$sparkle_bin/sign_update" --account "$SPARKLE_KEY_ACCOUNT" "$zip")
 else
   signature=""
   echo "No Sparkle key set; skipping appcast.xml."
