@@ -449,7 +449,7 @@ private struct StatusLabel: View {
         }
         // The 13-point menu bar font draws glyphs smaller than the system's
         // own menu extras, such as Sound and Wi-Fi.
-        .font(.system(size: 15))
+        .font(.system(size: 14))
         .padding(.horizontal, 1)
         .accessibilityHidden(true)
     }
