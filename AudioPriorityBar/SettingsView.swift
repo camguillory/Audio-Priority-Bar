@@ -83,6 +83,16 @@ struct SettingsView: View {
                 }
             }
 
+            Section("Menu Bar") {
+                Toggle(isOn: Binding(
+                    get: { model.outlinesMenuBarIcon },
+                    set: { model.setOutlinesMenuBarIcon($0) }
+                )) {
+                    Text("Outline the menu bar icon")
+                    Text("Tells it apart from the Sound icon, which shows the same device.")
+                }
+            }
+
             Section("Updates") {
                 if updates.isAvailable {
                     Toggle(isOn: Binding(

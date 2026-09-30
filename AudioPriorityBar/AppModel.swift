@@ -74,6 +74,7 @@ final class AppModel {
     var isInputRecording = false
     var showsSwitchNotice: Bool
     var remindsWhenMuted: Bool
+    var outlinesMenuBarIcon: Bool
     /// Called with the devices Automatic mode just switched to because the
     /// hardware changed, output first. Never for the user's own choices.
     var onAutomaticSwitch: (([AudioDevice]) -> Void)?
@@ -119,6 +120,7 @@ final class AppModel {
         hideNewDisplayOutputs = store.hideNewDisplayOutputs
         showsSwitchNotice = store.showsSwitchNotice
         remindsWhenMuted = store.remindsWhenMuted
+        outlinesMenuBarIcon = store.outlinesMenuBarIcon
     }
 
     func start() {
