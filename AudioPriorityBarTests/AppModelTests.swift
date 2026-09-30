@@ -319,6 +319,28 @@ func airPodsTakingTheMicrophoneOnEarDetectionIsSwitchedBack() {
 
 @Test
 @MainActor
+func outputMovingBeforeTheDisconnectArrivesKeepsAutomaticOn() {
+    let defaults = isolatedDefaults()
+    let audio = FakeAudio()
+    let speaker = output(1, "speaker")
+    let headphones = output(2, "headphones", "AirPods Pro")
+    audio.catalog = [speaker, headphones]
+    let model = testModel(audio: audio, defaults: defaults)
+    model.start()
+
+    // Seen in a real trace: the default moves to the speakers 40 ms before
+    // the AirPods leave the device list.
+    audio.defaults[.output] = speaker.platformID
+    model.handleDefaultChanged(.output)
+    audio.catalog = [speaker]
+    model.handleDevicesChanged()
+
+    #expect(!model.isManualMode)
+    #expect(model.currentOutputID == speaker.platformID)
+}
+
+@Test
+@MainActor
 func newHeadphoneBecomesAutomaticOutput() {
     let defaults = isolatedDefaults()
     let audio = FakeAudio()
