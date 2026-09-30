@@ -5,6 +5,7 @@ extension AppModel {
     func setManualMode(_ enabled: Bool) {
         isManualMode = enabled
         store.isManualMode = enabled
+        keptPicks = [:]
         if !enabled {
             applyHighestPriorityDevices()
         }

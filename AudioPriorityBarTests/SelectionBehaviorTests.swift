@@ -278,14 +278,14 @@ func soundSettingsOutputSelectionPairsItsMicrophone() {
     store.savePriorities([macMic, paired.input], role: .input)
     let audio = FakeAudio()
     audio.catalog = [airPods, paired.output, paired.input, macMic]
-    let model = testModel(audio: audio, defaults: defaults)
+    let model = testModel(audio: audio, defaults: defaults, isUserPicking: { true })
     model.start()
     audio.selections.removeAll()
 
     audio.defaults[.output] = paired.output.platformID
     model.handleDefaultChanged(.output)
 
-    #expect(model.isManualMode)
+    #expect(!model.isManualMode)
     #expect(model.currentInputID == paired.input.platformID)
     #expect(audio.selections.map(\.0) == [.input])
     #expect(audio.selections.map(\.1) == [paired.input.platformID])

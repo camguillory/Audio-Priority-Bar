@@ -654,13 +654,13 @@ func unrelatedConnectionDoesNotMaskSoundSettingsChoice() {
     let headphones = output(2, "headphones", "AirPods Pro")
     let display = output(3, "display", "HDMI")
     audio.catalog = [speaker, headphones]
-    let model = testModel(audio: audio, defaults: defaults)
+    let model = testModel(audio: audio, defaults: defaults, isUserPicking: { true })
     model.start()
 
     audio.catalog.append(display)
     audio.defaults[.output] = speaker.platformID
     model.handleDefaultChanged(.output)
 
-    #expect(model.isManualMode)
+    #expect(!model.isManualMode)
     #expect(model.currentOutputID == speaker.platformID)
 }

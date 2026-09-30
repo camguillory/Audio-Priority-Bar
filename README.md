@@ -148,9 +148,13 @@ priority, and the active one is highlighted.
 ### Automatic and manual switching
 
 - Automatic switching uses the first available headphone, then the first speaker.
-- Selecting a device in the panel or macOS Sound Settings turns automatic
-  switching off so that choice stays active.
-- Turn automatic switching back on to resume priority-based selection.
+- Selecting a device in the panel turns automatic switching off so that
+  choice stays active. Turn automatic switching back on to resume
+  priority-based selection.
+- A device you pick in Control Center or Sound Settings stays until a device
+  next connects or disconnects, and automatic switching stays on.
+- When macOS or another app changes the device on its own, as AirPods do with
+  the microphone when you put them in, automatic switching switches back.
 - With **Select headset input and output together** enabled, choosing
   either half of a physical USB headset selects the other too.
 
