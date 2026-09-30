@@ -447,6 +447,9 @@ private struct StatusLabel: View {
                 Image(systemName: "exclamationmark.triangle.fill")
             }
         }
+        // The 13-point menu bar font draws glyphs smaller than the system's
+        // own menu extras, such as Sound and Wi-Fi.
+        .font(.system(size: 14))
         .padding(.horizontal, 1)
         .accessibilityHidden(true)
     }
