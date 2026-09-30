@@ -112,8 +112,8 @@ brew install --cask camguillory/tap/audio-priority-bar
 
 ### First launch
 
-Audio Priority Bar is ad-hoc signed, not signed with an Apple Developer ID or
-notarized. If macOS blocks the first launch, open
+Audio Priority Bar is signed with its own certificate, not an Apple Developer
+ID, and it isn't notarized. If macOS blocks the first launch, open
 **System Settings > Privacy & Security** and click **Open Anyway**.
 
 <details>
@@ -136,7 +136,8 @@ cd Audio-Priority-Bar
 ./build.sh
 ```
 
-The universal, ad-hoc-signed app is written to `dist/AudioPriorityBar.app`.
+The universal app is written to `dist/AudioPriorityBar.app`, signed with the
+release certificate when it is in your keychain and ad-hoc otherwise.
 You can also open `AudioPriorityBar.xcodeproj` in Xcode and build with Command-R.
 
 </details>
