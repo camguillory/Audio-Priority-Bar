@@ -1,4 +1,35 @@
+import AppKit
 import AudioPriorityCore
+
+/// Whether someone is picking a device in Control Center or System Settings
+/// right now. CoreAudio never says who changed a default, but Control Center
+/// shows a window outside the menu bar's layer only while one of its menus
+/// is open. Window owners and layers need no permission to read.
+enum SystemSoundPicker {
+    static func isInUse() -> Bool {
+        isInUse(
+            windows: CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID)
+                as? [[String: Any]] ?? [],
+            controlCenterPIDs: Set(NSRunningApplication.runningApplications(
+                withBundleIdentifier: "com.apple.controlcenter"
+            ).map(\.processIdentifier)),
+            frontmostBundleID: NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+        )
+    }
+
+    static func isInUse(
+        windows: [[String: Any]],
+        controlCenterPIDs: Set<pid_t>,
+        frontmostBundleID: String?
+    ) -> Bool {
+        guard frontmostBundleID != "com.apple.systempreferences" else { return true }
+        let menuBarLayer = Int(CGWindowLevelForKey(.statusWindow))
+        return windows.contains {
+            controlCenterPIDs.contains($0[kCGWindowOwnerPID as String] as? pid_t ?? -1)
+                && ($0[kCGWindowLayer as String] as? Int) != menuBarLayer
+        }
+    }
+}
 
 @MainActor
 final class AppRuntime {
@@ -30,7 +61,8 @@ final class AppRuntime {
             link: LinkOperations(
                 isUsable: { $0.isConnected && jabra.isUsable($0) },
                 state: { jabra.monitoredState(for: $0) }
-            )
+            ),
+            isUserPicking: SystemSoundPicker.isInUse
         )
         updates = UpdateChecker(isIdle: { [weak model] in
             model.map { !$0.isMicrophoneMuted && !$0.isInputRecording } ?? true

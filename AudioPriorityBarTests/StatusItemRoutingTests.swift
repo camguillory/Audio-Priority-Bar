@@ -75,6 +75,29 @@ func aHeadsetSwitchingBothHalvesReadsAsOneDevice() {
 }
 
 @Test
+func aDeviceIsBeingPickedOnlyWhileControlCenterOrSystemSettingsIsInUse() {
+    func window(pid: pid_t, layer: Int) -> [String: Any] {
+        [kCGWindowOwnerPID as String: pid, kCGWindowLayer as String: layer]
+    }
+    // Observed on macOS 26: Control Center's menu bar items sit at the status
+    // layer, 25, and the open Sound menu adds a 458x1067 window at layer 23.
+    // An app using the microphone, even in full screen, adds nothing.
+    let menuBar = [window(pid: 400, layer: 25), window(pid: 400, layer: 25)]
+    let soundMenu = window(pid: 400, layer: 23)
+    let otherApp = window(pid: 900, layer: 23)
+    func picking(_ windows: [[String: Any]], frontmost: String? = "com.todesktop.cursor") -> Bool {
+        SystemSoundPicker.isInUse(
+            windows: windows,
+            controlCenterPIDs: [400],
+            frontmostBundleID: frontmost
+        )
+    }
+    #expect(!picking(menuBar + [otherApp]))
+    #expect(picking(menuBar + [soundMenu]))
+    #expect(picking(menuBar, frontmost: "com.apple.systempreferences"))
+}
+
+@Test
 func aSwitchNoticeOutranksTheMutedReminderButNeverCoversThePanel() {
     let notice = NoticeContent(
         lines: [.init(icon: "airpodspro", text: "AirPods Pro")],
