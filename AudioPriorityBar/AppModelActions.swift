@@ -36,6 +36,11 @@ extension AppModel {
         store.remindsWhenMuted = enabled
     }
 
+    func setOutlinesMenuBarIcon(_ enabled: Bool) {
+        outlinesMenuBarIcon = enabled
+        store.outlinesMenuBarIcon = enabled
+    }
+
     func setMicrophoneMuted(_ muted: Bool) {
         isMicrophoneMuted = muted
         refreshMute()

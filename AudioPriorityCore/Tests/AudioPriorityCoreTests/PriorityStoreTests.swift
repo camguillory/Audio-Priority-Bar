@@ -381,6 +381,15 @@ func appliedMicrophoneMutesAndNoticePreferencesPersist() throws {
     }
 }
 
+@Test
+func menuBarOutlineIsOffUntilTurnedOn() throws {
+    try withDefaults { defaults in
+        #expect(!PriorityStore(defaults: defaults).outlinesMenuBarIcon)
+        PriorityStore(defaults: defaults).outlinesMenuBarIcon = true
+        #expect(PriorityStore(defaults: defaults).outlinesMenuBarIcon)
+    }
+}
+
 private func monitor(
     _ uid: String = "dell",
     _ name: String = "DELL U2518D"

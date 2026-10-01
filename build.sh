@@ -22,12 +22,6 @@ cp -R \
   "$derived_data/Build/Products/Release/AudioPriorityBar.app" \
   "$root/dist/"
 
-while IFS= read -r -d '' file; do
-  if /usr/bin/file "$file" | /usr/bin/grep -q "Mach-O"; then
-    /usr/bin/codesign --force --sign - "$file"
-  fi
-done < <(/usr/bin/find "$app/Contents" -type f -print0)
-/usr/bin/codesign --force --sign - "$app"
-/usr/bin/codesign --verify --deep --strict --verbose=2 "$app"
+"$root/scripts/sign-app.sh" "$app"
 
 echo "Build complete: $app"

@@ -24,6 +24,7 @@ public final class PriorityStore {
         static let appliedMicrophoneMutes = "appliedMicrophoneMutes"
         static let showsSwitchNotice = "showsSwitchNotice"
         static let remindsWhenMuted = "remindsWhenMuted"
+        static let outlinesMenuBarIcon = "outlinesMenuBarIcon"
     }
 
     /// Marks a microphone muted through its mute property rather than by
@@ -171,6 +172,11 @@ public final class PriorityStore {
     public var remindsWhenMuted: Bool {
         get { defaults.object(forKey: Key.remindsWhenMuted) as? Bool ?? true }
         set { defaults.set(newValue, forKey: Key.remindsWhenMuted) }
+    }
+
+    public var outlinesMenuBarIcon: Bool {
+        get { defaults.bool(forKey: Key.outlinesMenuBarIcon) }
+        set { defaults.set(newValue, forKey: Key.outlinesMenuBarIcon) }
     }
 
     /// Microphones this app muted and has not restored yet, by UID: the input

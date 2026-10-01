@@ -209,6 +209,7 @@ final class StatusItemController: NSObject, NSWindowDelegate {
     private func observeStatus() {
         withObservationTracking {
             _ = statusDescription
+            _ = model.outlinesMenuBarIcon
         } onChange: { [weak self] in
             Task { @MainActor [weak self] in
                 self?.updateStatus()
@@ -445,6 +446,19 @@ private struct StatusLabel: View {
             // colored menu bar icons fight light and dark contrast.
             if model.isActiveOutputLinkDown {
                 Image(systemName: "exclamationmark.triangle.fill")
+            }
+        }
+        // The 13-point menu bar font draws glyphs smaller than the system's
+        // own menu extras, such as Sound and Wi-Fi.
+        .font(.system(size: 14))
+        .padding(.horizontal, model.outlinesMenuBarIcon ? 4 : 0)
+        .padding(.vertical, model.outlinesMenuBarIcon ? 2 : 0)
+        .overlay {
+            // Whole points only: a fractional width lands on half pixels and
+            // draws some edges softer than others.
+            if model.outlinesMenuBarIcon {
+                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                    .strokeBorder(.secondary, lineWidth: 1)
             }
         }
         .padding(.horizontal, 1)

@@ -69,7 +69,8 @@ list for each kind of device and uses the highest one that is connected.
 **Panel and menu bar**
 
 - A panel laid out like the macOS Sound menu, with an icon for every device
-- The menu bar icon shows the current output, like AirPods or headphones
+- The menu bar icon shows the current output, like AirPods or headphones, and
+  can be outlined in Settings to tell it apart from the Sound icon
 - Liquid Glass on macOS 26, VoiceOver support, and keyboard-accessible actions
 - Output volume and microphone level by slider or scroll wheel, with mute and
   availability status
@@ -111,8 +112,8 @@ brew install --cask camguillory/tap/audio-priority-bar
 
 ### First launch
 
-Audio Priority Bar is ad-hoc signed, not signed with an Apple Developer ID or
-notarized. If macOS blocks the first launch, open
+Audio Priority Bar is signed with its own certificate, not an Apple Developer
+ID, and it isn't notarized. If macOS blocks the first launch, open
 **System Settings > Privacy & Security** and click **Open Anyway**.
 
 <details>
@@ -135,7 +136,8 @@ cd Audio-Priority-Bar
 ./build.sh
 ```
 
-The universal, ad-hoc-signed app is written to `dist/AudioPriorityBar.app`.
+The universal app is written to `dist/AudioPriorityBar.app`, signed with the
+release certificate when it is in your keychain and ad-hoc otherwise.
 You can also open `AudioPriorityBar.xcodeproj` in Xcode and build with Command-R.
 
 </details>

@@ -72,6 +72,25 @@ func streamsMustAgreeBeforeTheyCountAsEvidence() {
 }
 
 @Test
+func bluetoothHeadphonesTerminalIsNoEvidence() {
+    // Measured: an Echo Dot, a Bluetooth loudspeaker, reports 'hdph'.
+    let headphones: UInt32 = 0x68647068 // 'hdph'
+    let speaker: UInt32 = 0x73706B72 // 'spkr'
+    #expect(CoreAudioProperties.category(
+        forTerminals: [headphones], transport: kAudioDeviceTransportTypeBluetooth
+    ) == nil)
+    #expect(CoreAudioProperties.category(
+        forTerminals: [headphones], transport: kAudioDeviceTransportTypeBluetoothLE
+    ) == nil)
+    #expect(CoreAudioProperties.category(
+        forTerminals: [speaker], transport: kAudioDeviceTransportTypeBluetooth
+    ) == .speaker)
+    #expect(CoreAudioProperties.category(
+        forTerminals: [headphones], transport: kAudioDeviceTransportTypeUSB
+    ) == .headphone)
+}
+
+@Test
 func onlyVideoCableTransportsCountAsDisplayOutputs() {
     // Both attached Dell panels report HDMI, including the one behind a
     // USB-C hub, so the hub does not need its own case.

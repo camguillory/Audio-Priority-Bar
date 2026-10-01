@@ -220,7 +220,7 @@ enum CoreAudioProperties {
             // Input terminals describe a microphone, which says nothing about
             // where output should go.
             declaredCategory: role == .output
-                ? declaredCategory(streams: streams)
+                ? declaredCategory(streams: streams, transport: transport)
                 : nil,
             isDisplayOutput: role == .output && Self.isDisplayTransport(transport),
             transportType: transport
@@ -231,7 +231,8 @@ enum CoreAudioProperties {
     /// usable. Aggregate devices report `Unknown` and HDMI reports its own
     /// terminal, so the caller still needs a fallback.
     private static func declaredCategory(
-        streams: [AudioObjectID]
+        streams: [AudioObjectID],
+        transport: UInt32
     ) -> OutputCategory? {
         category(forTerminals: streams.compactMap { stream in
             var terminal = UInt32(0)
@@ -244,7 +245,19 @@ enum CoreAudioProperties {
                 return nil
             }
             return terminal
-        })
+        }, transport: transport)
+    }
+
+    /// macOS gives a Bluetooth output a headphones terminal even when it is a
+    /// speaker, such as an Echo, so from Bluetooth that claim is no evidence.
+    static func category(
+        forTerminals terminals: [UInt32],
+        transport: UInt32
+    ) -> OutputCategory? {
+        let declared = category(forTerminals: terminals)
+        let isBluetooth = transport == kAudioDeviceTransportTypeBluetooth
+            || transport == kAudioDeviceTransportTypeBluetoothLE
+        return isBluetooth && declared == .headphone ? nil : declared
     }
 
     /// Resolves what a device's streams collectively claim. Streams that
