@@ -458,7 +458,7 @@ private struct StatusLabel: View {
             // draws some edges softer than others.
             if model.outlinesMenuBarIcon {
                 RoundedRectangle(cornerRadius: 4, style: .continuous)
-                    .strokeBorder(.secondary, lineWidth: 1)
+                    .strokeBorder(.primary.opacity(0.75), lineWidth: 1)
             }
         }
         .padding(.horizontal, 1)
