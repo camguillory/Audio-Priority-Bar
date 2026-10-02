@@ -97,6 +97,7 @@ final class StatusItemController: NSObject, NSWindowDelegate {
     }
     /// Set by a click so the preview stays away until the pointer leaves.
     private var isHoverDismissed = false
+    private var hoverTask: Task<Void, Never>?
 
     init(
         model: AppModel,
@@ -366,20 +367,35 @@ final class StatusItemController: NSObject, NSWindowDelegate {
             hideHoverPreview()
             return
         }
-        guard !isHoverDismissed, !panel.isVisible, !hoverPreview.isVisible else { return }
-        notice.isSuppressed = true
-        hoverPreview.show()
+        guard !isHoverDismissed, !panel.isVisible, !hoverPreview.isVisible,
+              hoverTask == nil else { return }
+        // Waits like a tooltip, so sweeping across the menu bar does not
+        // flash the preview.
+        hoverTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(300))
+            guard let self, !Task.isCancelled else { return }
+            hoverTask = nil
+            guard !isHoverDismissed, !panel.isVisible else { return }
+            notice.isSuppressed = true
+            hoverPreview.show()
+        }
     }
 
     /// The status item's window from the bottom of the menu bar up through
     /// the screen's top edge, where the pointer reports a point just outside
-    /// the window.
+    /// the window. Capped at that edge so a display stacked above does not
+    /// count.
     private func isPointInHoverColumn(_ point: NSPoint) -> Bool {
-        guard let frame = statusItem.button?.window?.frame else { return false }
-        return point.x >= frame.minX && point.x < frame.maxX && point.y >= frame.minY
+        guard let window = statusItem.button?.window,
+              let screen = window.screen else { return false }
+        let frame = window.frame
+        return point.x >= frame.minX && point.x < frame.maxX
+            && point.y >= frame.minY && point.y <= screen.frame.maxY
     }
 
     private func hideHoverPreview() {
+        hoverTask?.cancel()
+        hoverTask = nil
         guard hoverPreview.isVisible else { return }
         hoverPreview.hide()
         notice.isSuppressed = panel.isVisible

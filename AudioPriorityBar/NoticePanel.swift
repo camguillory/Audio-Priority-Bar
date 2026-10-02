@@ -207,8 +207,13 @@ final class HoverPreviewPanel {
         // the preview is up.
         host.sizingOptions = [.preferredContentSize]
         window.contentViewController = host
-        // Above the notice, which it covers while shown.
-        window.level = .popUpMenu
+        // Rounded like the panel's view, so the shadow does not draw a square
+        // around the glass. Matches `PanelBackground`.
+        host.view.wantsLayer = true
+        host.view.layer?.cornerRadius = 12
+        host.view.layer?.cornerCurve = .continuous
+        host.view.layer?.masksToBounds = true
+        window.level = .statusBar
         window.ignoresMouseEvents = true
         window.isOpaque = false
         window.backgroundColor = .clear
@@ -236,38 +241,55 @@ private struct HoverPreviewView: View {
     @Bindable var model: AppModel
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 22) {
-            row(
-                model.currentInputDevice,
-                placeholder: "No microphone",
-                showsLevel: model.isMicrophoneLevelControllable,
-                level: model.microphoneLevel
-            )
-            row(
-                model.currentOutputDevice,
-                placeholder: "No output",
-                showsLevel: true,
-                level: model.isVolumeControllable ? model.volume : nil
-            )
+        // In the panel's order: its header, then output, then microphone.
+        VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                HStack {
+                    Text("Automatic switching")
+                        .font(.system(size: 13, weight: .semibold))
+                    Spacer(minLength: 16)
+                    Text(model.isManualMode ? "Off" : "On")
+                        .font(.system(size: 13))
+                        .foregroundStyle(.secondary)
+                }
+                // What the tooltip used to explain behind the warning glyph.
+                if model.isActiveOutputLinkDown {
+                    Label("Headset off", systemImage: "exclamationmark.triangle.fill")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            Divider()
+            VStack(alignment: .leading, spacing: 14) {
+                row(
+                    model.currentOutputDevice,
+                    placeholder: "No output",
+                    showsLevel: model.isVolumeControllable,
+                    level: model.volume
+                )
+                row(
+                    model.currentInputDevice,
+                    placeholder: "No microphone",
+                    showsLevel: model.isMicrophoneLevelControllable,
+                    level: model.microphoneLevel
+                )
+            }
         }
         .padding(.horizontal, 12)
-        .padding(.top, 14)
-        .padding(.bottom, 16)
-        .background(
-            .regularMaterial,
-            in: RoundedRectangle(cornerRadius: 12, style: .continuous)
-        )
+        .padding(.top, 10)
+        .padding(.bottom, 12)
+        .modifier(PanelBackground())
         .fixedSize()
     }
 
     /// Icon, name, and mute status styled as in the device list, with the
-    /// level underneath. A nil level is one the device does not report.
+    /// level underneath when the device reports one.
     @ViewBuilder
     private func row(
         _ device: AudioDevice?,
         placeholder: String,
         showsLevel: Bool,
-        level: Float?
+        level: Float
     ) -> some View {
         let isMuted = device.map(model.isMuted) ?? false
         HStack(spacing: 8) {
@@ -278,22 +300,10 @@ private struct HoverPreviewView: View {
                 .foregroundStyle(isMuted ? AnyShapeStyle(.red) : AnyShapeStyle(.secondary))
                 .frame(width: 20)
             VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 8) {
-                    Text(device?.name ?? placeholder)
-                        .font(.system(size: 13))
-                        .foregroundStyle(device == nil ? .secondary : .primary)
-                        .lineLimit(1)
-                    if let device, isMuted {
-                        Label(
-                            "Muted",
-                            systemImage: device.role == .input
-                                ? "mic.slash.fill"
-                                : "speaker.slash.fill"
-                        )
-                        .font(.caption)
-                        .foregroundStyle(.red)
-                    }
-                }
+                Text(device?.name ?? placeholder)
+                    .font(.system(size: 13))
+                    .foregroundStyle(device == nil ? .secondary : .primary)
+                    .lineLimit(1)
                 if device != nil, showsLevel {
                     LevelBar(level: level, isMuted: isMuted)
                 }
@@ -316,7 +326,7 @@ private struct HoverPreviewView: View {
 /// Drawn in the text color with no thumb or value, so it does not read as a
 /// slider to drag.
 private struct LevelBar: View {
-    let level: Float?
+    let level: Float
     let isMuted: Bool
 
     var body: some View {
@@ -326,7 +336,7 @@ private struct LevelBar: View {
                 GeometryReader { proxy in
                     Capsule()
                         .fill(.primary)
-                        .frame(width: proxy.size.width * CGFloat(level ?? 0))
+                        .frame(width: proxy.size.width * CGFloat(level))
                 }
             }
             .clipShape(Capsule())
