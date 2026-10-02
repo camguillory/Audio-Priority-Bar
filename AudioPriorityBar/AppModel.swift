@@ -97,6 +97,10 @@ final class AppModel {
     /// Keeps "Output only" intact when CoreAudio echoes our own default change.
     /// Held by UID because platform IDs are recycled across devices.
     var selectedOnlyOutputUID: String?
+    /// Devices picked in Control Center or Sound Settings, by role and UID.
+    /// Automatic mode keeps them until a device connects or disconnects.
+    var keptPicks: [DeviceRole: String] = [:]
+    private let isUserPicking: () -> Bool
     /// Bumped on every Jabra link verdict so `linkState(for:)` is part of the
     /// Observation graph. `link.state` itself lives outside `@Observable`, so
     /// without this a row only redraws its badge when something else
@@ -109,12 +113,14 @@ final class AppModel {
         link: LinkOperations,
         reduceMotion: @escaping () -> Bool = {
             NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
-        }
+        },
+        isUserPicking: @escaping () -> Bool = { false }
     ) {
         self.store = store
         self.audio = audio
         self.link = link
         self.reduceMotion = reduceMotion
+        self.isUserPicking = isUserPicking
         isManualMode = store.isManualMode
         selectsPairedDevice = store.selectsPairedDevice
         hideNewDisplayOutputs = store.hideNewDisplayOutputs
@@ -224,8 +230,18 @@ final class AppModel {
             return
         }
         if let target = automaticTarget(for: role),
-           target.platformID != currentID {
-            setManualMode(true)
+           target.platformID != currentID,
+           let currentUID {
+            guard isUserPicking() else {
+                // macOS or another app moved it, as when AirPods take the
+                // microphone on ear detection, so the list wins.
+                let moved = currentUIDs
+                applyHighestPriority(role)
+                refreshMute()
+                announceAutomaticSwitches(since: moved)
+                return
+            }
+            keptPicks[role] = currentUID
         }
         if role == .output, let output = currentOutputDevice {
             selectPairedDevice(of: output, automatically: !isManualMode)
@@ -246,12 +262,13 @@ final class AppModel {
 
     func refreshDevices() {
         let connected = audio.devices()
-        connectedInputUIDs = Set(
-            connected.lazy.filter { $0.role == .input }.map(\.uid)
-        )
-        connectedOutputUIDs = Set(
-            connected.lazy.filter { $0.role == .output }.map(\.uid)
-        )
+        let inputUIDs = Set(connected.lazy.filter { $0.role == .input }.map(\.uid))
+        let outputUIDs = Set(connected.lazy.filter { $0.role == .output }.map(\.uid))
+        if inputUIDs != connectedInputUIDs || outputUIDs != connectedOutputUIDs {
+            keptPicks = [:]
+        }
+        connectedInputUIDs = inputUIDs
+        connectedOutputUIDs = outputUIDs
         connectedUIDsByID = Dictionary(grouping: connected, by: \.role)
             .mapValues {
                 Dictionary($0.map {
@@ -491,6 +508,10 @@ final class AppModel {
         guard !isManualMode else {
             return AutomaticOutputDecision(target: nil, skipped: nil)
         }
+        if let uid = keptPicks[.output],
+           let kept = allOutputs.first(where: { $0.uid == uid && $0.isConnected }) {
+            return AutomaticOutputDecision(target: kept, skipped: nil)
+        }
         var skipped: SkippedOutput?
         for device in headphoneDevices + speakerDevices {
             let category = store.category(for: device)
@@ -556,6 +577,10 @@ final class AppModel {
 
     private func automaticTarget(for role: DeviceRole) -> AudioDevice? {
         if role == .input {
+            if let uid = keptPicks[.input],
+               let kept = inputDevices.first(where: { $0.uid == uid && $0.isConnected }) {
+                return kept
+            }
             if let output = currentOutputDevice,
                automaticOutputDecision.target?.id == output.id,
                selectsPairedDevice,

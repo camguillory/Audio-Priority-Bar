@@ -70,12 +70,14 @@ func testModel(
     audio: FakeAudio,
     defaults: UserDefaults,
     usable: @escaping (AudioDevice) -> Bool = { _ in true },
-    state: @escaping (AudioDevice) -> LinkState? = { _ in nil }
+    state: @escaping (AudioDevice) -> LinkState? = { _ in nil },
+    isUserPicking: @escaping () -> Bool = { false }
 ) -> AppModel {
     AppModel(
         store: PriorityStore(defaults: defaults),
         audio: audio.operations,
-        link: LinkOperations(isUsable: usable, state: state)
+        link: LinkOperations(isUsable: usable, state: state),
+        isUserPicking: isUserPicking
     )
 }
 
@@ -243,7 +245,7 @@ func showAllRevealsHiddenDevicesInTheirOwnList() {
 
 @Test
 @MainActor
-func soundSettingsChoiceTurnsAutomaticOffAndSticks() {
+func anOutsideChangeIsSwitchedBackAndAutomaticStaysOn() {
     let defaults = isolatedDefaults()
     let audio = FakeAudio()
     let speaker = output(1, "speaker")
@@ -252,18 +254,88 @@ func soundSettingsChoiceTurnsAutomaticOffAndSticks() {
     let model = testModel(audio: audio, defaults: defaults)
     model.start()
     audio.selections.removeAll()
+    var notices: [[AudioDevice]] = []
+    model.onAutomaticSwitch = { notices.append($0) }
 
     audio.defaults[.output] = speaker.platformID
     model.handleDefaultChanged(.output)
 
-    #expect(model.isManualMode)
+    #expect(!model.isManualMode)
+    #expect(model.currentOutputID == headphones.platformID)
+    #expect(audio.selections.map(\.1) == [headphones.platformID])
+    #expect(notices.map { $0.map(\.uid) } == [["headphones"]])
+}
+
+@Test
+@MainActor
+func aPickInControlCenterStaysUntilADeviceConnectsOrDisconnects() {
+    let defaults = isolatedDefaults()
+    let audio = FakeAudio()
+    let speaker = output(1, "speaker")
+    let headphones = output(2, "headphones", "AirPods Pro")
+    audio.catalog = [speaker, headphones]
+    let model = testModel(audio: audio, defaults: defaults, isUserPicking: { true })
+    model.start()
+    audio.selections.removeAll()
+
+    audio.defaults[.output] = speaker.platformID
+    model.handleDefaultChanged(.output)
+    // A Jabra verdict refreshes the lists without connecting anything.
+    model.handleLinkChanged()
+
+    #expect(!model.isManualMode)
     #expect(audio.selections.isEmpty)
     #expect(model.currentOutputID == speaker.platformID)
-    #expect(model.activeOutputCategory == .speaker)
 
+    audio.catalog.append(input(3, "usb-mic", "USB Mic"))
     model.handleDevicesChanged()
 
-    #expect(audio.selections.isEmpty)
+    #expect(model.currentOutputID == headphones.platformID)
+}
+
+@Test
+@MainActor
+func airPodsTakingTheMicrophoneOnEarDetectionIsSwitchedBack() {
+    let defaults = isolatedDefaults()
+    let store = PriorityStore(defaults: defaults)
+    let airPods = output(1, "airpods-out", "AirPods Pro")
+    let airPodsMic = input(2, "airpods-in", "AirPods Pro")
+    let scarlett = input(3, "scarlett", "Scarlett Solo USB")
+    store.savePriorities([scarlett, airPodsMic], role: .input)
+    let audio = FakeAudio()
+    audio.catalog = [airPods, airPodsMic, scarlett]
+    let model = testModel(audio: audio, defaults: defaults)
+    model.start()
+    #expect(model.currentInputID == scarlett.platformID)
+
+    // Long after they connected, putting them in makes macOS move the mic.
+    audio.defaults[.input] = airPodsMic.platformID
+    model.handleDefaultChanged(.input)
+
+    #expect(!model.isManualMode)
+    #expect(model.currentInputID == scarlett.platformID)
+    #expect(model.currentOutputID == airPods.platformID)
+}
+
+@Test
+@MainActor
+func outputMovingBeforeTheDisconnectArrivesKeepsAutomaticOn() {
+    let defaults = isolatedDefaults()
+    let audio = FakeAudio()
+    let speaker = output(1, "speaker")
+    let headphones = output(2, "headphones", "AirPods Pro")
+    audio.catalog = [speaker, headphones]
+    let model = testModel(audio: audio, defaults: defaults)
+    model.start()
+
+    // Seen in a real trace: the default moves to the speakers 40 ms before
+    // the AirPods leave the device list.
+    audio.defaults[.output] = speaker.platformID
+    model.handleDefaultChanged(.output)
+    audio.catalog = [speaker]
+    model.handleDevicesChanged()
+
+    #expect(!model.isManualMode)
     #expect(model.currentOutputID == speaker.platformID)
 }
 
