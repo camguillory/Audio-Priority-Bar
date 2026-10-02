@@ -415,19 +415,32 @@ private struct StatusLabel: View {
 
     var body: some View {
         HStack(spacing: 2) {
-            if model.isActiveInputMuted {
-                Image(systemName: "mic.slash.fill")
-                    .opacity(reduceMotion || model.micFlashState ? 1 : 0.45)
-            }
-            // Every possible output glyph sits hidden underneath, so the item
-            // keeps the widest one's width instead of resizing as the output
+            Text("in:")
+                .padding(.leading, 4)
+            // Every possible glyph sits hidden underneath, so the item keeps
+            // the widest one's width instead of resizing as the device
             // changes.
             ZStack {
-                ForEach(Self.reservedIcons, id: \.self) {
+                ForEach(Self.reservedInputIcons, id: \.self) {
+                    Image(systemName: $0).hidden()
+                }
+                if model.isActiveInputMuted {
+                    Image(systemName: "mic.slash.fill")
+                        .opacity(reduceMotion || model.micFlashState ? 1 : 0.45)
+                } else {
+                    Image(systemName: Self.filled(inputIcon))
+                }
+            }
+
+            Text("out:")
+                .padding(.leading, 4)
+            ZStack {
+                ForEach(Self.reservedOutputIcons, id: \.self) {
                     Image(systemName: $0).hidden()
                 }
                 if model.isActiveOutputMuted {
                     Image(systemName: "speaker.slash.fill")
+                        .opacity(0.45)
                 } else if let hardwareIcon {
                     Image(systemName: Self.filled(hardwareIcon))
                 } else if !model.isVolumeControllable {
@@ -475,7 +488,17 @@ private struct StatusLabel: View {
         return icon == AudioDevice.genericSpeakerIcon ? nil : icon
     }
 
-    private static let reservedIcons = (
+    /// The current input's hardware icon, or a plain microphone while no
+    /// input is known.
+    private var inputIcon: String {
+        model.currentInputDevice?.hardwareIcon(category: nil) ?? "mic"
+    }
+
+    private static let reservedInputIcons = (
+        AudioDevice.hardwareIcons + ["mic.slash"]
+    ).map(filled)
+
+    private static let reservedOutputIcons = (
         AudioDevice.hardwareIcons + ["speaker.wave.2", "speaker.slash"]
     ).map(filled)
 
