@@ -91,6 +91,12 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         guard let self, let button = statusItem.button else { return nil }
         return origin(under: button, size: size)
     }
+    private lazy var hoverPreview = HoverPreviewPanel(model: model) { [weak self] size in
+        guard let self, let button = statusItem.button else { return nil }
+        return origin(under: button, size: size)
+    }
+    /// Set by a click so the preview stays away until the pointer leaves.
+    private var isHoverDismissed = false
 
     init(
         model: AppModel,
@@ -111,6 +117,7 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         configureMenu()
         observeStatus()
         observeNotice()
+        observePointer()
         model.onAutomaticSwitch = { [weak self] in self?.showSwitchNotice($0) }
         // Launch with `--args -previewNotices YES` to see both notices without
         // changing any hardware.
@@ -222,16 +229,17 @@ final class StatusItemController: NSObject, NSWindowDelegate {
     private func updateStatus() {
         labelView.layoutSubtreeIfNeeded()
         statusItem.length = ceil(labelView.fittingSize.width)
+        // Sighted users get the hover preview instead, which names the
+        // devices behind the glyphs.
         statusItem.button?.setAccessibilityValue(statusDescription)
-        // Sighted users get the same wording on hover, so the warning glyph
-        // does not have to carry the explanation by itself.
-        statusItem.button?.toolTip = statusDescription
         if panel.isVisible, let button = statusItem.button {
             positionPanel(relativeTo: button)
         }
     }
 
     @objc private func handleClick() {
+        isHoverDismissed = true
+        hideHoverPreview()
         let action: StatusItemClickAction
         if let event = NSApp.currentEvent,
            ProcessInfo.processInfo.systemUptime - event.timestamp < 1,
@@ -336,6 +344,45 @@ final class StatusItemController: NSObject, NSWindowDelegate {
             size: size,
             visibleFrame: screen.visibleFrame
         )
+    }
+
+    /// Follows the pointer across the whole screen rather than through a
+    /// tracking area, which never fires for a pointer sliding in along the
+    /// screen's top edge. Moves over other apps arrive through the global
+    /// monitor and moves over this app's own windows through the local one.
+    private func observePointer() {
+        NSEvent.addGlobalMonitorForEvents(matching: .mouseMoved) { [weak self] _ in
+            MainActor.assumeIsolated { self?.updateHoverPreview() }
+        }
+        NSEvent.addLocalMonitorForEvents(matching: .mouseMoved) { [weak self] event in
+            self?.updateHoverPreview()
+            return event
+        }
+    }
+
+    private func updateHoverPreview() {
+        guard isPointInHoverColumn(NSEvent.mouseLocation) else {
+            isHoverDismissed = false
+            hideHoverPreview()
+            return
+        }
+        guard !isHoverDismissed, !panel.isVisible, !hoverPreview.isVisible else { return }
+        notice.isSuppressed = true
+        hoverPreview.show()
+    }
+
+    /// The status item's window from the bottom of the menu bar up through
+    /// the screen's top edge, where the pointer reports a point just outside
+    /// the window.
+    private func isPointInHoverColumn(_ point: NSPoint) -> Bool {
+        guard let frame = statusItem.button?.window?.frame else { return false }
+        return point.x >= frame.minX && point.x < frame.maxX && point.y >= frame.minY
+    }
+
+    private func hideHoverPreview() {
+        guard hoverPreview.isVisible else { return }
+        hoverPreview.hide()
+        notice.isSuppressed = panel.isVisible
     }
 
     private func observeNotice() {
