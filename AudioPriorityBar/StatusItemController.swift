@@ -210,6 +210,7 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         withObservationTracking {
             _ = statusDescription
             _ = model.outlinesMenuBarIcon
+            _ = model.showsInputAndOutputIcons
         } onChange: { [weak self] in
             Task { @MainActor [weak self] in
                 self?.updateStatus()
@@ -415,32 +416,36 @@ private struct StatusLabel: View {
 
     var body: some View {
         HStack(spacing: 2) {
-            Text("in:")
-                .padding(.leading, 4)
-            // Every possible glyph sits hidden underneath, so the item keeps
-            // the widest one's width instead of resizing as the device
-            // changes.
-            ZStack {
-                ForEach(Self.reservedInputIcons, id: \.self) {
-                    Image(systemName: $0).hidden()
+            if model.showsInputAndOutputIcons {
+                Text("in:")
+                    .padding(.leading, 4)
+                // Every possible glyph sits hidden underneath, so the item
+                // keeps the widest one's width instead of resizing as the
+                // device changes.
+                ZStack {
+                    ForEach(Self.reservedInputIcons, id: \.self) {
+                        Image(systemName: $0).hidden()
+                    }
+                    if model.isActiveInputMuted {
+                        mutedMicrophone
+                    } else {
+                        Image(systemName: Self.filled(inputIcon))
+                    }
                 }
-                if model.isActiveInputMuted {
-                    Image(systemName: "mic.slash.fill")
-                        .opacity(reduceMotion || model.micFlashState ? 1 : 0.45)
-                } else {
-                    Image(systemName: Self.filled(inputIcon))
-                }
+
+                Text("out:")
+                    .padding(.leading, 4)
+            } else if model.isActiveInputMuted {
+                mutedMicrophone
             }
 
-            Text("out:")
-                .padding(.leading, 4)
             ZStack {
                 ForEach(Self.reservedOutputIcons, id: \.self) {
                     Image(systemName: $0).hidden()
                 }
                 if model.isActiveOutputMuted {
                     Image(systemName: "speaker.slash.fill")
-                        .opacity(0.45)
+                        .opacity(model.showsInputAndOutputIcons ? 0.45 : 1)
                 } else if let hardwareIcon {
                     Image(systemName: Self.filled(hardwareIcon))
                 } else if !model.isVolumeControllable {
@@ -476,6 +481,11 @@ private struct StatusLabel: View {
         }
         .padding(.horizontal, 1)
         .accessibilityHidden(true)
+    }
+
+    private var mutedMicrophone: some View {
+        Image(systemName: "mic.slash.fill")
+            .opacity(reduceMotion || model.micFlashState ? 1 : 0.45)
     }
 
     /// The current output's hardware icon, or nil for a generic speaker,

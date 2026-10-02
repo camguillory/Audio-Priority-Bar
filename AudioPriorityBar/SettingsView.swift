@@ -91,6 +91,14 @@ struct SettingsView: View {
                     Text("Outline the menu bar icon")
                     Text("Tells it apart from the Sound icon, which shows the same device.")
                 }
+
+                Toggle(isOn: Binding(
+                    get: { model.showsInputAndOutputIcons },
+                    set: { model.setShowsInputAndOutputIcons($0) }
+                )) {
+                    Text("Show the microphone and the output")
+                    Text("Show both devices in the menu bar, not just the output.")
+                }
             }
 
             Section("Updates") {

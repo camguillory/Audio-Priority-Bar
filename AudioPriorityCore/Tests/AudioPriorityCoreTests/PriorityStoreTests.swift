@@ -390,6 +390,15 @@ func menuBarOutlineIsOffUntilTurnedOn() throws {
     }
 }
 
+@Test
+func menuBarInputIconIsOffUntilTurnedOn() throws {
+    try withDefaults { defaults in
+        #expect(!PriorityStore(defaults: defaults).showsInputAndOutputIcons)
+        PriorityStore(defaults: defaults).showsInputAndOutputIcons = true
+        #expect(PriorityStore(defaults: defaults).showsInputAndOutputIcons)
+    }
+}
+
 private func monitor(
     _ uid: String = "dell",
     _ name: String = "DELL U2518D"

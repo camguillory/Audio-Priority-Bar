@@ -41,6 +41,11 @@ extension AppModel {
         store.outlinesMenuBarIcon = enabled
     }
 
+    func setShowsInputAndOutputIcons(_ enabled: Bool) {
+        showsInputAndOutputIcons = enabled
+        store.showsInputAndOutputIcons = enabled
+    }
+
     func setMicrophoneMuted(_ muted: Bool) {
         isMicrophoneMuted = muted
         refreshMute()
