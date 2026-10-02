@@ -391,11 +391,13 @@ func menuBarOutlineIsOffUntilTurnedOn() throws {
 }
 
 @Test
-func menuBarInputIconIsOffUntilTurnedOn() throws {
+func menuBarShowsOnlyTheOutputUntilChanged() throws {
     try withDefaults { defaults in
-        #expect(!PriorityStore(defaults: defaults).showsInputAndOutputIcons)
-        PriorityStore(defaults: defaults).showsInputAndOutputIcons = true
-        #expect(PriorityStore(defaults: defaults).showsInputAndOutputIcons)
+        #expect(PriorityStore(defaults: defaults).menuBarDevices == .outputOnly)
+        PriorityStore(defaults: defaults).menuBarDevices = .bothLabeled
+        #expect(PriorityStore(defaults: defaults).menuBarDevices == .bothLabeled)
+        defaults.set("unknown", forKey: "menuBarDevices")
+        #expect(PriorityStore(defaults: defaults).menuBarDevices == .outputOnly)
     }
 }
 

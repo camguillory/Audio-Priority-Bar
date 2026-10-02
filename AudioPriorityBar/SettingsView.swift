@@ -1,4 +1,5 @@
 import AppKit
+import AudioPriorityCore
 import ServiceManagement
 import SwiftUI
 
@@ -92,12 +93,16 @@ struct SettingsView: View {
                     Text("Tells it apart from the Sound icon, which shows the same device.")
                 }
 
-                Toggle(isOn: Binding(
-                    get: { model.showsInputAndOutputIcons },
-                    set: { model.setShowsInputAndOutputIcons($0) }
+                Picker(selection: Binding(
+                    get: { model.menuBarDevices },
+                    set: { model.setMenuBarDevices($0) }
                 )) {
-                    Text("Show the microphone and the output")
-                    Text("Show both devices in the menu bar, not just the output.")
+                    Text("Output only").tag(MenuBarDevices.outputOnly)
+                    Text("Both").tag(MenuBarDevices.both)
+                    Text("Both, labeled").tag(MenuBarDevices.bothLabeled)
+                } label: {
+                    Text("Menu bar icon shows")
+                    Text("Both adds the microphone. Labels help when the two icons look alike.")
                 }
             }
 

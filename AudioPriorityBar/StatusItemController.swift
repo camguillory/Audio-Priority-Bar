@@ -210,7 +210,7 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         withObservationTracking {
             _ = statusDescription
             _ = model.outlinesMenuBarIcon
-            _ = model.showsInputAndOutputIcons
+            _ = model.menuBarDevices
         } onChange: { [weak self] in
             Task { @MainActor [weak self] in
                 self?.updateStatus()
@@ -416,9 +416,11 @@ private struct StatusLabel: View {
 
     var body: some View {
         HStack(spacing: 2) {
-            if model.showsInputAndOutputIcons {
-                Text("in:")
-                    .padding(.leading, 4)
+            if model.menuBarDevices != .outputOnly {
+                if isLabeled {
+                    Text("in:")
+                        .padding(.leading, 4)
+                }
                 // Every possible glyph sits hidden underneath, so the item
                 // keeps the widest one's width instead of resizing as the
                 // device changes.
@@ -432,9 +434,10 @@ private struct StatusLabel: View {
                         Image(systemName: Self.filled(inputIcon))
                     }
                 }
-
-                Text("out:")
-                    .padding(.leading, 4)
+                if isLabeled {
+                    Text("out:")
+                        .padding(.leading, 4)
+                }
             } else if model.isActiveInputMuted {
                 mutedMicrophone
             }
@@ -445,7 +448,6 @@ private struct StatusLabel: View {
                 }
                 if model.isActiveOutputMuted {
                     Image(systemName: "speaker.slash.fill")
-                        .opacity(model.showsInputAndOutputIcons ? 0.45 : 1)
                 } else if let hardwareIcon {
                     Image(systemName: Self.filled(hardwareIcon))
                 } else if !model.isVolumeControllable {
@@ -482,6 +484,8 @@ private struct StatusLabel: View {
         .padding(.horizontal, 1)
         .accessibilityHidden(true)
     }
+
+    private var isLabeled: Bool { model.menuBarDevices == .bothLabeled }
 
     private var mutedMicrophone: some View {
         Image(systemName: "mic.slash.fill")
