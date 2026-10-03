@@ -861,3 +861,17 @@ func aMicrophoneWithNeitherMuteNorLevelCannotBeMuted() {
     #expect(!model.isMicrophoneLevelControllable)
     #expect(!model.isMicrophoneMutable)
 }
+
+@Test
+@MainActor
+func anOutputWithNeitherVolumeNorMuteCannotBeControlled() {
+    let audio = FakeAudio()
+    audio.catalog = [output(1, "scarlett", "Scarlett Solo USB")]
+    audio.defaults = [.output: 1]
+    audio.noMuteProperty = [1]
+    let model = testModel(audio: audio, defaults: isolatedDefaults())
+    model.start()
+
+    #expect(!model.isVolumeControllable)
+    #expect(!model.isOutputMutable)
+}
