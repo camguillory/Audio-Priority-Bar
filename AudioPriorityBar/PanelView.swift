@@ -7,6 +7,11 @@ struct PanelView: View {
     @Bindable var model: AppModel
     let showSettings: () -> Void
 
+    /// The AirPods page, which holds their Connect to This Mac setting.
+    private static let headphoneSettingsURL = URL(
+        string: "x-apple.systempreferences:com.apple.HeadphoneSettings"
+    )!
+
     /// Held here rather than per section so a row can be dragged between lists.
     @State private var drag: DeviceDrag?
     /// The id of the device whose row should show a highlight because the
@@ -61,7 +66,21 @@ struct PanelView: View {
                     .toggleStyle(.switch)
                 }
                 .help("Use device priorities as availability changes")
-                if let automationNote {
+                if let takeover = model.takeoverDevice {
+                    HStack(spacing: 6) {
+                        Text("macOS keeps switching to \(takeover.name)")
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                        if takeover.isBluetooth {
+                            Button("Fix in Settings…") {
+                                NSWorkspace.shared.open(Self.headphoneSettingsURL)
+                            }
+                            .buttonStyle(.link)
+                            .help("Under Connect to This Mac, choose When Last Connected to This Mac")
+                        }
+                    }
+                    .font(.caption)
+                } else if let automationNote {
                     Text(automationNote)
                         .font(.caption)
                         .foregroundStyle(.secondary)

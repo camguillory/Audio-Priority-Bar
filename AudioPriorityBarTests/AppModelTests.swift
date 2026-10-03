@@ -419,6 +419,59 @@ func anUnlockedOutputIsLeftToOtherApps() {
 
 @Test
 @MainActor
+func macOSTakingTheOutputAgainAfterASwitchBackIsLeftAndNamed() {
+    let defaults = isolatedDefaults()
+    let store = PriorityStore(defaults: defaults)
+    store.isManualMode = true
+    let speaker = output(1, "speaker")
+    let airPods = output(2, "airpods", "AirPods Pro")
+    let audio = FakeAudio()
+    audio.catalog = [speaker, airPods]
+    audio.defaults[.output] = speaker.platformID
+    let model = testModel(audio: audio, defaults: defaults)
+    model.start()
+
+    // Smart Routing retries about 4 seconds after each switch back.
+    for _ in 0..<3 {
+        audio.defaults[.output] = airPods.platformID
+        model.handleDefaultChanged(.output)
+    }
+
+    #expect(audio.selections.map(\.1) == [speaker.platformID])
+    #expect(model.takeoverDevice?.uid == airPods.uid)
+
+    model.selectManually(speaker)
+
+    #expect(model.takeoverDevice == nil)
+    #expect(model.currentOutputID == speaker.platformID)
+}
+
+@Test
+@MainActor
+func automaticModeKeepsAMicrophoneMacOSTakesAgainAfterASwitchBack() {
+    let defaults = isolatedDefaults()
+    let store = PriorityStore(defaults: defaults)
+    let airPods = output(1, "airpods-out", "AirPods Pro")
+    let airPodsMic = input(2, "airpods-in", "AirPods Pro")
+    let scarlett = input(3, "scarlett", "Scarlett Solo USB")
+    store.savePriorities([scarlett, airPodsMic], role: .input)
+    let audio = FakeAudio()
+    audio.catalog = [airPods, airPodsMic, scarlett]
+    let model = testModel(audio: audio, defaults: defaults)
+    model.start()
+
+    for _ in 0..<3 {
+        audio.defaults[.input] = airPodsMic.platformID
+        model.handleDefaultChanged(.input)
+    }
+
+    #expect(!model.isManualMode)
+    #expect(model.currentInputID == airPodsMic.platformID)
+    #expect(model.takeoverDevice?.uid == airPodsMic.uid)
+}
+
+@Test
+@MainActor
 func outputMovingBeforeTheDisconnectArrivesKeepsAutomaticOn() {
     let defaults = isolatedDefaults()
     let audio = FakeAudio()

@@ -6,6 +6,8 @@ extension AppModel {
         isManualMode = enabled
         store.isManualMode = enabled
         keptPicks = [:]
+        switchedBackAt = [:]
+        takeoverUIDs = [:]
         if !enabled {
             applyHighestPriorityDevices()
         }

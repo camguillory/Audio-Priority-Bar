@@ -171,6 +171,11 @@ priority, and the active one is highlighted.
 - With automatic switching off, click the lock beside the output or microphone
   level to let macOS and other apps change that device. Click it again to keep
   your choice.
+- If macOS takes the device again right after a switch back, as AirPods in
+  your ears can, Audio Priority Bar leaves it and names it in the panel.
+  **Fix in Settings** opens the AirPods settings, where choosing **When Last
+  Connected to This Mac** under **Connect to This Mac** stops them switching
+  on their own.
 - With **Select headset input and output together** enabled, choosing
   either half of a physical USB headset selects the other too.
 
