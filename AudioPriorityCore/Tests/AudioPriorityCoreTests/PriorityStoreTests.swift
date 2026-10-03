@@ -396,6 +396,10 @@ func menuBarVolumeIsOffUntilTurnedOn() throws {
         #expect(!PriorityStore(defaults: defaults).showsMenuBarVolume)
         PriorityStore(defaults: defaults).showsMenuBarVolume = true
         #expect(PriorityStore(defaults: defaults).showsMenuBarVolume)
+    }
+}
+
+@Test
 func locksAreOnUntilTurnedOff() throws {
     try withDefaults { defaults in
         let store = PriorityStore(defaults: defaults)
