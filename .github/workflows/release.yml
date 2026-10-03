@@ -40,6 +40,10 @@ jobs:
             exit 1
           fi
           git show-ref --verify --quiet "refs/tags/$TAG"
+          if ! git merge-base --is-ancestor "refs/tags/$TAG^{commit}" origin/main; then
+            echo "$TAG is not on main. Promote it through the release pull request first." >&2
+            exit 1
+          fi
           if gh release view "$TAG" >/dev/null 2>&1; then
             echo "A release already exists for $TAG." >&2
             exit 1
@@ -47,6 +51,16 @@ jobs:
           git checkout --detach "refs/tags/$TAG"
           version="${TAG#v}"
           echo "VERSION=${version%%-*}" >> "$GITHUB_ENV"
+
+      - name: Validate release notes
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          notes=".github/release-notes/$TAG.md"
+          if [[ ! -s "$notes" ]]; then
+            echo "Missing release notes: $notes" >&2
+            exit 1
+          fi
 
       - name: Test core
         run: swift test --package-path AudioPriorityCore
@@ -97,16 +111,6 @@ jobs:
           # keep rising from one release to the next.
           scripts/package-release.sh "$VERSION" "$GITHUB_RUN_NUMBER"
           test -s release/appcast.xml
-
-      - name: Validate release notes
-        env:
-          TAG: ${{ inputs.tag }}
-        run: |
-          notes=".github/release-notes/$TAG.md"
-          if [[ ! -s "$notes" ]]; then
-            echo "Missing release notes: $notes" >&2
-            exit 1
-          fi
 
       - name: Create release draft
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
