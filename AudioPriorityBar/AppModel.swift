@@ -77,6 +77,8 @@ final class AppModel {
     var outlinesMenuBarIcon: Bool
     var menuBarDevices: MenuBarDevices
     var showsMenuBarVolume: Bool
+    var locksOutput: Bool
+    var locksInput: Bool
     /// Called with the devices Automatic mode just switched to because the
     /// hardware changed, output first. Never for the user's own choices.
     var onAutomaticSwitch: (([AudioDevice]) -> Void)?
@@ -100,9 +102,16 @@ final class AppModel {
     /// Keeps "Output only" intact when CoreAudio echoes our own default change.
     /// Held by UID because platform IDs are recycled across devices.
     var selectedOnlyOutputUID: String?
-    /// Devices picked in Control Center or Sound Settings, by role and UID.
-    /// Automatic mode keeps them until a device connects or disconnects.
+    /// Devices picked in Control Center or Sound Settings, or that macOS keeps
+    /// switching to, by role and UID. Automatic mode keeps them until a device
+    /// connects or disconnects.
     var keptPicks: [DeviceRole: String] = [:]
+    /// When the app last switched each role back after macOS or another app
+    /// moved it.
+    var switchedBackAt: [DeviceRole: TimeInterval] = [:]
+    /// The device macOS moved each role to again soon after a switch back, by
+    /// UID. The app leaves it there and names it in the panel.
+    var takeoverUIDs: [DeviceRole: String] = [:]
     private let isUserPicking: () -> Bool
     /// Bumped on every Jabra link verdict so `linkState(for:)` is part of the
     /// Observation graph. `link.state` itself lives outside `@Observable`, so
@@ -134,6 +143,8 @@ final class AppModel {
         outlinesMenuBarIcon = store.outlinesMenuBarIcon
         menuBarDevices = store.menuBarDevices
         showsMenuBarVolume = store.showsMenuBarVolume
+        locksOutput = store.locksOutput
+        locksInput = store.locksInput
     }
 
     func start() {
@@ -200,6 +211,7 @@ final class AppModel {
         let before = currentUIDs
         let previousID = role == .input ? currentInputID : currentOutputID
         let previousUID = previousID.flatMap { connectedUIDsByID[role]?[$0] }
+        let previousDevice = role == .input ? currentInputDevice : currentOutputDevice
         let previousUIDs = role == .input
             ? connectedInputUIDs
             : connectedOutputUIDs
@@ -214,17 +226,6 @@ final class AppModel {
             refreshMute()
             return
         }
-        if isManualMode {
-            if role == .output {
-                let output = currentOutputDevice
-                if output?.uid != selectedOnlyOutputUID {
-                    selectedOnlyOutputUID = nil
-                    if let output { selectPairedDevice(of: output) }
-                }
-            }
-            refreshMute()
-            return
-        }
         // CoreAudio does not report whether a default changed because of the
         // user or topology; disappearing and newly-current devices identify topology.
         let topologyExplainsChange =
@@ -235,6 +236,29 @@ final class AppModel {
                     && ProcessInfo.processInfo.systemUptime
                         - (topologyChangedAt[role] ?? 0) < 2
             } == true
+        if isManualMode {
+            if !topologyExplainsChange,
+               role == .input ? locksInput : locksOutput,
+               let previousDevice, let currentUID, previousDevice.uid != currentUID,
+               connectedUIDs.contains(previousDevice.uid),
+               !isUserPicking(),
+               shouldSwitchBack(role, from: currentUID) {
+                // macOS or another app moved it, as when AirPods in the ears
+                // take the output back, so the user's own pick wins.
+                select(previousDevice, includesPairedDevice: false)
+                refreshMute()
+                return
+            }
+            if role == .output {
+                let output = currentOutputDevice
+                if output?.uid != selectedOnlyOutputUID {
+                    selectedOnlyOutputUID = nil
+                    if let output { selectPairedDevice(of: output) }
+                }
+            }
+            refreshMute()
+            return
+        }
         if topologyExplainsChange {
             applyHighestPriorityDevices()
             announceAutomaticSwitches(since: before)
@@ -243,7 +267,7 @@ final class AppModel {
         if let target = automaticTarget(for: role),
            target.platformID != currentID,
            let currentUID {
-            guard isUserPicking() else {
+            guard isUserPicking() || !shouldSwitchBack(role, from: currentUID) else {
                 // macOS or another app moved it, as when AirPods take the
                 // microphone on ear detection, so the list wins.
                 let moved = currentUIDs
@@ -258,6 +282,35 @@ final class AppModel {
             selectPairedDevice(of: output, automatically: !isManualMode)
         }
         refreshMute()
+    }
+
+    /// Whether to switch `role` back from `uid`. AirPods Smart Routing ignores
+    /// a default set through CoreAudio and retries every few seconds, so once
+    /// the same role is taken again soon after a switch back, the app stops
+    /// rather than fight it.
+    private func shouldSwitchBack(_ role: DeviceRole, from uid: String) -> Bool {
+        guard takeoverUIDs[role] != uid else { return false }
+        let now = ProcessInfo.processInfo.systemUptime
+        // ponytail: a fixed 30 s window. A retry slower than that still loops,
+        // at its own pace; counting retries per pick would close that.
+        if let last = switchedBackAt[role], now - last < 30 {
+            takeoverUIDs[role] = uid
+            return false
+        }
+        switchedBackAt[role] = now
+        return true
+    }
+
+    /// The device macOS keeps switching to, while it is still current, output
+    /// first.
+    var takeoverDevice: AudioDevice? {
+        if let output = currentOutputDevice, takeoverUIDs[.output] == output.uid {
+            return output
+        }
+        if let input = currentInputDevice, takeoverUIDs[.input] == input.uid {
+            return input
+        }
+        return nil
     }
 
     func handleMuteOrVolumeChanged() {
@@ -277,6 +330,8 @@ final class AppModel {
         let outputUIDs = Set(connected.lazy.filter { $0.role == .output }.map(\.uid))
         if inputUIDs != connectedInputUIDs || outputUIDs != connectedOutputUIDs {
             keptPicks = [:]
+            switchedBackAt = [:]
+            takeoverUIDs = [:]
         }
         connectedInputUIDs = inputUIDs
         connectedOutputUIDs = outputUIDs

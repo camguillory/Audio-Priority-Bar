@@ -431,7 +431,8 @@ func selectOnlyOutputSurvivesItsDefaultChangeEcho() {
     audio.catalog = [paired.output, paired.input, speaker, macMic]
     audio.defaults[.output] = speaker.platformID
     audio.defaults[.input] = macMic.platformID
-    let model = testModel(audio: audio, defaults: defaults)
+    // The later changes are the user's own, made in Sound Settings.
+    let model = testModel(audio: audio, defaults: defaults, isUserPicking: { true })
     model.start()
 
     model.selectOnly(paired.output)

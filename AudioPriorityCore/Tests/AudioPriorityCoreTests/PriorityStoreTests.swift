@@ -400,6 +400,17 @@ func menuBarVolumeIsOffUntilTurnedOn() throws {
 }
 
 @Test
+func locksAreOnUntilTurnedOff() throws {
+    try withDefaults { defaults in
+        let store = PriorityStore(defaults: defaults)
+        #expect(store.locksOutput && store.locksInput)
+        store.locksOutput = false
+        #expect(!PriorityStore(defaults: defaults).locksOutput)
+        #expect(PriorityStore(defaults: defaults).locksInput)
+    }
+}
+
+@Test
 func menuBarShowsOnlyTheOutputUntilChanged() throws {
     try withDefaults { defaults in
         #expect(PriorityStore(defaults: defaults).menuBarDevices == .outputOnly)
