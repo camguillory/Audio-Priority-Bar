@@ -218,6 +218,7 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         withObservationTracking {
             _ = statusDescription
             _ = model.outlinesMenuBarIcon
+            _ = model.menuBarDevices
         } onChange: { [weak self] in
             Task { @MainActor [weak self] in
                 self?.updateStatus()
@@ -478,15 +479,34 @@ private struct StatusLabel: View {
 
     var body: some View {
         HStack(spacing: 2) {
-            if model.isActiveInputMuted {
-                Image(systemName: "mic.slash.fill")
-                    .opacity(reduceMotion || model.micFlashState ? 1 : 0.45)
+            if model.menuBarDevices != .outputOnly {
+                if isLabeled {
+                    Text("in:")
+                        .padding(.leading, 4)
+                }
+                // Every possible glyph sits hidden underneath, so the item
+                // keeps the widest one's width instead of resizing as the
+                // device changes.
+                ZStack {
+                    ForEach(Self.reservedInputIcons, id: \.self) {
+                        Image(systemName: $0).hidden()
+                    }
+                    if model.isActiveInputMuted {
+                        mutedMicrophone
+                    } else {
+                        Image(systemName: Self.filled(inputIcon))
+                    }
+                }
+                if isLabeled {
+                    Text("out:")
+                        .padding(.leading, 4)
+                }
+            } else if model.isActiveInputMuted {
+                mutedMicrophone
             }
-            // Every possible output glyph sits hidden underneath, so the item
-            // keeps the widest one's width instead of resizing as the output
-            // changes.
+
             ZStack {
-                ForEach(Self.reservedIcons, id: \.self) {
+                ForEach(Self.reservedOutputIcons, id: \.self) {
                     Image(systemName: $0).hidden()
                 }
                 if model.isActiveOutputMuted {
@@ -528,6 +548,13 @@ private struct StatusLabel: View {
         .accessibilityHidden(true)
     }
 
+    private var isLabeled: Bool { model.menuBarDevices == .bothLabeled }
+
+    private var mutedMicrophone: some View {
+        Image(systemName: "mic.slash.fill")
+            .opacity(reduceMotion || model.micFlashState ? 1 : 0.45)
+    }
+
     /// The current output's hardware icon, or nil for a generic speaker,
     /// which shows the volume level instead. Falls back to the category
     /// while no output is known.
@@ -538,7 +565,17 @@ private struct StatusLabel: View {
         return icon == AudioDevice.genericSpeakerIcon ? nil : icon
     }
 
-    private static let reservedIcons = (
+    /// The current input's hardware icon, or a plain microphone while no
+    /// input is known.
+    private var inputIcon: String {
+        model.currentInputDevice?.hardwareIcon(category: nil) ?? "mic"
+    }
+
+    private static let reservedInputIcons = (
+        AudioDevice.hardwareIcons + ["mic.slash"]
+    ).map(filled)
+
+    private static let reservedOutputIcons = (
         AudioDevice.hardwareIcons + ["speaker.wave.2", "speaker.slash"]
     ).map(filled)
 

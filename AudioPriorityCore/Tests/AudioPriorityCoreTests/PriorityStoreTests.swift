@@ -390,6 +390,17 @@ func menuBarOutlineIsOffUntilTurnedOn() throws {
     }
 }
 
+@Test
+func menuBarShowsOnlyTheOutputUntilChanged() throws {
+    try withDefaults { defaults in
+        #expect(PriorityStore(defaults: defaults).menuBarDevices == .outputOnly)
+        PriorityStore(defaults: defaults).menuBarDevices = .bothLabeled
+        #expect(PriorityStore(defaults: defaults).menuBarDevices == .bothLabeled)
+        defaults.set("unknown", forKey: "menuBarDevices")
+        #expect(PriorityStore(defaults: defaults).menuBarDevices == .outputOnly)
+    }
+}
+
 private func monitor(
     _ uid: String = "dell",
     _ name: String = "DELL U2518D"
