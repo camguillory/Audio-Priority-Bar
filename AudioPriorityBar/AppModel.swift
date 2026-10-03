@@ -200,6 +200,7 @@ final class AppModel {
         let before = currentUIDs
         let previousID = role == .input ? currentInputID : currentOutputID
         let previousUID = previousID.flatMap { connectedUIDsByID[role]?[$0] }
+        let previousDevice = role == .input ? currentInputDevice : currentOutputDevice
         let previousUIDs = role == .input
             ? connectedInputUIDs
             : connectedOutputUIDs
@@ -214,17 +215,6 @@ final class AppModel {
             refreshMute()
             return
         }
-        if isManualMode {
-            if role == .output {
-                let output = currentOutputDevice
-                if output?.uid != selectedOnlyOutputUID {
-                    selectedOnlyOutputUID = nil
-                    if let output { selectPairedDevice(of: output) }
-                }
-            }
-            refreshMute()
-            return
-        }
         // CoreAudio does not report whether a default changed because of the
         // user or topology; disappearing and newly-current devices identify topology.
         let topologyExplainsChange =
@@ -235,6 +225,27 @@ final class AppModel {
                     && ProcessInfo.processInfo.systemUptime
                         - (topologyChangedAt[role] ?? 0) < 2
             } == true
+        if isManualMode {
+            if !topologyExplainsChange,
+               let previousDevice, previousDevice.uid != currentUID,
+               connectedUIDs.contains(previousDevice.uid),
+               !isUserPicking() {
+                // macOS or another app moved it, as when AirPods in the ears
+                // take the output back, so the user's own pick wins.
+                select(previousDevice, includesPairedDevice: false)
+                refreshMute()
+                return
+            }
+            if role == .output {
+                let output = currentOutputDevice
+                if output?.uid != selectedOnlyOutputUID {
+                    selectedOnlyOutputUID = nil
+                    if let output { selectPairedDevice(of: output) }
+                }
+            }
+            refreshMute()
+            return
+        }
         if topologyExplainsChange {
             applyHighestPriorityDevices()
             announceAutomaticSwitches(since: before)
