@@ -7,6 +7,10 @@ struct DeviceRow: View {
         let icon: String, text: String
         /// Carried with the value so restyling never depends on matching copy.
         var tint: Color = .secondary
+        /// Read aloud and shown on hover instead of `text` when the glyph
+        /// carries meaning the text alone does not.
+        var spokenText: String?
+        var description: String { spokenText ?? text }
     }
 
     @Bindable var model: AppModel
@@ -123,7 +127,19 @@ struct DeviceRow: View {
                 tint: .red
             ))
         }
+        result.append(contentsOf: batteryStatuses)
         return result
+    }
+
+    private var batteryStatuses: [Status] {
+        (model.batteryLevels(for: device)?.badges ?? []).map {
+            Status(
+                icon: $0.icon,
+                text: $0.text,
+                tint: $0.isLow ? .orange : .secondary,
+                spokenText: $0.spokenText
+            )
+        }
     }
 
     var body: some View {
@@ -164,7 +180,7 @@ struct DeviceRow: View {
                     .layoutPriority(1)
                 if !statuses.isEmpty {
                     HStack(spacing: 8) {
-                        ForEach(statuses, id: \.text) { status in
+                        ForEach(statuses, id: \.description) { status in
                             Label(status.text, systemImage: status.icon)
                                 .font(.caption)
                                 .foregroundStyle(status.tint)
@@ -172,7 +188,7 @@ struct DeviceRow: View {
                     }
                     .lineLimit(1)
                     .truncationMode(.tail)
-                    .help(statuses.map(\.text).joined(separator: " · "))
+                    .help(statuses.map(\.description).joined(separator: " · "))
                     .accessibilityHidden(true)
                 }
             }
@@ -450,7 +466,7 @@ struct DeviceRow: View {
     private var accessibilityValue: String {
         var values = ["Priority \(index + 1) of \(count)"]
         if isSelected, !isUnavailable { values.append("Active") }
-        values.append(contentsOf: statuses.map(\.text))
+        values.append(contentsOf: statuses.map(\.description))
         // Shown only as strikethrough, so it needs saying here.
         if isNeverUse { values.append("Never auto-select") }
         return values.joined(separator: ", ")

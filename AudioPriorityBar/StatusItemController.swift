@@ -87,6 +87,8 @@ final class StatusItemController: NSObject, NSWindowDelegate {
     /// narrows with its glyphs, like the muted microphone, and re-centering on
     /// it would slide the open panel sideways.
     private var panelAnchorX: CGFloat?
+    /// Rereads AirPods battery levels while the panel stays open.
+    private var batteryTimer: Timer?
     private lazy var notice = NoticePanel { [weak self] size in
         guard let self, let button = statusItem.button else { return nil }
         return origin(under: button, size: size)
@@ -276,6 +278,10 @@ final class StatusItemController: NSObject, NSWindowDelegate {
             $0.convertToScreen(button.convert(button.bounds, to: nil)).midX
         }
         positionPanel(relativeTo: button)
+        model.battery.refresh()
+        batteryTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.model.battery.refresh() }
+        }
         panel.orderFrontRegardless()
         panel.makeKey()
         button.highlight(true)
@@ -314,6 +320,8 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         }
         panel.orderOut(nil)
         panelAnchorX = nil
+        batteryTimer?.invalidate()
+        batteryTimer = nil
         notice.isSuppressed = false
     }
 
