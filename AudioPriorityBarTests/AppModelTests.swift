@@ -14,7 +14,8 @@ final class FakeAudio {
     var failedSelectionRoles: Set<DeviceRole> = []
     var volumeReadCount = 0
     var muteReadCount = 0
-    /// Microphones without a settable mute property, like ZoomAudioDevice.
+    /// Devices without a settable mute property, like ZoomAudioDevice or a
+    /// Scarlett Solo.
     var noMuteProperty: Set<UInt32> = []
     var inputVolumes: [UInt32: Float] = [:]
     var running: Set<UInt32> = []
@@ -836,9 +837,11 @@ func aZeroVolumeMuteShowsTheLevelItWillRestore() {
 func outputMuteTogglesAndRaisingTheVolumeUnmutes() {
     let audio = FakeAudio()
     audio.catalog = [output(1, "speaker")]
+    audio.defaults = [.output: 1]
     audio.volume = 0.43
     let model = testModel(audio: audio, defaults: isolatedDefaults())
     model.start()
+    #expect(model.isOutputMutable)
 
     model.setOutputMuted(true)
     #expect(model.isActiveOutputMuted)
@@ -860,4 +863,18 @@ func aMicrophoneWithNeitherMuteNorLevelCannotBeMuted() {
 
     #expect(!model.isMicrophoneLevelControllable)
     #expect(!model.isMicrophoneMutable)
+}
+
+@Test
+@MainActor
+func anOutputWithNeitherVolumeNorMuteCannotBeControlled() {
+    let audio = FakeAudio()
+    audio.catalog = [output(1, "scarlett", "Scarlett Solo USB")]
+    audio.defaults = [.output: 1]
+    audio.noMuteProperty = [1]
+    let model = testModel(audio: audio, defaults: isolatedDefaults())
+    model.start()
+
+    #expect(!model.isVolumeControllable)
+    #expect(!model.isOutputMutable)
 }

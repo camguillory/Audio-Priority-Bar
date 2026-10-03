@@ -79,6 +79,8 @@ struct PanelView: View {
                     isMuted: model.isActiveOutputMuted,
                     level: model.volume,
                     isControllable: model.isVolumeControllable,
+                    uncontrollableNote: "This device does not allow volume control",
+                    canToggleMute: model.isOutputMutable,
                     toggleMute: { model.setOutputMuted(!model.isActiveOutputMuted) },
                     setLevel: model.setVolume
                 )
@@ -184,15 +186,16 @@ struct PanelView: View {
     }
 
     /// The current output's hardware icon, so it is clear which device the
-    /// slider controls. A generic speaker shows the volume level instead.
+    /// slider controls. A generic speaker shows the volume level instead, or
+    /// full waves when the device has no volume to show.
     private var outputIcon: String {
-        if !model.isVolumeControllable { return "speaker.wave.3.fill" }
         let hardware = model.currentOutputDevice.map {
             $0.hardwareIcon(category: model.activeOutputCategory)
         } ?? (model.activeOutputCategory == .headphone
             ? "headphones"
             : AudioDevice.genericSpeakerIcon)
         guard hardware == AudioDevice.genericSpeakerIcon else { return hardware }
+        if !model.isVolumeControllable { return "speaker.wave.3.fill" }
         return switch model.volume {
         case ...0: "speaker.fill"
         case ..<0.33: "speaker.wave.1.fill"
