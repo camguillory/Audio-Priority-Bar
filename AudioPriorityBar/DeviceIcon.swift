@@ -45,11 +45,13 @@ extension AudioDevice {
         }
 
         if role == .input { return "mic" }
-        if transportType == kAudioDeviceTransportTypeBluetooth
-            || transportType == kAudioDeviceTransportTypeBluetoothLE {
-            return "hifispeaker"
-        }
+        if isBluetooth { return "hifispeaker" }
         return Self.genericSpeakerIcon
+    }
+
+    var isBluetooth: Bool {
+        transportType == kAudioDeviceTransportTypeBluetooth
+            || transportType == kAudioDeviceTransportTypeBluetoothLE
     }
 
     /// The menu bar shows the Mac's own mic and speakers by role, so the two
