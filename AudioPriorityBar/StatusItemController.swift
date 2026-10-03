@@ -511,16 +511,18 @@ private struct StatusLabel: View {
                 }
                 if model.isActiveOutputMuted {
                     Image(systemName: "speaker.slash.fill")
-                } else if let hardwareIcon {
-                    Image(systemName: Self.filled(hardwareIcon))
-                } else if !model.isVolumeControllable {
-                    Image(systemName: "speaker.wave.2.fill")
                 } else {
-                    Image(
-                        systemName: "speaker.wave.2.fill",
-                        variableValue: Double(model.volume)
-                    )
+                    Image(systemName: Self.filled(outputIcon))
                 }
+            }
+
+            // Separate from the output glyph, since most hardware glyphs have
+            // no waves of their own to show the volume level.
+            if !model.isActiveOutputMuted, model.isVolumeControllable {
+                Image(
+                    systemName: "wave.3.right",
+                    variableValue: Double(model.volume)
+                )
             }
 
             // Beside the audio glyph rather than replacing it: that glyph
@@ -555,14 +557,14 @@ private struct StatusLabel: View {
             .opacity(reduceMotion || model.micFlashState ? 1 : 0.45)
     }
 
-    /// The current output's hardware icon, or nil for a generic speaker,
-    /// which shows the volume level instead. Falls back to the category
-    /// while no output is known.
-    private var hardwareIcon: String? {
+    /// The current output's hardware icon, falling back to the category
+    /// while no output is known. The generic speaker drops its waves, which
+    /// the volume indicator beside it already draws.
+    private var outputIcon: String {
         let icon = model.currentOutputDevice.map {
             $0.hardwareIcon(category: model.activeOutputCategory)
-        } ?? (model.activeOutputCategory == .headphone ? "headphones" : nil)
-        return icon == AudioDevice.genericSpeakerIcon ? nil : icon
+        } ?? (model.activeOutputCategory == .headphone ? "headphones" : "speaker")
+        return icon == AudioDevice.genericSpeakerIcon ? "speaker" : icon
     }
 
     /// The current input's hardware icon, or a plain microphone while no
@@ -576,7 +578,7 @@ private struct StatusLabel: View {
     ).map(filled)
 
     private static let reservedOutputIcons = (
-        AudioDevice.hardwareIcons + ["speaker.wave.2", "speaker.slash"]
+        AudioDevice.hardwareIcons + ["speaker", "speaker.slash"]
     ).map(filled)
 
     /// The menu bar uses filled glyphs; not every hardware symbol has one.
