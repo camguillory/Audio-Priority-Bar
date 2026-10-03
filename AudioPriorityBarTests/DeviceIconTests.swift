@@ -120,5 +120,13 @@ func hardwareIconMatchesTheDevice(_ icon: IconCase) {
 
 @Test(arguments: realDevices + branches)
 func hardwareIconsListsEveryIconTheMenuBarMayShow(_ icon: IconCase) {
-    #expect(AudioDevice.hardwareIcons.contains(icon.expected))
+    #expect(AudioDevice.hardwareIcons.contains(icon.device.menuBarIcon(category: icon.category)))
+}
+
+@Test
+func theMenuBarShowsTheMacsOwnDevicesByRole() {
+    #expect(IconCase.input("MacBook Air Microphone", builtIn, "").device
+        .menuBarIcon(category: nil) == "mic")
+    #expect(IconCase.output("MacBook Air Speakers", builtIn, .speaker, "").device
+        .menuBarIcon(category: .speaker) == AudioDevice.genericSpeakerIcon)
 }

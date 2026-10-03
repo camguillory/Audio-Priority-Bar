@@ -76,6 +76,7 @@ final class AppModel {
     var remindsWhenMuted: Bool
     var outlinesMenuBarIcon: Bool
     var menuBarDevices: MenuBarDevices
+    var showsMenuBarVolume: Bool
     /// Called with the devices Automatic mode just switched to because the
     /// hardware changed, output first. Never for the user's own choices.
     var onAutomaticSwitch: (([AudioDevice]) -> Void)?
@@ -129,6 +130,7 @@ final class AppModel {
         remindsWhenMuted = store.remindsWhenMuted
         outlinesMenuBarIcon = store.outlinesMenuBarIcon
         menuBarDevices = store.menuBarDevices
+        showsMenuBarVolume = store.showsMenuBarVolume
     }
 
     func start() {
