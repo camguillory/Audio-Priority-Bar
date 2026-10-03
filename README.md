@@ -75,6 +75,8 @@ list for each kind of device and uses the highest one that is connected.
 - Liquid Glass on macOS 26, VoiceOver support, and keyboard-accessible actions
 - Output volume and microphone level by slider or scroll wheel, with mute and
   availability status
+- AirPods battery levels on their rows, left and right apart when they
+  differ, and the case
 
 **Other**
 
