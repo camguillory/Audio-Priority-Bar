@@ -80,7 +80,10 @@ struct PanelView: View {
                     level: model.volume,
                     isControllable: model.isVolumeControllable,
                     toggleMute: { model.setOutputMuted(!model.isActiveOutputMuted) },
-                    setLevel: model.setVolume
+                    setLevel: model.setVolume,
+                    isLocked: model.locksOutput,
+                    canToggleLock: model.isManualMode,
+                    toggleLock: { model.setLocksOutput(!model.locksOutput) }
                 )
                 if model.currentInputID != nil {
                     LevelControl(
@@ -93,7 +96,10 @@ struct PanelView: View {
                         uncontrollableNote: "This mic does not allow volume control",
                         canToggleMute: model.isMicrophoneMutable,
                         toggleMute: { model.setMicrophoneMuted(!model.isMicrophoneMuted) },
-                        setLevel: model.setMicrophoneLevel
+                        setLevel: model.setMicrophoneLevel,
+                        isLocked: model.locksInput,
+                        canToggleLock: model.isManualMode,
+                        toggleLock: { model.setLocksInput(!model.locksInput) }
                     )
                 }
             }
@@ -208,7 +214,9 @@ struct PanelView: View {
             return "No output selected"
         }
         if model.isManualMode {
-            return "Your choice stays until you turn this on"
+            return model.locksOutput && model.locksInput
+                ? "Your choice stays until you turn this on"
+                : "macOS and other apps can change an unlocked device"
         }
         guard let skipped = model.automaticOutputDecision.skipped,
               skipped.device.id != current.id else {
@@ -244,6 +252,12 @@ private struct LevelControl: View {
     var canToggleMute = true
     let toggleMute: () -> Void
     let setLevel: (Float) -> Void
+    /// Locked, the device stays when macOS or another app changes it.
+    /// Automatic switching already switches back, so it only toggles in
+    /// manual mode.
+    let isLocked: Bool
+    let canToggleLock: Bool
+    let toggleLock: () -> Void
 
     @State private var isHoveringMute = false
 
@@ -274,6 +288,17 @@ private struct LevelControl: View {
             } else {
                 slider
             }
+            Button(action: toggleLock) {
+                Image(systemName: isLocked || !canToggleLock ? "lock.fill" : "lock.open")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(lockStyle)
+                    .frame(width: 18, height: Self.buttonSize)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .disabled(!canToggleLock)
+            .help(lockTitle)
+            .accessibilityLabel(lockTitle)
         }
         .background(ScrollWheelReceiver { delta in
             guard isControllable else { return }
@@ -311,6 +336,18 @@ private struct LevelControl: View {
 
     private var muteTitle: String {
         "\(isMuted ? "Unmute" : "Mute") \(deviceName ?? name)"
+    }
+
+    private var lockTitle: String {
+        guard canToggleLock else { return "Automatic switching already switches back" }
+        return isLocked
+            ? "Let macOS and other apps change \(deviceName ?? name)"
+            : "Keep \(deviceName ?? name) when macOS or another app changes it"
+    }
+
+    private var lockStyle: AnyShapeStyle {
+        guard canToggleLock else { return AnyShapeStyle(.tertiary) }
+        return isLocked ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary)
     }
 
     /// Always filled so the icon reads as a button, and tinted while muted.

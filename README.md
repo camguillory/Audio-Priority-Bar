@@ -41,6 +41,8 @@ list for each kind of device and uses the highest one that is connected.
   microphone
 - One click in the panel picks a device by hand; turn automatic switching back
   on to resume
+- A device you pick stays when macOS or another app changes it, unless you
+  unlock it beside its level
 - A USB headset's input and output are selected together, with per-row
   **Mic only** and **Output only** overrides
 - A brief notice below the menu bar icon shows which device automatic
@@ -159,8 +161,12 @@ priority, and the active one is highlighted.
   priority-based selection.
 - A device you pick in Control Center or Sound Settings stays until a device
   next connects or disconnects, and automatic switching stays on.
-- When macOS or another app changes the device on its own, as AirPods do with
-  the microphone when you put them in, automatic switching switches back.
+- When macOS or another app changes the device on its own, as AirPods do when
+  you put them in, Audio Priority Bar switches back: to your list with
+  automatic switching on, or to the device you picked with it off.
+- With automatic switching off, click the lock beside the output or microphone
+  level to let macOS and other apps change that device. Click it again to keep
+  your choice.
 - With **Select headset input and output together** enabled, choosing
   either half of a physical USB headset selects the other too.
 
