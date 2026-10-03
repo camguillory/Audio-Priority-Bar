@@ -41,6 +41,11 @@ extension AppModel {
         store.outlinesMenuBarIcon = enabled
     }
 
+    func setMenuBarDevices(_ devices: MenuBarDevices) {
+        menuBarDevices = devices
+        store.menuBarDevices = devices
+    }
+
     func setMicrophoneMuted(_ muted: Bool) {
         isMicrophoneMuted = muted
         refreshMute()

@@ -407,7 +407,7 @@ private struct ScrollWheelReceiver: NSViewRepresentable {
 
 /// Matches the menu bar's own menus: Liquid Glass on macOS 26 and later, and
 /// the menu material blurred over whatever is behind the panel before that.
-private struct PanelBackground: ViewModifier {
+struct PanelBackground: ViewModifier {
     private let cornerRadius: CGFloat = 12
 
     private var shape: RoundedRectangle {

@@ -93,6 +93,13 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         guard let self, let button = statusItem.button else { return nil }
         return origin(under: button, size: size)
     }
+    private lazy var hoverPreview = HoverPreviewPanel(model: model) { [weak self] size in
+        guard let self, let button = statusItem.button else { return nil }
+        return origin(under: button, size: size)
+    }
+    /// Set by a click so the preview stays away until the pointer leaves.
+    private var isHoverDismissed = false
+    private var hoverTask: Task<Void, Never>?
 
     init(
         model: AppModel,
@@ -113,6 +120,7 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         configureMenu()
         observeStatus()
         observeNotice()
+        observePointer()
         model.onAutomaticSwitch = { [weak self] in self?.showSwitchNotice($0) }
         // Launch with `--args -previewNotices YES` to see both notices without
         // changing any hardware.
@@ -212,6 +220,7 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         withObservationTracking {
             _ = statusDescription
             _ = model.outlinesMenuBarIcon
+            _ = model.menuBarDevices
         } onChange: { [weak self] in
             Task { @MainActor [weak self] in
                 self?.updateStatus()
@@ -224,16 +233,17 @@ final class StatusItemController: NSObject, NSWindowDelegate {
     private func updateStatus() {
         labelView.layoutSubtreeIfNeeded()
         statusItem.length = ceil(labelView.fittingSize.width)
+        // Sighted users get the hover preview instead, which names the
+        // devices behind the glyphs.
         statusItem.button?.setAccessibilityValue(statusDescription)
-        // Sighted users get the same wording on hover, so the warning glyph
-        // does not have to carry the explanation by itself.
-        statusItem.button?.toolTip = statusDescription
         if panel.isVisible, let button = statusItem.button {
             positionPanel(relativeTo: button)
         }
     }
 
     @objc private func handleClick() {
+        isHoverDismissed = true
+        hideHoverPreview()
         let action: StatusItemClickAction
         if let event = NSApp.currentEvent,
            ProcessInfo.processInfo.systemUptime - event.timestamp < 1,
@@ -346,6 +356,60 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         )
     }
 
+    /// Follows the pointer across the whole screen rather than through a
+    /// tracking area, which never fires for a pointer sliding in along the
+    /// screen's top edge. Moves over other apps arrive through the global
+    /// monitor and moves over this app's own windows through the local one.
+    private func observePointer() {
+        NSEvent.addGlobalMonitorForEvents(matching: .mouseMoved) { [weak self] _ in
+            MainActor.assumeIsolated { self?.updateHoverPreview() }
+        }
+        NSEvent.addLocalMonitorForEvents(matching: .mouseMoved) { [weak self] event in
+            self?.updateHoverPreview()
+            return event
+        }
+    }
+
+    private func updateHoverPreview() {
+        guard isPointInHoverColumn(NSEvent.mouseLocation) else {
+            isHoverDismissed = false
+            hideHoverPreview()
+            return
+        }
+        guard !isHoverDismissed, !panel.isVisible, !hoverPreview.isVisible,
+              hoverTask == nil else { return }
+        // Waits like a tooltip, so sweeping across the menu bar does not
+        // flash the preview.
+        hoverTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(300))
+            guard let self, !Task.isCancelled else { return }
+            hoverTask = nil
+            guard !isHoverDismissed, !panel.isVisible else { return }
+            notice.isSuppressed = true
+            hoverPreview.show()
+        }
+    }
+
+    /// The status item's window from the bottom of the menu bar up through
+    /// the screen's top edge, where the pointer reports a point just outside
+    /// the window. Capped at that edge so a display stacked above does not
+    /// count.
+    private func isPointInHoverColumn(_ point: NSPoint) -> Bool {
+        guard let window = statusItem.button?.window,
+              let screen = window.screen else { return false }
+        let frame = window.frame
+        return point.x >= frame.minX && point.x < frame.maxX
+            && point.y >= frame.minY && point.y <= screen.frame.maxY
+    }
+
+    private func hideHoverPreview() {
+        hoverTask?.cancel()
+        hoverTask = nil
+        guard hoverPreview.isVisible else { return }
+        hoverPreview.hide()
+        notice.isSuppressed = panel.isVisible
+    }
+
     private func observeNotice() {
         withObservationTracking {
             notice.showsMutedReminder = model.remindsWhenMuted
@@ -423,15 +487,34 @@ private struct StatusLabel: View {
 
     var body: some View {
         HStack(spacing: 2) {
-            if model.isActiveInputMuted {
-                Image(systemName: "mic.slash.fill")
-                    .opacity(reduceMotion || model.micFlashState ? 1 : 0.45)
+            if model.menuBarDevices != .outputOnly {
+                if isLabeled {
+                    Text("in:")
+                        .padding(.leading, 4)
+                }
+                // Every possible glyph sits hidden underneath, so the item
+                // keeps the widest one's width instead of resizing as the
+                // device changes.
+                ZStack {
+                    ForEach(Self.reservedInputIcons, id: \.self) {
+                        Image(systemName: $0).hidden()
+                    }
+                    if model.isActiveInputMuted {
+                        mutedMicrophone
+                    } else {
+                        Image(systemName: Self.filled(inputIcon))
+                    }
+                }
+                if isLabeled {
+                    Text("out:")
+                        .padding(.leading, 4)
+                }
+            } else if model.isActiveInputMuted {
+                mutedMicrophone
             }
-            // Every possible output glyph sits hidden underneath, so the item
-            // keeps the widest one's width instead of resizing as the output
-            // changes.
+
             ZStack {
-                ForEach(Self.reservedIcons, id: \.self) {
+                ForEach(Self.reservedOutputIcons, id: \.self) {
                     Image(systemName: $0).hidden()
                 }
                 if model.isActiveOutputMuted {
@@ -473,6 +556,13 @@ private struct StatusLabel: View {
         .accessibilityHidden(true)
     }
 
+    private var isLabeled: Bool { model.menuBarDevices == .bothLabeled }
+
+    private var mutedMicrophone: some View {
+        Image(systemName: "mic.slash.fill")
+            .opacity(reduceMotion || model.micFlashState ? 1 : 0.45)
+    }
+
     /// The current output's hardware icon, or nil for a generic speaker,
     /// which shows the volume level instead. Falls back to the category
     /// while no output is known.
@@ -483,7 +573,17 @@ private struct StatusLabel: View {
         return icon == AudioDevice.genericSpeakerIcon ? nil : icon
     }
 
-    private static let reservedIcons = (
+    /// The current input's hardware icon, or a plain microphone while no
+    /// input is known.
+    private var inputIcon: String {
+        model.currentInputDevice?.hardwareIcon(category: nil) ?? "mic"
+    }
+
+    private static let reservedInputIcons = (
+        AudioDevice.hardwareIcons + ["mic.slash"]
+    ).map(filled)
+
+    private static let reservedOutputIcons = (
         AudioDevice.hardwareIcons + ["speaker.wave.2", "speaker.slash"]
     ).map(filled)
 

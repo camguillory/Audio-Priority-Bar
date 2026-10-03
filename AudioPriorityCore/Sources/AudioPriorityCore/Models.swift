@@ -10,6 +10,14 @@ public enum OutputCategory: String, Codable, CaseIterable, Sendable {
     case headphone
 }
 
+/// Which devices the menu bar icon shows.
+public enum MenuBarDevices: String, CaseIterable, Sendable {
+    case outputOnly
+    /// The microphone, then the output.
+    case both
+    case bothLabeled
+}
+
 public enum LinkState: Equatable, Sendable {
     case up
     case down

@@ -184,3 +184,163 @@ private struct NoticeView: View {
             : AnyShape(Capsule())
     }
 }
+
+/// A click-through window below the menu bar icon, shown while the pointer
+/// rests on it, naming the current microphone and output.
+@MainActor
+final class HoverPreviewPanel {
+    private let window = NSPanel(
+        contentRect: .zero,
+        styleMask: [.borderless, .nonactivatingPanel],
+        backing: .buffered,
+        defer: false
+    )
+    private let host: NSHostingController<HoverPreviewView>
+    private let placement: (NSSize) -> NSPoint?
+
+    var isVisible: Bool { window.isVisible }
+
+    init(model: AppModel, placement: @escaping (NSSize) -> NSPoint?) {
+        self.placement = placement
+        host = NSHostingController(rootView: HoverPreviewView(model: model))
+        // Follows the content, such as a device being renamed or muted while
+        // the preview is up.
+        host.sizingOptions = [.preferredContentSize]
+        window.contentViewController = host
+        // Rounded like the panel's view, so the shadow does not draw a square
+        // around the glass. Matches `PanelBackground`.
+        host.view.wantsLayer = true
+        host.view.layer?.cornerRadius = 12
+        host.view.layer?.cornerCurve = .continuous
+        host.view.layer?.masksToBounds = true
+        window.level = .statusBar
+        window.ignoresMouseEvents = true
+        window.isOpaque = false
+        window.backgroundColor = .clear
+        window.hasShadow = true
+        window.isReleasedWhenClosed = false
+        window.collectionBehavior = [
+            .canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle,
+        ]
+    }
+
+    func show() {
+        host.view.layoutSubtreeIfNeeded()
+        let size = host.view.fittingSize
+        window.setContentSize(size)
+        if let origin = placement(size) { window.setFrameOrigin(origin) }
+        window.orderFrontRegardless()
+    }
+
+    func hide() {
+        window.orderOut(nil)
+    }
+}
+
+private struct HoverPreviewView: View {
+    @Bindable var model: AppModel
+
+    var body: some View {
+        // In the panel's order: its header, then output, then microphone.
+        VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                HStack {
+                    Text("Automatic switching")
+                        .font(.system(size: 13, weight: .semibold))
+                    Spacer(minLength: 16)
+                    Text(model.isManualMode ? "Off" : "On")
+                        .font(.system(size: 13))
+                        .foregroundStyle(.secondary)
+                }
+                // What the tooltip used to explain behind the warning glyph.
+                if model.isActiveOutputLinkDown {
+                    Label("Headset off", systemImage: "exclamationmark.triangle.fill")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            Divider()
+            VStack(alignment: .leading, spacing: 14) {
+                row(
+                    model.currentOutputDevice,
+                    placeholder: "No output",
+                    showsLevel: model.isVolumeControllable,
+                    level: model.volume
+                )
+                row(
+                    model.currentInputDevice,
+                    placeholder: "No microphone",
+                    showsLevel: model.isMicrophoneLevelControllable,
+                    level: model.microphoneLevel
+                )
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.top, 10)
+        .padding(.bottom, 12)
+        .modifier(PanelBackground())
+        .fixedSize()
+    }
+
+    /// Icon, name, and mute status styled as in the device list, with the
+    /// level underneath when the device reports one.
+    @ViewBuilder
+    private func row(
+        _ device: AudioDevice?,
+        placeholder: String,
+        showsLevel: Bool,
+        level: Float
+    ) -> some View {
+        let isMuted = device.map(model.isMuted) ?? false
+        HStack(spacing: 8) {
+            // No circle, unlike the panel's buttons, since nothing here can
+            // be clicked. Muted shows as the panel's mute button does.
+            Image(systemName: isMuted ? mutedIcon(device) : device.map(icon) ?? "questionmark")
+                .font(.system(size: 14))
+                .foregroundStyle(isMuted ? AnyShapeStyle(.red) : AnyShapeStyle(.secondary))
+                .frame(width: 20)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(device?.name ?? placeholder)
+                    .font(.system(size: 13))
+                    .foregroundStyle(device == nil ? .secondary : .primary)
+                    .lineLimit(1)
+                if device != nil, showsLevel {
+                    LevelBar(level: level, isMuted: isMuted)
+                }
+            }
+        }
+    }
+
+    private func mutedIcon(_ device: AudioDevice?) -> String {
+        device?.role == .input ? "mic.slash.fill" : "speaker.slash.fill"
+    }
+
+    private func icon(_ device: AudioDevice) -> String {
+        device.hardwareIcon(
+            category: device.role == .output ? model.store.category(for: device) : nil
+        )
+    }
+}
+
+/// A read-only volume meter, dimmed while muted like the panel's slider.
+/// Drawn in the text color with no thumb or value, so it does not read as a
+/// slider to drag.
+private struct LevelBar: View {
+    let level: Float
+    let isMuted: Bool
+
+    var body: some View {
+        Capsule()
+            .fill(Color.primary.opacity(0.1))
+            .overlay(alignment: .leading) {
+                GeometryReader { proxy in
+                    Capsule()
+                        .fill(.primary)
+                        .frame(width: proxy.size.width * CGFloat(level))
+                }
+            }
+            .clipShape(Capsule())
+            .frame(width: 120, height: 4)
+            .opacity(isMuted ? 0.5 : 1)
+    }
+}
