@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Builds the app. Defaults to a universal Release build signed with the
 # pinned release certificate; pass --dev for a fast local-iteration build
-# (single-arch, Debug, ad-hoc signing).
+# (single-arch, Debug).
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")" && pwd)"
@@ -25,13 +25,11 @@ if [[ "$mode" == dev ]]; then
   app="$root/dist/AudioPriorityBar-dev.app"
   configuration=Debug
   archs=(-arch "$(uname -m)" ONLY_ACTIVE_ARCH=YES)
-  sign=skip
 else
   derived_data="${DERIVED_DATA:-$root/.build/app}"
   app="$root/dist/AudioPriorityBar.app"
   configuration=Release
   archs=(-arch arm64 -arch x86_64 ONLY_ACTIVE_ARCH=NO)
-  sign=pinned
 fi
 
 xcodebuild \
@@ -50,12 +48,6 @@ cp -R \
   "$derived_data/Build/Products/$configuration/AudioPriorityBar.app" \
   "$app"
 
-if [[ "$sign" == pinned ]]; then
-  "$root/scripts/sign-app.sh" "$app"
-else
-  # Local links need an ad-hoc signature to launch; the pinned release
-  # certificate is unnecessary for development.
-  /usr/bin/codesign --force --sign - "$app"
-fi
+"$root/scripts/sign-app.sh" "$app"
 
 echo "Build complete: $app"

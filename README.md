@@ -145,8 +145,8 @@ release certificate when it is in your keychain and ad-hoc otherwise.
 You can also open `AudioPriorityBar.xcodeproj` in Xcode and build with Command-R.
 
 For local development, `./build.sh --dev` builds only your machine's
-architecture in the Debug configuration with ad-hoc signing, which is much
-faster; it writes `dist/AudioPriorityBar-dev.app`.
+architecture in the Debug configuration, which is much faster, and writes
+`dist/AudioPriorityBar-dev.app`, signed the same way.
 
 </details>
 
