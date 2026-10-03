@@ -84,6 +84,7 @@ final class AppModel {
     let store: PriorityStore
     let audio: AudioOperations
     let link: LinkOperations
+    let battery: BluetoothBatteryMonitor
     private let reduceMotion: () -> Bool
     private var mutedRoles: Set<String> = []
     /// The microphone currently carrying `isMicrophoneMuted`, by UID.
@@ -113,6 +114,7 @@ final class AppModel {
         store: PriorityStore = PriorityStore(),
         audio: AudioOperations,
         link: LinkOperations,
+        battery: BluetoothBatteryMonitor = BluetoothBatteryMonitor(read: { nil }),
         reduceMotion: @escaping () -> Bool = {
             NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
         },
@@ -121,6 +123,7 @@ final class AppModel {
         self.store = store
         self.audio = audio
         self.link = link
+        self.battery = battery
         self.reduceMotion = reduceMotion
         self.isUserPicking = isUserPicking
         isManualMode = store.isManualMode
@@ -137,6 +140,7 @@ final class AppModel {
         guard !hasStarted else { return }
         refreshDevices()
         refreshVolume()
+        battery.refresh()
         if !isManualMode {
             applyHighestPriorityDevices()
         } else {
@@ -165,6 +169,9 @@ final class AppModel {
         let oldInputs = connectedInputUIDs
         let oldOutputs = connectedOutputUIDs
         refreshDevices()
+        if connectedInputUIDs != oldInputs || connectedOutputUIDs != oldOutputs {
+            battery.refresh()
+        }
         let additions: [DeviceRole: Set<String>] = [
             .input: connectedInputUIDs.subtracting(oldInputs),
             .output: connectedOutputUIDs.subtracting(oldOutputs),
@@ -480,6 +487,12 @@ final class AppModel {
 
     func isMuted(_ device: AudioDevice) -> Bool {
         mutedRoles.contains(device.roleIdentifier)
+    }
+
+    /// AirPods battery levels, read again when devices come or go and
+    /// whenever the panel opens.
+    func batteryLevels(for device: AudioDevice) -> BatteryLevels? {
+        battery.levels(for: device)
     }
 
     func linkState(for device: AudioDevice) -> LinkState? {

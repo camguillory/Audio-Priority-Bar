@@ -62,6 +62,7 @@ final class AppRuntime {
                 isUsable: { $0.isConnected && jabra.isUsable($0) },
                 state: { jabra.monitoredState(for: $0) }
             ),
+            battery: BluetoothBatteryMonitor(),
             isUserPicking: SystemSoundPicker.isInUse
         )
         updates = UpdateChecker(isIdle: { [weak model] in
