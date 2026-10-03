@@ -520,23 +520,21 @@ private struct StatusLabel: View {
                 }
                 if model.isActiveOutputMuted {
                     Image(systemName: "speaker.slash.fill")
-                } else if model.showsMenuBarVolume {
-                    Image(systemName: Self.filled(hardwareIcon ?? "speaker"))
                 } else if let hardwareIcon {
                     Image(systemName: Self.filled(hardwareIcon))
                 } else if !model.isVolumeControllable {
-                    Image(systemName: "speaker.wave.2.fill")
+                    Image(systemName: "speaker.wave.3.fill")
                 } else {
                     Image(
-                        systemName: "speaker.wave.2.fill",
+                        systemName: "speaker.wave.3.fill",
                         variableValue: Double(model.volume)
                     )
                 }
             }
 
-            // Separate from the output glyph, since most hardware glyphs have
-            // no waves of their own, and reserved so muting keeps the width.
-            if model.showsMenuBarVolume {
+            // Only beside hardware glyphs, which have no waves of their own.
+            // Kept while muted so muting does not change the width.
+            if model.showsMenuBarVolume, hardwareIcon != nil {
                 ZStack {
                     Image(systemName: "wave.3.right").hidden()
                     if !model.isActiveOutputMuted, model.isVolumeControllable {
@@ -601,7 +599,7 @@ private struct StatusLabel: View {
     ).map(filled)
 
     private static let reservedOutputIcons = (
-        AudioDevice.hardwareIcons + ["speaker.wave.2", "speaker.slash"]
+        AudioDevice.hardwareIcons + ["speaker.wave.3", "speaker.slash"]
     ).map(filled)
 
     /// The menu bar uses filled glyphs; not every hardware symbol has one.
