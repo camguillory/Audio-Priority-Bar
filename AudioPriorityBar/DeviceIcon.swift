@@ -33,6 +33,12 @@ extension AudioDevice {
              kAudioDeviceTransportTypeAutoAggregate:
             return "waveform"
         case kAudioDeviceTransportTypeBuiltIn:
+            // macOS names the Mac's own mic and speakers after the model, like
+            // "MacBook Air Microphone". A headphone jack device is also built
+            // in but named "External", so it falls through to the role.
+            if let mac = Self.macIcons.first(where: { name.contains($0.keyword) }) {
+                return mac.icon
+            }
             return role == .input ? "mic" : Self.genericSpeakerIcon
         default:
             break
@@ -46,16 +52,33 @@ extension AudioDevice {
         return Self.genericSpeakerIcon
     }
 
+    /// The menu bar shows the Mac's own mic and speakers by role, so the two
+    /// stay apart when both are shown and the speaker keeps its volume level.
+    func menuBarIcon(category: OutputCategory?) -> String {
+        let icon = hardwareIcon(category: category)
+        guard Self.macIcons.contains(where: { $0.icon == icon }) else { return icon }
+        return role == .input ? "mic" : Self.genericSpeakerIcon
+    }
+
     /// Returned for an output with nothing more specific to show, so the
     /// volume control can swap in its level-based speaker instead.
     static let genericSpeakerIcon = "speaker.wave.2"
 
-    /// Every symbol `hardwareIcon` can return, so the menu bar can reserve
+    /// Every symbol `menuBarIcon` can return, so the menu bar can reserve
     /// room for the widest one.
     static let hardwareIcons = [
         "airpodsmax", "airpodspro", "airpods", "beats.headphones", "iphone",
         "ipad", "web.camera", "display", "airplayaudio", "waveform", "mic",
         "headphones", "hifispeaker", genericSpeakerIcon,
+    ]
+
+    /// Checked in order, so "macbook" wins before any shorter Mac name.
+    private static let macIcons: [(keyword: String, icon: String)] = [
+        ("macbook", "laptopcomputer"),
+        ("imac", "desktopcomputer"),
+        ("mac mini", "macmini"),
+        ("mac studio", "macstudio"),
+        ("mac pro", "macpro.gen3"),
     ]
 
     private static let cameraKeywords = [

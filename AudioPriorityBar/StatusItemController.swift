@@ -221,6 +221,7 @@ final class StatusItemController: NSObject, NSWindowDelegate {
             _ = statusDescription
             _ = model.outlinesMenuBarIcon
             _ = model.menuBarDevices
+            _ = model.showsMenuBarVolume
         } onChange: { [weak self] in
             Task { @MainActor [weak self] in
                 self?.updateStatus()
@@ -519,6 +520,8 @@ private struct StatusLabel: View {
                 }
                 if model.isActiveOutputMuted {
                     Image(systemName: "speaker.slash.fill")
+                } else if model.showsMenuBarVolume {
+                    Image(systemName: Self.filled(hardwareIcon ?? "speaker"))
                 } else if let hardwareIcon {
                     Image(systemName: Self.filled(hardwareIcon))
                 } else if !model.isVolumeControllable {
@@ -528,6 +531,20 @@ private struct StatusLabel: View {
                         systemName: "speaker.wave.2.fill",
                         variableValue: Double(model.volume)
                     )
+                }
+            }
+
+            // Separate from the output glyph, since most hardware glyphs have
+            // no waves of their own, and reserved so muting keeps the width.
+            if model.showsMenuBarVolume {
+                ZStack {
+                    Image(systemName: "wave.3.right").hidden()
+                    if !model.isActiveOutputMuted, model.isVolumeControllable {
+                        Image(
+                            systemName: "wave.3.right",
+                            variableValue: Double(model.volume)
+                        )
+                    }
                 }
             }
 
@@ -568,7 +585,7 @@ private struct StatusLabel: View {
     /// while no output is known.
     private var hardwareIcon: String? {
         let icon = model.currentOutputDevice.map {
-            $0.hardwareIcon(category: model.activeOutputCategory)
+            $0.menuBarIcon(category: model.activeOutputCategory)
         } ?? (model.activeOutputCategory == .headphone ? "headphones" : nil)
         return icon == AudioDevice.genericSpeakerIcon ? nil : icon
     }
@@ -576,7 +593,7 @@ private struct StatusLabel: View {
     /// The current input's hardware icon, or a plain microphone while no
     /// input is known.
     private var inputIcon: String {
-        model.currentInputDevice?.hardwareIcon(category: nil) ?? "mic"
+        model.currentInputDevice?.menuBarIcon(category: nil) ?? "mic"
     }
 
     private static let reservedInputIcons = (

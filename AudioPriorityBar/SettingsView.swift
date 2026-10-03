@@ -104,6 +104,14 @@ struct SettingsView: View {
                     Text("Menu bar icon shows")
                     Text("Both adds the microphone. Labels help when the two icons look alike.")
                 }
+
+                Toggle(isOn: Binding(
+                    get: { model.showsMenuBarVolume },
+                    set: { model.setShowsMenuBarVolume($0) }
+                )) {
+                    Text("Show the volume level")
+                    Text("Adds a level beside the output icon, which AirPods and other device icons cannot show.")
+                }
             }
 
             Section("Updates") {

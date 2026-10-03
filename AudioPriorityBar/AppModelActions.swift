@@ -46,6 +46,11 @@ extension AppModel {
         store.menuBarDevices = devices
     }
 
+    func setShowsMenuBarVolume(_ enabled: Bool) {
+        showsMenuBarVolume = enabled
+        store.showsMenuBarVolume = enabled
+    }
+
     func setMicrophoneMuted(_ muted: Bool) {
         isMicrophoneMuted = muted
         refreshMute()

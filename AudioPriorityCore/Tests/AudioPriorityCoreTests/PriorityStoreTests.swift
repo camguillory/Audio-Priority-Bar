@@ -391,6 +391,15 @@ func menuBarOutlineIsOffUntilTurnedOn() throws {
 }
 
 @Test
+func menuBarVolumeIsOffUntilTurnedOn() throws {
+    try withDefaults { defaults in
+        #expect(!PriorityStore(defaults: defaults).showsMenuBarVolume)
+        PriorityStore(defaults: defaults).showsMenuBarVolume = true
+        #expect(PriorityStore(defaults: defaults).showsMenuBarVolume)
+    }
+}
+
+@Test
 func menuBarShowsOnlyTheOutputUntilChanged() throws {
     try withDefaults { defaults in
         #expect(PriorityStore(defaults: defaults).menuBarDevices == .outputOnly)

@@ -74,8 +74,8 @@ private let realDevices: [IconCase] = [
     .output("PowerConf", usb, .speaker, "speaker.wave.2"),
     .output("Scarlett 2i2 USB", usb, .speaker, "speaker.wave.2"),
     .output("Microsoft Teams Audio", kAudioDeviceTransportTypeVirtual, .speaker, "waveform"),
-    .input("MacBook Air Microphone", builtIn, "mic"),
-    .output("MacBook Air Speakers", builtIn, .speaker, "speaker.wave.2"),
+    .input("MacBook Air Microphone", builtIn, "laptopcomputer"),
+    .output("MacBook Air Speakers", builtIn, .speaker, "laptopcomputer"),
 ]
 
 /// One case for each remaining branch of `hardwareIcon`.
@@ -102,6 +102,15 @@ private let branches: [IconCase] = [
     // The Headphones section decides over the transport too.
     .output("External Headphones", builtIn, .headphone, "headphones"),
     .output("krisp speaker", kAudioDeviceTransportTypeVirtual, .headphone, "headphones"),
+    .output("MacBook Pro Speakers", builtIn, .speaker, "laptopcomputer"),
+    .input("iMac Microphone", builtIn, "desktopcomputer"),
+    .output("Mac mini Speakers", builtIn, .speaker, "macmini"),
+    .output("Mac Studio Speakers", builtIn, .speaker, "macstudio"),
+    .output("Mac Pro Speakers", builtIn, .speaker, "macpro.gen3"),
+    // The headphone jack is built in too, but it is not the Mac itself.
+    .input("External Microphone", builtIn, "mic"),
+    // Only the Mac's own hardware gets its icon, not a device named after it.
+    .output("MacBook Pro Speakers", kAudioDeviceTransportTypeVirtual, .speaker, "waveform"),
 ]
 
 @Test(arguments: realDevices + branches)
@@ -111,5 +120,13 @@ func hardwareIconMatchesTheDevice(_ icon: IconCase) {
 
 @Test(arguments: realDevices + branches)
 func hardwareIconsListsEveryIconTheMenuBarMayShow(_ icon: IconCase) {
-    #expect(AudioDevice.hardwareIcons.contains(icon.expected))
+    #expect(AudioDevice.hardwareIcons.contains(icon.device.menuBarIcon(category: icon.category)))
+}
+
+@Test
+func theMenuBarShowsTheMacsOwnDevicesByRole() {
+    #expect(IconCase.input("MacBook Air Microphone", builtIn, "").device
+        .menuBarIcon(category: nil) == "mic")
+    #expect(IconCase.output("MacBook Air Speakers", builtIn, .speaker, "").device
+        .menuBarIcon(category: .speaker) == AudioDevice.genericSpeakerIcon)
 }
