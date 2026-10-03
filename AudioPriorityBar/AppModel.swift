@@ -53,6 +53,9 @@ final class AppModel {
     var currentOutputID: UInt32?
     var volume: Float = 0
     var isVolumeControllable = true
+    /// The current output has a settable mute property. Some, like TVs and
+    /// audio interfaces, have neither a volume nor a mute.
+    var isOutputMutable = true
     /// The current microphone's input level. While it is muted by zeroing,
     /// this is the level unmuting will restore rather than zero.
     var microphoneLevel: Float = 0
@@ -349,6 +352,7 @@ final class AppModel {
             volume = 0
             isVolumeControllable = false
         }
+        isOutputMutable = currentOutputID.map { audio.canSetMute(.output, $0) } ?? false
         if let id = currentInputID, let level = audio.inputVolume(id) {
             let uid = connectedUIDsByID[.input]?[id]
             let saved = uid.flatMap { store.appliedMicrophoneMutes[$0] }
