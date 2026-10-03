@@ -1,4 +1,5 @@
 import AppKit
+import AudioPriorityCore
 import ServiceManagement
 import SwiftUI
 
@@ -90,6 +91,18 @@ struct SettingsView: View {
                 )) {
                     Text("Outline the menu bar icon")
                     Text("Tells it apart from the Sound icon, which shows the same device.")
+                }
+
+                Picker(selection: Binding(
+                    get: { model.menuBarDevices },
+                    set: { model.setMenuBarDevices($0) }
+                )) {
+                    Text("Output only").tag(MenuBarDevices.outputOnly)
+                    Text("Both").tag(MenuBarDevices.both)
+                    Text("Both, labeled").tag(MenuBarDevices.bothLabeled)
+                } label: {
+                    Text("Menu bar icon shows")
+                    Text("Both adds the microphone. Labels help when the two icons look alike.")
                 }
             }
 
