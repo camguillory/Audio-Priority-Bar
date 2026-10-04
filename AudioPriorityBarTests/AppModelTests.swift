@@ -353,6 +353,36 @@ func airPodsTakingTheOutputBackInManualModeIsSwitchedBack() {
 
 @Test
 @MainActor
+func airPodsTakingBothDevicesAtOnceInManualModeAreBothSwitchedBack() {
+    let defaults = isolatedDefaults()
+    let store = PriorityStore(defaults: defaults)
+    store.isManualMode = true
+    let speaker = output(1, "speaker", "MacBook Air Speakers")
+    let airPods = output(2, "airpods-out", "AirPods Pro")
+    let airPodsMic = input(3, "airpods-in", "AirPods Pro")
+    let scarlett = input(4, "scarlett", "Scarlett Solo USB")
+    let audio = FakeAudio()
+    audio.catalog = [speaker, airPods, airPodsMic, scarlett]
+    audio.defaults[.output] = speaker.platformID
+    audio.defaults[.input] = scarlett.platformID
+    let model = testModel(audio: audio, defaults: defaults)
+    model.start()
+
+    // Seen in a real trace: macOS moves both 3 ms apart, so the input has
+    // already moved when the output's event is handled.
+    audio.defaults[.output] = airPods.platformID
+    audio.defaults[.input] = airPodsMic.platformID
+    model.handleDefaultChanged(.output)
+    model.handleDefaultChanged(.input)
+
+    #expect(model.currentOutputID == speaker.platformID)
+    #expect(model.currentInputID == scarlett.platformID)
+    #expect(audio.defaults[.output] == speaker.platformID)
+    #expect(audio.defaults[.input] == scarlett.platformID)
+}
+
+@Test
+@MainActor
 func aPickInControlCenterStaysInManualMode() {
     let defaults = isolatedDefaults()
     let store = PriorityStore(defaults: defaults)

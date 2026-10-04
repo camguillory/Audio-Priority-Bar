@@ -212,17 +212,20 @@ final class AppModel {
 
     func handleDefaultChanged(_ role: DeviceRole) {
         let before = currentUIDs
-        let previousID = role == .input ? currentInputID : currentOutputID
-        let previousUID = previousID.flatMap { connectedUIDsByID[role]?[$0] }
-        let previousDevice = role == .input ? currentInputDevice : currentOutputDevice
-        let previousUIDs = role == .input
-            ? connectedInputUIDs
-            : connectedOutputUIDs
+        // Both roles, because the refresh below reads both defaults: macOS
+        // moves the output and microphone to AirPods a few milliseconds apart,
+        // so by the microphone's own event it no longer looks moved.
+        let previousUIDs = before
+        let previousDevices: [DeviceRole: AudioDevice] = [
+            .input: currentInputDevice,
+            .output: currentOutputDevice,
+        ].compactMapValues { $0 }
+        let previousConnectedUIDs: [DeviceRole: Set<String>] = [
+            .input: connectedInputUIDs,
+            .output: connectedOutputUIDs,
+        ]
         refreshDevices()
         refreshVolume()
-        let connectedUIDs = role == .input
-            ? connectedInputUIDs
-            : connectedOutputUIDs
         let currentID = role == .input ? currentInputID : currentOutputID
         let currentUID = currentID.flatMap { connectedUIDsByID[role]?[$0] }
         guard hasStarted else {
@@ -231,24 +234,43 @@ final class AppModel {
         }
         // CoreAudio does not report whether a default changed because of the
         // user or topology; disappearing and newly-current devices identify topology.
-        let topologyExplainsChange =
-            previousUID.map { !connectedUIDs.contains($0) } == true
-            || currentUID.map { !previousUIDs.contains($0) } == true
-            || currentUID.map {
-                recentlyAddedUIDs[role]?.contains($0) == true
-                    && ProcessInfo.processInfo.systemUptime
-                        - (topologyChangedAt[role] ?? 0) < 2
-            } == true
+        func topologyExplainsChange(_ role: DeviceRole) -> Bool {
+            let connectedUIDs = role == .input
+                ? connectedInputUIDs
+                : connectedOutputUIDs
+            let currentUID = currentUIDs[role]
+            return previousUIDs[role].map { !connectedUIDs.contains($0) } == true
+                || currentUID.map {
+                    previousConnectedUIDs[role]?.contains($0) == false
+                } == true
+                || currentUID.map {
+                    recentlyAddedUIDs[role]?.contains($0) == true
+                        && ProcessInfo.processInfo.systemUptime
+                            - (topologyChangedAt[role] ?? 0) < 2
+                } == true
+        }
         if isManualMode {
-            if !topologyExplainsChange,
-               role == .input ? locksInput : locksOutput,
-               let previousDevice, let currentUID, previousDevice.uid != currentUID,
-               connectedUIDs.contains(previousDevice.uid),
-               !isUserPicking(),
-               shouldSwitchBack(role, from: currentUID) {
+            var switchedBack = false
+            for movedRole in [role, role == .input ? .output : .input] {
+                let connectedUIDs = movedRole == .input
+                    ? connectedInputUIDs
+                    : connectedOutputUIDs
+                guard !topologyExplainsChange(movedRole),
+                      movedRole == .input ? locksInput : locksOutput,
+                      let previousDevice = previousDevices[movedRole],
+                      let currentUID = currentUIDs[movedRole],
+                      previousDevice.uid != currentUID,
+                      connectedUIDs.contains(previousDevice.uid),
+                      !isUserPicking(),
+                      shouldSwitchBack(movedRole, from: currentUID) else {
+                    continue
+                }
                 // macOS or another app moved it, as when AirPods in the ears
                 // take the output back, so the user's own pick wins.
                 select(previousDevice, includesPairedDevice: false)
+                switchedBack = true
+            }
+            if switchedBack {
                 refreshMute()
                 return
             }
@@ -262,7 +284,7 @@ final class AppModel {
             refreshMute()
             return
         }
-        if topologyExplainsChange {
+        if topologyExplainsChange(role) {
             applyHighestPriorityDevices()
             announceAutomaticSwitches(since: before)
             return
