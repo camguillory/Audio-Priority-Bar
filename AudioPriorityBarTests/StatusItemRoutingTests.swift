@@ -1,7 +1,14 @@
 import AppKit
 import AudioPriorityCore
+import KeyboardShortcuts
 import Testing
 @testable import AudioPriorityBar
+
+@Test
+@MainActor
+func theDefaultMuteShortcutReadsOptionShiftMOnTheCurrentLayout() {
+    #expect(KeyboardShortcuts.Shortcut.optionShiftM?.description == "⌥⇧M")
+}
 
 @Test
 func statusItemRoutesMouseAndAccessibilityEvents() {

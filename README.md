@@ -54,8 +54,8 @@ list for each kind of device and uses the highest one that is connected.
   level
 - Mute the microphone from the right-click menu, or by Option-clicking the
   menu bar icon
-- Set a global shortcut for mute in Settings. It works from any app, with no
-  extra permission
+- Mute with Option-Shift-M from any app, with no extra permission. Change the
+  shortcut in Settings
 - Mute from Shortcuts, Raycast, or a Stream Deck with
   [`audioprioritybar://` URLs](#automation)
 - The mute follows automatic switching to the next microphone, and quitting
