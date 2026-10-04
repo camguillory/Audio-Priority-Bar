@@ -80,8 +80,6 @@ final class AppModel {
     var outlinesMenuBarIcon: Bool
     var menuBarDevices: MenuBarDevices
     var showsMenuBarVolume: Bool
-    var locksOutput: Bool
-    var locksInput: Bool
     /// Called with the devices Automatic mode just switched to because the
     /// hardware changed, output first. Never for the user's own choices.
     var onAutomaticSwitch: (([AudioDevice]) -> Void)?
@@ -146,8 +144,6 @@ final class AppModel {
         outlinesMenuBarIcon = store.outlinesMenuBarIcon
         menuBarDevices = store.menuBarDevices
         showsMenuBarVolume = store.showsMenuBarVolume
-        locksOutput = store.locksOutput
-        locksInput = store.locksInput
     }
 
     func start() {
@@ -256,7 +252,6 @@ final class AppModel {
                     ? connectedInputUIDs
                     : connectedOutputUIDs
                 guard !topologyExplainsChange(movedRole),
-                      movedRole == .input ? locksInput : locksOutput,
                       let previousDevice = previousDevices[movedRole],
                       let currentUID = currentUIDs[movedRole],
                       previousDevice.uid != currentUID,

@@ -427,28 +427,6 @@ func aNewlyConnectedOutputStaysInManualMode() {
 
 @Test
 @MainActor
-func anUnlockedOutputIsLeftToOtherApps() {
-    let defaults = isolatedDefaults()
-    let store = PriorityStore(defaults: defaults)
-    store.isManualMode = true
-    store.locksOutput = false
-    let speaker = output(1, "speaker")
-    let airPods = output(2, "airpods", "AirPods Pro")
-    let audio = FakeAudio()
-    audio.catalog = [speaker, airPods]
-    audio.defaults[.output] = speaker.platformID
-    let model = testModel(audio: audio, defaults: defaults)
-    model.start()
-
-    audio.defaults[.output] = airPods.platformID
-    model.handleDefaultChanged(.output)
-
-    #expect(model.currentOutputID == airPods.platformID)
-    #expect(audio.selections.isEmpty)
-}
-
-@Test
-@MainActor
 func macOSTakingTheOutputAgainAfterASwitchBackIsLeftAndNamed() {
     let defaults = isolatedDefaults()
     let store = PriorityStore(defaults: defaults)

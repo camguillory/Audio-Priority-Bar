@@ -52,17 +52,6 @@ extension AppModel {
         showsMenuBarVolume = enabled
         store.showsMenuBarVolume = enabled
     }
-
-    func setLocksOutput(_ enabled: Bool) {
-        locksOutput = enabled
-        store.locksOutput = enabled
-    }
-
-    func setLocksInput(_ enabled: Bool) {
-        locksInput = enabled
-        store.locksInput = enabled
-    }
-
     func setMicrophoneMuted(_ muted: Bool) {
         isMicrophoneMuted = muted
         refreshMute()

@@ -25,8 +25,6 @@ public final class PriorityStore {
         static let showsSwitchNotice = "showsSwitchNotice"
         static let remindsWhenMuted = "remindsWhenMuted"
         static let outlinesMenuBarIcon = "outlinesMenuBarIcon"
-        static let locksOutput = "locksOutput"
-        static let locksInput = "locksInput"
         static let menuBarDevices = "menuBarDevices"
         static let showsMenuBarVolume = "showsMenuBarVolume"
     }
@@ -181,20 +179,6 @@ public final class PriorityStore {
     public var outlinesMenuBarIcon: Bool {
         get { defaults.bool(forKey: Key.outlinesMenuBarIcon) }
         set { defaults.set(newValue, forKey: Key.outlinesMenuBarIcon) }
-    }
-
-    /// Whether manual mode switches the output back when macOS or another
-    /// app changes it.
-    public var locksOutput: Bool {
-        get { defaults.object(forKey: Key.locksOutput) as? Bool ?? true }
-        set { defaults.set(newValue, forKey: Key.locksOutput) }
-    }
-
-    /// Whether manual mode switches the microphone back when macOS or
-    /// another app changes it.
-    public var locksInput: Bool {
-        get { defaults.object(forKey: Key.locksInput) as? Bool ?? true }
-        set { defaults.set(newValue, forKey: Key.locksInput) }
     }
 
     public var menuBarDevices: MenuBarDevices {
