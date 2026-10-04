@@ -6,6 +6,8 @@ extension AppModel {
         isManualMode = enabled
         store.isManualMode = enabled
         keptPicks = [:]
+        switchedBackAt = [:]
+        takeoverUIDs = [:]
         if !enabled {
             applyHighestPriorityDevices()
         }
@@ -50,7 +52,6 @@ extension AppModel {
         showsMenuBarVolume = enabled
         store.showsMenuBarVolume = enabled
     }
-
     func setMicrophoneMuted(_ muted: Bool) {
         isMicrophoneMuted = muted
         refreshMute()

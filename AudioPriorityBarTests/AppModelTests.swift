@@ -320,6 +320,166 @@ func airPodsTakingTheMicrophoneOnEarDetectionIsSwitchedBack() {
 
 @Test
 @MainActor
+func airPodsTakingTheOutputBackInManualModeIsSwitchedBack() {
+    let defaults = isolatedDefaults()
+    let store = PriorityStore(defaults: defaults)
+    store.isManualMode = true
+    let speaker = output(1, "speaker", "MacBook Air Speakers")
+    let airPods = output(2, "airpods-out", "AirPods Pro")
+    let airPodsMic = input(3, "airpods-in", "AirPods Pro")
+    let scarlett = input(4, "scarlett", "Scarlett Solo USB")
+    let audio = FakeAudio()
+    audio.catalog = [speaker, airPods, airPodsMic, scarlett]
+    audio.defaults[.output] = airPods.platformID
+    audio.defaults[.input] = scarlett.platformID
+    let model = testModel(audio: audio, defaults: defaults)
+    model.start()
+    model.selectManually(speaker)
+    model.handleDefaultChanged(.output)
+    audio.selections.removeAll()
+
+    // Seen in a real trace: seconds after the pick, with nothing connecting,
+    // macOS moves the output and microphone to the AirPods in the user's ears.
+    audio.defaults[.output] = airPods.platformID
+    model.handleDefaultChanged(.output)
+    audio.defaults[.input] = airPodsMic.platformID
+    model.handleDefaultChanged(.input)
+
+    #expect(model.isManualMode)
+    #expect(model.currentOutputID == speaker.platformID)
+    #expect(model.currentInputID == scarlett.platformID)
+    #expect(audio.selections.map(\.1) == [speaker.platformID, scarlett.platformID])
+}
+
+@Test
+@MainActor
+func airPodsTakingBothDevicesAtOnceInManualModeAreBothSwitchedBack() {
+    let defaults = isolatedDefaults()
+    let store = PriorityStore(defaults: defaults)
+    store.isManualMode = true
+    let speaker = output(1, "speaker", "MacBook Air Speakers")
+    let airPods = output(2, "airpods-out", "AirPods Pro")
+    let airPodsMic = input(3, "airpods-in", "AirPods Pro")
+    let scarlett = input(4, "scarlett", "Scarlett Solo USB")
+    let audio = FakeAudio()
+    audio.catalog = [speaker, airPods, airPodsMic, scarlett]
+    audio.defaults[.output] = speaker.platformID
+    audio.defaults[.input] = scarlett.platformID
+    let model = testModel(audio: audio, defaults: defaults)
+    model.start()
+
+    // Seen in a real trace: macOS moves both 3 ms apart, so the input has
+    // already moved when the output's event is handled.
+    audio.defaults[.output] = airPods.platformID
+    audio.defaults[.input] = airPodsMic.platformID
+    model.handleDefaultChanged(.output)
+    model.handleDefaultChanged(.input)
+
+    #expect(model.currentOutputID == speaker.platformID)
+    #expect(model.currentInputID == scarlett.platformID)
+    #expect(audio.defaults[.output] == speaker.platformID)
+    #expect(audio.defaults[.input] == scarlett.platformID)
+}
+
+@Test
+@MainActor
+func aPickInControlCenterStaysInManualMode() {
+    let defaults = isolatedDefaults()
+    let store = PriorityStore(defaults: defaults)
+    store.isManualMode = true
+    let speaker = output(1, "speaker")
+    let airPods = output(2, "airpods", "AirPods Pro")
+    let audio = FakeAudio()
+    audio.catalog = [speaker, airPods]
+    audio.defaults[.output] = speaker.platformID
+    let model = testModel(audio: audio, defaults: defaults, isUserPicking: { true })
+    model.start()
+
+    audio.defaults[.output] = airPods.platformID
+    model.handleDefaultChanged(.output)
+
+    #expect(model.isManualMode)
+    #expect(model.currentOutputID == airPods.platformID)
+    #expect(audio.selections.isEmpty)
+}
+
+@Test
+@MainActor
+func aNewlyConnectedOutputStaysInManualMode() {
+    let defaults = isolatedDefaults()
+    let store = PriorityStore(defaults: defaults)
+    store.isManualMode = true
+    let speaker = output(1, "speaker")
+    let airPods = output(2, "airpods", "AirPods Pro")
+    let audio = FakeAudio()
+    audio.catalog = [speaker]
+    audio.defaults[.output] = speaker.platformID
+    let model = testModel(audio: audio, defaults: defaults)
+    model.start()
+
+    audio.catalog.append(airPods)
+    audio.defaults[.output] = airPods.platformID
+    model.handleDefaultChanged(.output)
+
+    #expect(model.currentOutputID == airPods.platformID)
+    #expect(audio.selections.isEmpty)
+}
+
+@Test
+@MainActor
+func macOSTakingTheOutputAgainAfterASwitchBackIsLeftAndNamed() {
+    let defaults = isolatedDefaults()
+    let store = PriorityStore(defaults: defaults)
+    store.isManualMode = true
+    let speaker = output(1, "speaker")
+    let airPods = output(2, "airpods", "AirPods Pro")
+    let audio = FakeAudio()
+    audio.catalog = [speaker, airPods]
+    audio.defaults[.output] = speaker.platformID
+    let model = testModel(audio: audio, defaults: defaults)
+    model.start()
+
+    // Smart Routing retries about 4 seconds after each switch back.
+    for _ in 0..<3 {
+        audio.defaults[.output] = airPods.platformID
+        model.handleDefaultChanged(.output)
+    }
+
+    #expect(audio.selections.map(\.1) == [speaker.platformID])
+    #expect(model.takeoverDevice?.uid == airPods.uid)
+
+    model.selectManually(speaker)
+
+    #expect(model.takeoverDevice == nil)
+    #expect(model.currentOutputID == speaker.platformID)
+}
+
+@Test
+@MainActor
+func automaticModeKeepsAMicrophoneMacOSTakesAgainAfterASwitchBack() {
+    let defaults = isolatedDefaults()
+    let store = PriorityStore(defaults: defaults)
+    let airPods = output(1, "airpods-out", "AirPods Pro")
+    let airPodsMic = input(2, "airpods-in", "AirPods Pro")
+    let scarlett = input(3, "scarlett", "Scarlett Solo USB")
+    store.savePriorities([scarlett, airPodsMic], role: .input)
+    let audio = FakeAudio()
+    audio.catalog = [airPods, airPodsMic, scarlett]
+    let model = testModel(audio: audio, defaults: defaults)
+    model.start()
+
+    for _ in 0..<3 {
+        audio.defaults[.input] = airPodsMic.platformID
+        model.handleDefaultChanged(.input)
+    }
+
+    #expect(!model.isManualMode)
+    #expect(model.currentInputID == airPodsMic.platformID)
+    #expect(model.takeoverDevice?.uid == airPodsMic.uid)
+}
+
+@Test
+@MainActor
 func outputMovingBeforeTheDisconnectArrivesKeepsAutomaticOn() {
     let defaults = isolatedDefaults()
     let audio = FakeAudio()
