@@ -501,7 +501,7 @@ struct StatusLabel: View {
 
     var body: some View {
         HStack(spacing: 2) {
-            if model.menuBarDevices != .outputOnly {
+            if showsInput {
                 if isLabeled {
                     Text("in:")
                         .padding(.leading, 4)
@@ -585,6 +585,19 @@ struct StatusLabel: View {
     }
 
     private var isLabeled: Bool { model.menuBarDevices == .bothLabeled }
+
+    /// Whether the microphone gets its own glyph. Unlabeled, a mic that is
+    /// the output's own half, as on AirPods, would only repeat its glyph.
+    private var showsInput: Bool {
+        switch model.menuBarDevices {
+        case .outputOnly: false
+        case .bothLabeled: true
+        case .both:
+            model.currentInputDevice.map {
+                $0.pairingKey != model.currentOutputDevice?.pairingKey
+            } ?? true
+        }
+    }
 
     private var mutedMicrophone: some View {
         Image(systemName: "mic.slash.fill")

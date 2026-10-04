@@ -76,7 +76,8 @@ list for each kind of device and uses the highest one that is connected.
 
 - A panel laid out like the macOS Sound menu, with an icon for every device
 - The menu bar icon shows the current output, like AirPods or headphones, and
-  optionally the microphone, labeled in and out if you like. It can be
+  optionally the microphone, labeled in and out if you like. Unlabeled, a mic
+  that belongs to the output, like the AirPods mic, shares its icon. It can be
   outlined in Settings to tell it apart from the Sound icon, and can show
   the volume level beside any device icon. Settings previews the icon as you
   change it
