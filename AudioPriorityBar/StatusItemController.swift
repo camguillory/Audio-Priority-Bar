@@ -1,5 +1,6 @@
 import AudioPriorityCore
 import AppKit
+import Combine
 import Observation
 import SwiftUI
 
@@ -81,7 +82,10 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         action: nil,
         keyEquivalent: ""
     )
-    private let labelView: PassthroughHostingView<StatusLabel>
+    /// Drawn into the button's template image rather than layered over it, so
+    /// the system dims it on an inactive display and tints it when highlighted.
+    private let labelRenderer: ImageRenderer<StatusLabel>
+    private var labelChange: AnyCancellable?
     private var suppressNextClickAt: TimeInterval?
     /// The status item's center when the panel opened. The item widens and
     /// narrows with its glyphs, like the muted microphone, and re-centering on
@@ -111,9 +115,7 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         self.settings = settings
         self.updates = updates
         statusItem = statusBar.statusItem(withLength: NSStatusItem.variableLength)
-        labelView = PassthroughHostingView(
-            rootView: StatusLabel(model: model)
-        )
+        labelRenderer = ImageRenderer(content: StatusLabel(model: model))
         super.init()
         configureStatusItem()
         configurePanel()
@@ -148,12 +150,11 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         button.target = self
         button.action = #selector(handleClick)
         button.sendAction(on: [.leftMouseUp, .rightMouseUp])
-        labelView.translatesAutoresizingMaskIntoConstraints = false
-        button.addSubview(labelView)
-        NSLayoutConstraint.activate([
-            labelView.centerXAnchor.constraint(equalTo: button.centerXAnchor),
-            labelView.centerYAnchor.constraint(equalTo: button.centerYAnchor),
-        ])
+        button.imagePosition = .imageOnly
+        // Fires before the change lands, so the redraw waits a turn.
+        labelChange = labelRenderer.objectWillChange.sink { [weak self] in
+            Task { @MainActor [weak self] in self?.updateStatus() }
+        }
         button.setAccessibilityLabel(appDisplayName)
         button.setAccessibilityHelp(
             "Activate to show audio devices; open the context menu to mute the microphone, or for Settings and Quit"
@@ -232,8 +233,11 @@ final class StatusItemController: NSObject, NSWindowDelegate {
     }
 
     private func updateStatus() {
-        labelView.layoutSubtreeIfNeeded()
-        statusItem.length = ceil(labelView.fittingSize.width)
+        labelRenderer.scale = NSScreen.screens.map(\.backingScaleFactor).max() ?? 2
+        let image = labelRenderer.nsImage
+        image?.isTemplate = true
+        statusItem.button?.image = image
+        statusItem.length = ceil(image?.size.width ?? 0)
         // Sighted users get the hover preview instead, which names the
         // devices behind the glyphs.
         statusItem.button?.setAccessibilityValue(statusDescription)
@@ -609,8 +613,4 @@ private struct StatusLabel: View {
             ? name
             : fill
     }
-}
-
-private final class PassthroughHostingView<Content: View>: NSHostingView<Content> {
-    override func hitTest(_ point: NSPoint) -> NSView? { nil }
 }
