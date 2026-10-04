@@ -1,5 +1,6 @@
 import AppKit
 import AudioPriorityCore
+import KeyboardShortcuts
 import ServiceManagement
 import SwiftUI
 
@@ -111,6 +112,15 @@ struct SettingsView: View {
                 )) {
                     Text("Show the volume level")
                     Text("Adds a level beside the output icon, which AirPods and other device icons cannot show.")
+                }
+            }
+
+            Section("Shortcut") {
+                LabeledContent {
+                    KeyboardShortcuts.Recorder(for: .toggleMicrophoneMute)
+                } label: {
+                    Text("Mute microphone")
+                    Text("Works from any app. Press it again to unmute.")
                 }
             }
 
