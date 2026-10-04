@@ -495,7 +495,7 @@ final class StatusItemController: NSObject, NSWindowDelegate {
     }
 }
 
-private struct StatusLabel: View {
+struct StatusLabel: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Bindable var model: AppModel
 

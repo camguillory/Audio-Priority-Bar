@@ -78,7 +78,8 @@ list for each kind of device and uses the highest one that is connected.
 - The menu bar icon shows the current output, like AirPods or headphones, and
   optionally the microphone, labeled in and out if you like. It can be
   outlined in Settings to tell it apart from the Sound icon, and can show
-  the volume level beside any device icon
+  the volume level beside any device icon. Settings previews the icon as you
+  change it
 - Liquid Glass on macOS 26, VoiceOver support, and keyboard-accessible actions
 - Output volume and microphone level by slider or scroll wheel, with mute and
   availability status
@@ -217,7 +218,8 @@ open "audioprioritybar://unmute-mic"
 ```
 
 In Shortcuts, add an **Open URLs** action with one of them. The app opens if it
-isn't running. Any other form of the URL is ignored.
+isn't running. Any other form of the URL is ignored. The Shortcuts tab in
+Settings lists them with a Copy button.
 
 ### Jabra Link monitoring
 

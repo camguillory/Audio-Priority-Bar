@@ -4,10 +4,44 @@ import KeyboardShortcuts
 import ServiceManagement
 import SwiftUI
 
+/// The tabs of the Settings window, in toolbar order.
+enum SettingsPane: CaseIterable {
+    case menuBar, devices, shortcuts, app
+
+    var label: String {
+        switch self {
+        case .menuBar: "Menu Bar"
+        case .devices: "Devices"
+        case .shortcuts: "Shortcuts"
+        case .app: "App"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .menuBar: "menubar.rectangle"
+        case .devices: "hifispeaker.2"
+        case .shortcuts: "command"
+        case .app: "gearshape"
+        }
+    }
+}
+
+private extension URLCommand {
+    var title: String {
+        switch self {
+        case .toggleMicMute: "Toggle microphone mute"
+        case .muteMic: "Mute microphone"
+        case .unmuteMic: "Unmute microphone"
+        }
+    }
+}
+
 struct SettingsView: View {
     @Bindable var model: AppModel
     @Bindable var launchAtLogin: LaunchAtLoginController
     @Bindable var updates: UpdateChecker
+    let pane: SettingsPane
 
     private static let homePageURL = URL(
         string: "https://github.com/camguillory/Audio-Priority-Bar/"
@@ -21,156 +55,182 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
-            Section("Startup") {
-                Toggle(isOn: Binding(
-                    get: { launchAtLogin.isEnabled },
-                    set: { launchAtLogin.setEnabled($0) }
-                )) {
-                    Text("Open at Login")
-                    Text("Open Audio Priority Bar automatically when you log in.")
-                }
-
-                if launchAtLogin.requiresApproval {
-                    LabeledContent("Approval needed in Login Items") {
-                        Button("Open Login Items") {
-                            SMAppService.openSystemSettingsLoginItems()
-                        }
-                    }
-                }
-                if let error = launchAtLogin.errorMessage {
-                    Text("Open at Login failed: \(error)")
-                        .foregroundStyle(.red)
-                }
-            }
-
-            Section("Devices") {
-                Toggle(isOn: Binding(
-                    get: { model.selectsPairedDevice },
-                    set: { model.setSelectsPairedDevice($0) }
-                )) {
-                    Text("Select headset input and output together")
-                    Text("Choosing either one also selects the other.")
-                }
-
-                Toggle(isOn: Binding(
-                    get: { model.hideNewDisplayOutputs },
-                    set: { model.setHideNewDisplayOutputs($0) }
-                )) {
-                    Text("Hide new HDMI and DisplayPort outputs")
-                    Text("""
-                        Monitor and TV speakers stay hidden until you turn on \
-                        “Show hidden and disconnected devices” in the panel.
-                        """)
-                }
-            }
-
-            Section("Notices") {
-                Toggle(isOn: Binding(
-                    get: { model.showsSwitchNotice },
-                    set: { model.setShowsSwitchNotice($0) }
-                )) {
-                    Text("Show a notice when switching automatically")
-                    Text("Briefly shows the new device below the menu bar icon.")
-                }
-
-                Toggle(isOn: Binding(
-                    get: { model.remindsWhenMuted },
-                    set: { model.setRemindsWhenMuted($0) }
-                )) {
-                    Text("Remind me when an app records while muted")
-                    Text("""
-                        Shows “Microphone muted” below the menu bar icon while \
-                        an app uses the muted microphone.
-                        """)
-                }
-            }
-
-            Section("Menu Bar") {
-                Toggle(isOn: Binding(
-                    get: { model.outlinesMenuBarIcon },
-                    set: { model.setOutlinesMenuBarIcon($0) }
-                )) {
-                    Text("Outline the menu bar icon")
-                    Text("Tells it apart from the Sound icon, which shows the same device.")
-                }
-
-                Picker(selection: Binding(
-                    get: { model.menuBarDevices },
-                    set: { model.setMenuBarDevices($0) }
-                )) {
-                    Text("Output only").tag(MenuBarDevices.outputOnly)
-                    Text("Both").tag(MenuBarDevices.both)
-                    Text("Both, labeled").tag(MenuBarDevices.bothLabeled)
-                } label: {
-                    Text("Menu bar icon shows")
-                    Text("Both adds the microphone. Labels help when the two icons look alike.")
-                }
-
-                Toggle(isOn: Binding(
-                    get: { model.showsMenuBarVolume },
-                    set: { model.setShowsMenuBarVolume($0) }
-                )) {
-                    Text("Show the volume level")
-                    Text("Adds a level beside the output icon, which AirPods and other device icons cannot show.")
-                }
-            }
-
-            Section("Shortcut") {
-                LabeledContent {
-                    KeyboardShortcuts.Recorder(for: .toggleMicrophoneMute)
-                } label: {
-                    Text("Mute microphone")
-                    Text("Works from any app. Press it again to unmute.")
-                }
-            }
-
-            Section("Updates") {
-                if updates.isAvailable {
-                    Toggle(isOn: Binding(
-                        get: { updates.automaticUpdatesEnabled },
-                        set: { updates.setAutomaticUpdatesEnabled($0) }
-                    )) {
-                        Text("Install updates automatically")
-                        Text("""
-                            Checks GitHub daily, installs new versions in the \
-                            background, and restarts the app.
-                            """)
-                    }
-
-                    Button("Check for Updates…") { updates.checkForUpdates() }
-                } else {
-                    Text("Updates are off in development builds.")
-                        .foregroundStyle(.secondary)
-                }
-            }
-
-            Section {
-                HStack(spacing: 10) {
-                    Image(nsImage: NSApp.applicationIconImage)
-                        .resizable()
-                        .frame(width: 36, height: 36)
-                        .accessibilityHidden(true)
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(appDisplayName).font(.headline)
-                        Text("Version \(version)").foregroundStyle(.secondary)
-                        Link("Project Home Page", destination: Self.homePageURL)
-                    }
-
-                    Spacer()
-
-                    Button("Quit Audio Priority Bar") { NSApp.terminate(nil) }
-                }
+            switch pane {
+            case .menuBar: menuBar
+            case .devices: devices
+            case .shortcuts: shortcuts
+            case .app: app
             }
         }
         .formStyle(.grouped)
         .toggleStyle(.switch)
         .frame(width: 460)
+        // Each tab is as tall as its content, so the window resizes to fit it.
+        .fixedSize(horizontal: false, vertical: true)
+    }
+
+    @ViewBuilder private var menuBar: some View {
+        Section { menuBarPreview }
+
+        Section("Icon") {
+            Picker("Shows", selection: Binding(
+                get: { model.menuBarDevices },
+                set: { model.setMenuBarDevices($0) }
+            )) {
+                Text("Output only").tag(MenuBarDevices.outputOnly)
+                Text("Output and microphone").tag(MenuBarDevices.both)
+                Text("Output and microphone, labeled").tag(MenuBarDevices.bothLabeled)
+            }
+
+            Toggle("Outline", isOn: Binding(
+                get: { model.outlinesMenuBarIcon },
+                set: { model.setOutlinesMenuBarIcon($0) }
+            ))
+
+            Toggle(isOn: Binding(
+                get: { model.showsMenuBarVolume },
+                set: { model.setShowsMenuBarVolume($0) }
+            )) {
+                Text("Volume level")
+                Text("Shown beside AirPods and other device icons.")
+            }
+        }
+
+        Section("Notices") {
+            Toggle("Show a notice when switching automatically", isOn: Binding(
+                get: { model.showsSwitchNotice },
+                set: { model.setShowsSwitchNotice($0) }
+            ))
+
+            Toggle("Remind me when an app records while muted", isOn: Binding(
+                get: { model.remindsWhenMuted },
+                set: { model.setRemindsWhenMuted($0) }
+            ))
+        }
+    }
+
+    /// The real menu bar icon between the system items it sits beside, so
+    /// the icon options show their effect instead of describing it.
+    private var menuBarPreview: some View {
+        HStack(spacing: 14) {
+            Image(systemName: "wifi")
+            Image(systemName: "speaker.wave.2.fill")
+            StatusLabel(model: model)
+                .foregroundStyle(.primary)
+            Text(Date.now, format: .dateTime.weekday().hour().minute())
+        }
+        .font(.system(size: 14))
+        .foregroundStyle(.secondary)
+        .padding(.horizontal, 14)
+        .frame(height: 30)
+        .background(.quaternary, in: RoundedRectangle(cornerRadius: 7))
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 4)
+        .accessibilityHidden(true)
+    }
+
+    @ViewBuilder private var shortcuts: some View {
+        Section {
+            LabeledContent("Mute microphone") {
+                KeyboardShortcuts.Recorder(for: .toggleMicrophoneMute)
+            }
+        }
+
+        Section {
+            ForEach(URLCommand.allCases, id: \.self) { command in
+                let url = "\(URLCommand.scheme)://\(command.rawValue)"
+                LabeledContent {
+                    Button("Copy") {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(url, forType: .string)
+                    }
+                    .accessibilityLabel("Copy \(url)")
+                } label: {
+                    Text(command.title)
+                    Text(url)
+                        .font(.system(.caption, design: .monospaced))
+                        .textSelection(.enabled)
+                }
+            }
+        } header: {
+            Text("URLs")
+        } footer: {
+            Text("Open them from Shortcuts, Raycast, a Stream Deck or Terminal.")
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    @ViewBuilder private var app: some View {
+        Section {
+            Toggle("Open at Login", isOn: Binding(
+                get: { launchAtLogin.isEnabled },
+                set: { launchAtLogin.setEnabled($0) }
+            ))
+
+            if launchAtLogin.requiresApproval {
+                LabeledContent("Approval needed in Login Items") {
+                    Button("Open Login Items") {
+                        SMAppService.openSystemSettingsLoginItems()
+                    }
+                }
+            }
+            if let error = launchAtLogin.errorMessage {
+                Text("Open at Login failed: \(error)")
+                    .foregroundStyle(.red)
+            }
+        }
         .onAppear { launchAtLogin.refresh() }
         // Approving in System Settings happens while this window stays open.
         .onReceive(NotificationCenter.default.publisher(
             for: NSApplication.didBecomeActiveNotification
         )) { _ in launchAtLogin.refresh() }
+
+        Section("Updates") {
+            if updates.isAvailable {
+                Toggle(isOn: Binding(
+                    get: { updates.automaticUpdatesEnabled },
+                    set: { updates.setAutomaticUpdatesEnabled($0) }
+                )) {
+                    Text("Install updates automatically")
+                    Text("Checks daily and restarts the app after installing.")
+                }
+
+                Button("Check for Updates…") { updates.checkForUpdates() }
+            } else {
+                Text("Updates are off in development builds.")
+                    .foregroundStyle(.secondary)
+            }
+        }
+
+        Section {
+            HStack(spacing: 8) {
+                Image(nsImage: NSApp.applicationIconImage)
+                    .resizable()
+                    .frame(width: 22, height: 22)
+                    .accessibilityHidden(true)
+                Text("Version \(version)").foregroundStyle(.secondary)
+                Link("Home Page", destination: Self.homePageURL)
+                Spacer()
+                Button("Quit Audio Priority Bar") { NSApp.terminate(nil) }
+            }
+        }
+    }
+
+    @ViewBuilder private var devices: some View {
+        Section {
+            Toggle("Select headset input and output together", isOn: Binding(
+                get: { model.selectsPairedDevice },
+                set: { model.setSelectsPairedDevice($0) }
+            ))
+
+            Toggle(isOn: Binding(
+                get: { model.hideNewDisplayOutputs },
+                set: { model.setHideNewDisplayOutputs($0) }
+            )) {
+                Text("Hide new HDMI and DisplayPort outputs")
+                Text("Find them under “Show hidden and disconnected devices” in the panel.")
+            }
+        }
     }
 }
 
@@ -206,17 +266,30 @@ final class SettingsWindowController: NSWindowController {
             defer: false
         )
         window.title = "\(appDisplayName) Settings"
-        let hostingController = NSHostingController(
-            rootView: SettingsView(
-                model: model,
-                launchAtLogin: launchAtLogin,
-                updates: updates
+        let tabs = NSTabViewController()
+        tabs.tabStyle = .toolbar
+        for pane in SettingsPane.allCases {
+            let hostingController = NSHostingController(
+                rootView: SettingsView(
+                    model: model,
+                    launchAtLogin: launchAtLogin,
+                    updates: updates,
+                    pane: pane
+                )
             )
-        )
-        // Gives the window its real size before it is ever placed, so the
-        // first open on another screen is centered on the actual height.
-        hostingController.sizingOptions = [.preferredContentSize]
-        window.contentViewController = hostingController
+            // Gives the window its real size before it is ever placed, so the
+            // first open on another screen is centered on the actual height.
+            hostingController.sizingOptions = [.preferredContentSize]
+            let item = NSTabViewItem(viewController: hostingController)
+            item.label = pane.label
+            item.image = NSImage(
+                systemSymbolName: pane.symbol,
+                accessibilityDescription: nil
+            )
+            tabs.addTabViewItem(item)
+        }
+        window.contentViewController = tabs
+        window.toolbarStyle = .preference
         window.isReleasedWhenClosed = false
         window.center()
         super.init(window: window)
