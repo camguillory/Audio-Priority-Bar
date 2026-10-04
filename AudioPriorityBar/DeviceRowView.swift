@@ -412,7 +412,7 @@ struct DeviceRow: View {
                 Button {
                     model.unhide(device)
                 } label: {
-                    Label("Show Device", systemImage: "eye")
+                    Label("Unhide Device", systemImage: "eye")
                 }
             } else {
                 Button {
