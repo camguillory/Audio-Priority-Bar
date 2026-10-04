@@ -1,5 +1,10 @@
 import AppKit
 import AudioPriorityCore
+import KeyboardShortcuts
+
+extension KeyboardShortcuts.Name {
+    static let toggleMicrophoneMute = Self("toggleMicrophoneMute")
+}
 
 /// Whether someone is picking a device in Control Center or System Settings
 /// right now. CoreAudio never says who changed a default, but Control Center
@@ -89,6 +94,9 @@ final class AppRuntime {
         let isListening = audioObserver.startListening()
         model.start()
         updates.start()
+        KeyboardShortcuts.onKeyUp(for: .toggleMicrophoneMute) { [weak model] in
+            model?.perform(.toggleMicMute)
+        }
         return isListening
     }
 

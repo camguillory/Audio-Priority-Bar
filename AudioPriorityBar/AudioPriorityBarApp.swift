@@ -1,4 +1,5 @@
 import AppKit
+import AudioPriorityCore
 let appDisplayName = "Audio Priority Bar"
 
 @main
@@ -19,6 +20,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var runtime: AppRuntime?
     private var settingsController: SettingsWindowController?
     private var statusController: StatusItemController?
+    /// A URL that launched the app can arrive before the runtime exists.
+    private var pendingCommands: [URLCommand] = []
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         guard ProcessInfo.processInfo.environment[
@@ -53,10 +56,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 alert.runModal()
             }
         }
+        pendingCommands.forEach(runtime.model.perform)
+        pendingCommands = []
     }
 
     func applicationWillTerminate(_ notification: Notification) {
         runtime?.stop()
+    }
+
+    func application(_ application: NSApplication, open urls: [URL]) {
+        let commands = urls.compactMap(URLCommand.init(url:))
+        guard let model = runtime?.model else {
+            pendingCommands += commands
+            return
+        }
+        commands.forEach(model.perform)
     }
 
     private func configureMainMenu() {

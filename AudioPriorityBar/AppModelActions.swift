@@ -57,6 +57,14 @@ extension AppModel {
         refreshVolume()
     }
 
+    func perform(_ command: URLCommand) {
+        switch command {
+        case .toggleMicMute: setMicrophoneMuted(!isMicrophoneMuted)
+        case .muteMic: setMicrophoneMuted(true)
+        case .unmuteMic: setMicrophoneMuted(false)
+        }
+    }
+
     /// Moving the level while muted unmutes, as the macOS volume keys do.
     func setMicrophoneLevel(_ value: Float) {
         guard let id = currentInputID else { return }
