@@ -170,7 +170,7 @@ priority, and the active one is highlighted.
   automatic switching on, or to the device you picked with it off.
 - With automatic switching off, click the lock beside the output or microphone
   level to let macOS and other apps change that device. Click it again to keep
-  your choice.
+  your choice. A device you connect still takes over.
 - If macOS takes the device again right after a switch back, as AirPods in
   your ears can, Audio Priority Bar leaves it and names it in the panel.
   **Fix in Settings** opens the AirPods settings, where choosing **When Last
