@@ -3,7 +3,22 @@ import AudioPriorityCore
 import KeyboardShortcuts
 
 extension KeyboardShortcuts.Name {
-    static let toggleMicrophoneMute = Self("toggleMicrophoneMute")
+    /// Starts as Option-Shift-M, which no call app uses for its own mute.
+    @MainActor static let toggleMicrophoneMute = Self(
+        "toggleMicrophoneMute",
+        initial: .optionShiftM
+    )
+}
+
+extension KeyboardShortcuts.Shortcut {
+    /// Shortcuts store a physical key, so this looks up the key that types M
+    /// on the current layout, a different key on AZERTY than on QWERTY.
+    @MainActor static var optionShiftM: Self? {
+        (0..<128).lazy
+            .map { KeyboardShortcuts.Key(rawValue: $0) }
+            .first { Self($0).description == "M" }
+            .map { Self($0, modifiers: [.option, .shift]) }
+    }
 }
 
 /// Whether someone is picking a device in Control Center or System Settings
