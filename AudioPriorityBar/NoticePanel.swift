@@ -52,8 +52,24 @@ struct NoticeContent: Equatable {
     }
 }
 
-/// A borderless, click-through window below the menu bar icon, used for the
-/// automatic switch notice and the muted reminder.
+/// Whether the muted reminder shows. Dismissing it hides it until it stops
+/// applying, so the next recording while muted brings it back.
+struct MutedReminderState {
+    private(set) var isDismissed = false
+
+    mutating func update(applies: Bool) -> Bool {
+        if !applies { isDismissed = false }
+        return applies && !isDismissed
+    }
+
+    mutating func dismiss() {
+        isDismissed = true
+    }
+}
+
+/// A borderless window below the menu bar icon, used for the automatic switch
+/// notice and the muted reminder. It is click-through except while showing
+/// the reminder, which a click dismisses.
 @MainActor
 final class NoticePanel {
     private static let switchDuration: Duration = .milliseconds(1500)
@@ -65,9 +81,10 @@ final class NoticePanel {
         defer: false
     )
     private let host = NSHostingView(
-        rootView: NoticeView(content: .mutedWhileRecording)
+        rootView: NoticeView(content: .mutedWhileRecording, onDismiss: nil)
     )
     private let placement: (NSSize) -> NSPoint?
+    var onDismissMutedReminder: (() -> Void)?
     private var switchNotice: NoticeContent?
     private var clearTask: Task<Void, Never>?
     private var shown: NoticeContent?
@@ -116,6 +133,8 @@ final class NoticePanel {
         )
         guard content != shown else { return }
         shown = content
+        let isReminder = content == .mutedWhileRecording
+        window.ignoresMouseEvents = !isReminder
         let animates = !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
         guard let content else {
             guard animates else { return window.orderOut(nil) }
@@ -130,7 +149,12 @@ final class NoticePanel {
             }
             return
         }
-        host.rootView = NoticeView(content: content)
+        host.rootView = NoticeView(
+            content: content,
+            onDismiss: isReminder
+                ? { [weak self] in self?.onDismissMutedReminder?() }
+                : nil
+        )
         let size = host.fittingSize
         window.setContentSize(size)
         if let origin = placement(size) { window.setFrameOrigin(origin) }
@@ -157,8 +181,23 @@ final class NoticePanel {
 
 private struct NoticeView: View {
     let content: NoticeContent
+    let onDismiss: (() -> Void)?
 
     var body: some View {
+        if let onDismiss {
+            bubble
+                .contentShape(shape)
+                .onTapGesture(perform: onDismiss)
+                .accessibilityElement(children: .combine)
+                .accessibilityAddTraits(.isButton)
+                .accessibilityHint("Hides the reminder until you next record while muted")
+                .accessibilityAction(named: "Dismiss", onDismiss)
+        } else {
+            bubble
+        }
+    }
+
+    private var bubble: some View {
         VStack(alignment: .leading, spacing: 6) {
             ForEach(content.lines, id: \.text) { line in
                 HStack(spacing: 8) {

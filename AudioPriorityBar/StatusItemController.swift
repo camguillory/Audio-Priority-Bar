@@ -104,6 +104,7 @@ final class StatusItemController: NSObject, NSWindowDelegate {
     /// Set by a click so the preview stays away until the pointer leaves.
     private var isHoverDismissed = false
     private var hoverTask: Task<Void, Never>?
+    private var mutedReminder = MutedReminderState()
 
     init(
         model: AppModel,
@@ -123,6 +124,10 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         observeStatus()
         observeNotice()
         observePointer()
+        notice.onDismissMutedReminder = { [weak self] in
+            self?.mutedReminder.dismiss()
+            self?.refreshMutedReminder()
+        }
         model.onAutomaticSwitch = { [weak self] in self?.showSwitchNotice($0) }
         // Launch with `--args -previewNotices YES` to see both notices without
         // changing any hardware.
@@ -139,9 +144,7 @@ final class StatusItemController: NSObject, NSWindowDelegate {
             try? await Task.sleep(for: .seconds(2.5))
             notice.showsMutedReminder = true
             try? await Task.sleep(for: .seconds(3))
-            notice.showsMutedReminder = model.remindsWhenMuted
-                && model.isMicrophoneMuted
-                && model.isInputRecording
+            refreshMutedReminder()
         }
     }
 
@@ -417,12 +420,18 @@ final class StatusItemController: NSObject, NSWindowDelegate {
 
     private func observeNotice() {
         withObservationTracking {
-            notice.showsMutedReminder = model.remindsWhenMuted
-                && model.isMicrophoneMuted
-                && model.isInputRecording
+            refreshMutedReminder()
         } onChange: { [weak self] in
             Task { @MainActor [weak self] in self?.observeNotice() }
         }
+    }
+
+    private func refreshMutedReminder() {
+        notice.showsMutedReminder = mutedReminder.update(
+            applies: model.remindsWhenMuted
+                && model.isMicrophoneMuted
+                && model.isInputRecording
+        )
     }
 
     private func showSwitchNotice(_ devices: [AudioDevice]) {

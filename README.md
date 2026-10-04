@@ -60,7 +60,8 @@ list for each kind of device and uses the highest one that is connected.
 - The mute follows automatic switching to the next microphone, and quitting
   the app restores it
 - A **Microphone muted** reminder appears when an app starts recording while
-  you are muted. It and the switch notices can each be turned off in Settings
+  you are muted. Click it to hide it until you next record while muted. It
+  and the switch notices can each be turned off in Settings
 
 **Device lists**
 
