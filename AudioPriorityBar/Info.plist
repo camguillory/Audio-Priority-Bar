@@ -22,6 +22,17 @@
     <string>public.app-category.utilities</string>
     <key>LSUIElement</key>
     <true/>
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleURLName</key>
+            <string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+            <key>CFBundleURLSchemes</key>
+            <array>
+                <string>audioprioritybar</string>
+            </array>
+        </dict>
+    </array>
     <key>SUFeedURL</key>
     <string>$(SPARKLE_FEED_URL)</string>
     <key>SUPublicEDKey</key>

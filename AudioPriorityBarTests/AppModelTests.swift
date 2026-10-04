@@ -1038,3 +1038,31 @@ func anOutputWithNeitherVolumeNorMuteCannotBeControlled() {
     #expect(!model.isVolumeControllable)
     #expect(!model.isOutputMutable)
 }
+
+@Test
+@MainActor
+func urlCommandsMuteOnlyAMicrophoneThatCanBeMuted() {
+    let audio = FakeAudio()
+    audio.catalog = [input(1, "headset", "USB Headset")]
+    audio.defaults = [.input: 1]
+    let model = testModel(audio: audio, defaults: isolatedDefaults())
+    model.start()
+
+    model.perform(.toggleMicMute)
+    #expect(model.isMicrophoneMuted)
+    #expect(audio.muted == ["input:1"])
+    model.perform(.muteMic)
+    #expect(model.isMicrophoneMuted)
+    model.perform(.toggleMicMute)
+    #expect(!model.isMicrophoneMuted)
+    #expect(audio.muted.isEmpty)
+    model.perform(.unmuteMic)
+    #expect(!model.isMicrophoneMuted)
+
+    audio.noMuteProperty = [1]
+    model.refreshVolume()
+    model.perform(.muteMic)
+    #expect(!model.isMicrophoneMuted)
+    model.perform(.toggleMicMute)
+    #expect(!model.isMicrophoneMuted)
+}

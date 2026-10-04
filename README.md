@@ -54,10 +54,15 @@ list for each kind of device and uses the highest one that is connected.
   level
 - Mute the microphone from the right-click menu, or by Option-clicking the
   menu bar icon
+- Set a global shortcut for mute in Settings. It works from any app, with no
+  extra permission
+- Mute from Shortcuts, Raycast, or a Stream Deck with
+  [`audioprioritybar://` URLs](#automation)
 - The mute follows automatic switching to the next microphone, and quitting
   the app restores it
 - A **Microphone muted** reminder appears when an app starts recording while
-  you are muted. It and the switch notices can each be turned off in Settings
+  you are muted. Click it to hide it until you next record while muted. It
+  and the switch notices can each be turned off in Settings
 
 **Device lists**
 
@@ -199,6 +204,20 @@ Speakers, Headphones, and Microphones remain visible in both modes.
 New HDMI and DisplayPort outputs start hidden; showing one is permanent, and
 **Hide new HDMI and DisplayPort outputs** turns this off for future devices.
 The active device always stays listed, even when hidden.
+
+### Automation
+
+Three URLs control the microphone mute from Shortcuts, Raycast, a Stream Deck,
+or Terminal:
+
+```bash
+open "audioprioritybar://toggle-mic-mute"
+open "audioprioritybar://mute-mic"
+open "audioprioritybar://unmute-mic"
+```
+
+In Shortcuts, add an **Open URLs** action with one of them. The app opens if it
+isn't running. Any other form of the URL is ignored.
 
 ### Jabra Link monitoring
 

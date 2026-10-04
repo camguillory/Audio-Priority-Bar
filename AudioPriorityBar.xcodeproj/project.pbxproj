@@ -15,6 +15,7 @@
 		A10000000000000000000005 /* CoreAudio.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B10000000000000000000009 /* CoreAudio.framework */; };
 		A10000000000000000000006 /* AudioPriorityCore in Frameworks */ = {isa = PBXBuildFile; productRef = M100000000000000000000001 /* AudioPriorityCore */; };
 		A10000000000000000000031 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = M100000000000000000000002 /* Sparkle */; };
+		A10000000000000000000032 /* KeyboardShortcuts in Frameworks */ = {isa = PBXBuildFile; productRef = M100000000000000000000003 /* KeyboardShortcuts */; };
 		A10000000000000000000007 /* AppIdentityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000008 /* AppIdentityTests.swift */; };
 		A10000000000000000000008 /* CoreAudioListeners.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000010 /* CoreAudioListeners.swift */; };
 		A10000000000000000000009 /* CoreAudioProperties.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000011 /* CoreAudioProperties.swift */; };
@@ -94,6 +95,7 @@
 				A10000000000000000000013 /* IOKit.framework in Frameworks */,
 				A10000000000000000000006 /* AudioPriorityCore in Frameworks */,
 				A10000000000000000000031 /* Sparkle in Frameworks */,
+				A10000000000000000000032 /* KeyboardShortcuts in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -196,6 +198,7 @@
 			packageProductDependencies = (
 				M100000000000000000000001 /* AudioPriorityCore */,
 				M100000000000000000000002 /* Sparkle */,
+				M100000000000000000000003 /* KeyboardShortcuts */,
 			);
 			productName = AudioPriorityBar;
 			productReference = B10000000000000000000006 /* AudioPriorityBar.app */;
@@ -249,6 +252,7 @@
 			packageReferences = (
 				L100000000000000000000001 /* XCLocalSwiftPackageReference "AudioPriorityCore" */,
 				L100000000000000000000002 /* XCRemoteSwiftPackageReference "Sparkle" */,
+				L100000000000000000000003 /* XCRemoteSwiftPackageReference "KeyboardShortcuts" */,
 			);
 			productRefGroup = D100000000000000000000004 /* Products */;
 			projectDirPath = "";
@@ -485,6 +489,14 @@
 				minimumVersion = 2.10.0;
 			};
 		};
+		L100000000000000000000003 /* XCRemoteSwiftPackageReference "KeyboardShortcuts" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/sindresorhus/KeyboardShortcuts";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 3.1.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -497,6 +509,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = L100000000000000000000002 /* XCRemoteSwiftPackageReference "Sparkle" */;
 			productName = Sparkle;
+		};
+		M100000000000000000000003 /* KeyboardShortcuts */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = L100000000000000000000003 /* XCRemoteSwiftPackageReference "KeyboardShortcuts" */;
+			productName = KeyboardShortcuts;
 		};
 /* End XCSwiftPackageProductDependency section */
 

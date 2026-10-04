@@ -98,6 +98,19 @@ func aDeviceIsBeingPickedOnlyWhileControlCenterOrSystemSettingsIsInUse() {
 }
 
 @Test
+func aDismissedMutedReminderStaysHiddenUntilItStopsApplying() {
+    var reminder = MutedReminderState()
+    var shows: [Bool] = []
+    shows.append(reminder.update(applies: true))
+    reminder.dismiss()
+    shows.append(reminder.update(applies: true))
+    // Unmuting or the recording ending clears the dismissal.
+    shows.append(reminder.update(applies: false))
+    shows.append(reminder.update(applies: true))
+    #expect(shows == [true, false, false, true])
+}
+
+@Test
 func aSwitchNoticeOutranksTheMutedReminderButNeverCoversThePanel() {
     let notice = NoticeContent(
         lines: [.init(icon: "airpodspro", text: "AirPods Pro")],

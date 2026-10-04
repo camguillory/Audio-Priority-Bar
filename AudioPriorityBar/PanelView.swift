@@ -95,6 +95,7 @@ struct PanelView: View {
                     name: "Output",
                     deviceName: model.currentOutputDevice?.name,
                     icon: model.isActiveOutputMuted ? "speaker.slash.fill" : outputIcon,
+                    toggledIcon: model.isActiveOutputMuted ? outputIcon : "speaker.slash.fill",
                     isMuted: model.isActiveOutputMuted,
                     level: model.volume,
                     isControllable: model.isVolumeControllable,
@@ -108,6 +109,7 @@ struct PanelView: View {
                         name: "Microphone",
                         deviceName: model.currentInputDevice?.name,
                         icon: model.isMicrophoneMuted ? "mic.slash.fill" : "mic.fill",
+                        toggledIcon: model.isMicrophoneMuted ? "mic.fill" : "mic.slash.fill",
                         isMuted: model.isMicrophoneMuted,
                         level: model.microphoneLevel,
                         isControllable: model.isMicrophoneLevelControllable,
@@ -255,6 +257,8 @@ private struct LevelControl: View {
     /// rather than taking a line of its own.
     let deviceName: String?
     let icon: String
+    /// Shown while hovering, so the button previews what a click will do.
+    let toggledIcon: String
     let isMuted: Bool
     let level: Float
     let isControllable: Bool
@@ -268,19 +272,29 @@ private struct LevelControl: View {
     let setLevel: (Float) -> Void
 
     @State private var isHoveringMute = false
+    /// Set by a click so the result shows until the pointer leaves, instead
+    /// of the preview flipping straight back to the previous state.
+    @State private var isPreviewSuppressed = false
 
     var body: some View {
         HStack(spacing: Self.spacing) {
-            Button(action: toggleMute) {
-                Image(systemName: icon)
-                    .foregroundStyle(isMuted ? AnyShapeStyle(.red) : AnyShapeStyle(.tint))
+            Button {
+                isPreviewSuppressed = true
+                toggleMute()
+            } label: {
+                Image(systemName: isHoveringMute && canToggleMute && !isPreviewSuppressed ? toggledIcon : icon)
+                    .foregroundStyle(isMuted ? AnyShapeStyle(.red) : AnyShapeStyle(.primary))
                     .frame(width: Self.buttonSize, height: Self.buttonSize)
                     .background(Circle().fill(muteBackground))
                     .contentShape(Circle())
                     .animation(.easeInOut(duration: 0.15), value: icon)
+                    .animation(.easeInOut(duration: 0.15), value: isHoveringMute)
             }
             .buttonStyle(.plain)
-            .onHover { isHoveringMute = $0 }
+            .onHover {
+                isHoveringMute = $0
+                if !$0 { isPreviewSuppressed = false }
+            }
             .animation(.easeInOut(duration: 0.12), value: isHoveringMute)
             .help(muteTitle)
             .accessibilityLabel(muteTitle)
@@ -339,7 +353,7 @@ private struct LevelControl: View {
     private var muteBackground: AnyShapeStyle {
         isMuted
             ? AnyShapeStyle(Color.red.opacity(isHoveringMute ? 0.3 : 0.2))
-            : AnyShapeStyle(Color.primary.opacity(isHoveringMute ? 0.16 : 0.08))
+            : AnyShapeStyle(Color.primary.opacity(isHoveringMute ? 0.24 : 0.16))
     }
 
     private var valueDescription: String {
