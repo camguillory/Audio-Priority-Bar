@@ -369,6 +369,7 @@ private struct Footer: View {
     let showSettings: () -> Void
 
     @State private var isHoveringSettings = false
+    @State private var isHoveringShowAll = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -384,8 +385,22 @@ private struct Footer: View {
             )
             .toggleStyle(.checkbox)
             .font(.system(size: 13))
-            .frame(maxWidth: .infinity, minHeight: 30, alignment: .leading)
-            .padding(.horizontal, 12)
+            .frame(maxWidth: .infinity, minHeight: 26, alignment: .leading)
+            .padding(.horizontal, 8)
+            .background(
+                Color.primary.opacity(isHoveringShowAll ? 0.1 : 0),
+                in: RoundedRectangle(cornerRadius: 6)
+            )
+            // The highlight covers the whole row, so the whole row toggles.
+            .contentShape(Rectangle())
+            .onTapGesture {
+                model.showAll.toggle()
+                model.refreshDevices()
+            }
+            .onHover { isHoveringShowAll = $0 }
+            .animation(.easeInOut(duration: 0.12), value: isHoveringShowAll)
+            .padding(.horizontal, 4)
+            .padding(.vertical, 2)
 
             Divider().padding(.horizontal, 12)
 
