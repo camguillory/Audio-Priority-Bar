@@ -233,6 +233,18 @@ func usbAudioEngineRolesShareAPairingKey() {
 }
 
 @Test
+func headsetHalvesAreTheSameDeviceButBuiltInMicAndSpeakersAreNot() {
+    let jabra = "AppleUSBAudioEngine:Unknown Manufacturer:Jabra Link 380:50C275445423"
+    #expect(device("\(jabra):2", role: .input).isSameDevice(as: device("\(jabra):1")))
+    #expect(device("70-AE-2A-5E-21-CD:input", role: .input)
+        .isSameDevice(as: device("70-AE-2A-5E-21-CD:output")))
+    #expect(!device("70-AE-2A-5E-21-CD:input", role: .input)
+        .isSameDevice(as: device("20-18-5B-E4-7C-CD:output")))
+    #expect(!device("BuiltInMicrophoneDevice", role: .input)
+        .isSameDevice(as: device("BuiltInSpeakerDevice")))
+}
+
+@Test
 func virtualDevicesDefaultOutOfAutomaticSelection() throws {
     try withDefaults { defaults in
         let store = PriorityStore(defaults: defaults)

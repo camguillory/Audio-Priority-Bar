@@ -593,8 +593,8 @@ struct StatusLabel: View {
         case .outputOnly: false
         case .bothLabeled: true
         case .both:
-            model.currentInputDevice.map {
-                $0.pairingKey != model.currentOutputDevice?.pairingKey
+            model.currentInputDevice.map { input in
+                model.currentOutputDevice.map { !input.isSameDevice(as: $0) } ?? true
             } ?? true
         }
     }
