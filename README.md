@@ -85,6 +85,7 @@ list for each kind of device and uses the highest one that is connected.
   availability status
 - AirPods battery levels on their rows, left and right apart when they
   differ, and the case
+- The battery level of a Jabra headset connected through its Link dongle
 
 **Other**
 
@@ -181,6 +182,9 @@ priority, and the active one is highlighted.
   on their own.
 - With **Select headset input and output together** enabled, choosing
   either half of a physical USB headset selects the other too.
+- With **Mute speakers when headphones disconnect** enabled, the speakers
+  start muted when the headphones playing disconnect, are turned off or run
+  out of battery.
 
 Speakers, Headphones, and Microphones remain visible in both modes.
 

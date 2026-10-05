@@ -286,6 +286,32 @@ func completeVendorEvidenceOverridesTheUntrustworthyLegacyBit() {
 }
 
 @Test
+func headsetBatteryIsReadFromItsReplyOrUnaskedUpdate() throws {
+    // The Evolve2 85's reply to a battery query, captured at 95%: flags 24,
+    // level 5f.
+    let reply = try #require(JabraGNP.decode(
+        [0x00, 0x04, 0x7a, 0xca, 0x12, 0x02, 0x24, 0x5f, 0x10, 0x23]
+    ))
+    #expect(JabraGNP.batteryLevel(reply) == 95)
+
+    // The same message sent unasked carries an event kind.
+    let update = try #require(JabraGNP.decode(
+        [0x00, 0x04, 0x00, 0x0a, 0x12, 0x02, 0x24, 0x40, 0x10, 0x23]
+    ))
+    #expect(JabraGNP.batteryLevel(update) == 64)
+
+    // From the dongle rather than the headset, or out of range.
+    let fromDongle = try #require(JabraGNP.decode(
+        [0x00, 0x01, 0x7a, 0xca, 0x12, 0x02, 0x24, 0x5f, 0x10, 0x23]
+    ))
+    #expect(JabraGNP.batteryLevel(fromDongle) == nil)
+    let invalid = try #require(JabraGNP.decode(
+        [0x00, 0x04, 0x7a, 0xca, 0x12, 0x02, 0x24, 0xe6, 0x10, 0x23]
+    ))
+    #expect(JabraGNP.batteryLevel(invalid) == nil)
+}
+
+@Test
 func audioDeviceSerialBindsStateToOnePhysicalDongle() {
     #expect(JabraLink.serial(
         fromAudioUID: "AppleUSBAudioEngine:Unknown Manufacturer:Jabra Link 380:50C275445423:1"

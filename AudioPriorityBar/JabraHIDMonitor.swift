@@ -86,6 +86,9 @@ final class JabraHIDMonitor {
         /// walk may have read its records before the change landed and another
         /// has to follow it.
         var requeryWhenIdle = false
+        /// The headset's battery percentage, nil until it answers.
+        var battery: Int?
+        var lastBatteryQueryAt: TimeInterval = -.greatestFiniteMagnitude
 
         init(key: String, serial: String?, attachedAt: TimeInterval) {
             self.key = key
@@ -108,6 +111,7 @@ final class JabraHIDMonitor {
     }
 
     var onLinkChange: (() -> Void)?
+    var onBatteryChange: (() -> Void)?
 
     private var manager: IOHIDManager?
     private var pollTimer: Timer?
@@ -132,6 +136,9 @@ final class JabraHIDMonitor {
     /// keeping the overall budget for a first answer near 1.5s.
     private static let queryTimeout: TimeInterval = 0.5
     private static let maximumAttempts = 3
+    /// The headset also reports a changed level on its own, so asking is only
+    /// the backstop.
+    private static let batteryRefreshInterval: TimeInterval = 60
 
     // MARK: - Lifecycle
 
@@ -229,6 +236,12 @@ final class JabraHIDMonitor {
     func monitoredState(for device: AudioDevice) -> LinkState? {
         if case .unmonitored = binding(for: device) { return nil }
         return linkState(for: device)
+    }
+
+    func batteryLevel(for device: AudioDevice) -> Int? {
+        guard case let .one(dongle) = binding(for: device),
+              Self.state(of: dongle) == .up else { return nil }
+        return dongle.battery
     }
 
     /// Binds an audio device to at most one physical dongle. The USB serial in
@@ -615,10 +628,50 @@ final class JabraHIDMonitor {
         // single failed cycle would freeze a stale verdict in place.
         dongle.vendor = evidence == .inconclusive ? nil : evidence
         refresh(dongle)
+        if evidence == .connected {
+            requestBattery(dongle)
+        } else if evidence == .disconnected {
+            // The next headset to connect may not be this one.
+            dongle.lastBatteryQueryAt = -.greatestFiniteMagnitude
+            updateBattery(dongle, nil)
+        }
         if dongle.requeryWhenIdle {
             dongle.requeryWhenIdle = false
             requestQuery(dongle)
         }
+    }
+
+    /// Asks the headset for its battery without waiting: the answer is picked
+    /// up like an unasked update, and a lost one is retried a minute later.
+    private func requestBattery(_ dongle: Dongle) {
+        let now = ProcessInfo.processInfo.systemUptime
+        guard now - dongle.lastBatteryQueryAt >= Self.batteryRefreshInterval,
+              let interface = dongle.managementInterface,
+              let layout = interface.management,
+              let output = interface.managementOutput,
+              let body = JabraGNP.encodeQuery(
+                  destination: JabraGNP.headsetAddress,
+                  sequence: nextSequence(),
+                  group: JabraGNP.statusGroup,
+                  op: JabraGNP.batteryOp,
+                  arguments: [],
+                  frameLength: layout.outputFrameLength
+              ),
+              let value = IOHIDValueCreateWithBytes(
+                  kCFAllocatorDefault,
+                  output,
+                  0,
+                  body,
+                  body.count
+              ) else { return }
+        dongle.lastBatteryQueryAt = now
+        _ = IOHIDDeviceSetValue(interface.device, output, value)
+    }
+
+    private func updateBattery(_ dongle: Dongle, _ level: Int?) {
+        guard dongle.battery != level else { return }
+        dongle.battery = level
+        if isRunning { onBatteryChange?() }
     }
 
     /// The dongle announced that a remembered device connected or
@@ -647,6 +700,10 @@ final class JabraHIDMonitor {
                   let message = JabraGNP.decode(body) else { return }
             if JabraGNP.isConnectionEvent(message) {
                 noteAnnouncedChange(dongle)
+                return
+            }
+            if let level = JabraGNP.batteryLevel(message) {
+                updateBattery(dongle, level)
                 return
             }
             guard let query = dongle.query,

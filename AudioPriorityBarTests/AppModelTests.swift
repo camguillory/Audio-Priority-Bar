@@ -269,6 +269,106 @@ func anOutsideChangeIsSwitchedBackAndAutomaticStaysOn() {
 
 @Test
 @MainActor
+func speakersTakingOverFromDisconnectedHeadphonesStartMuted() {
+    let defaults = isolatedDefaults()
+    PriorityStore(defaults: defaults).mutesSpeakersWhenHeadphonesDisconnect = true
+    let audio = FakeAudio()
+    let speaker = output(1, "speaker")
+    let headphones = output(2, "headphones", "AirPods Pro")
+    audio.catalog = [speaker, headphones]
+    let model = testModel(audio: audio, defaults: defaults)
+    model.start()
+    #expect(model.currentOutputID == headphones.platformID)
+
+    audio.catalog = [speaker]
+    model.handleDevicesChanged()
+
+    #expect(model.currentOutputID == speaker.platformID)
+    #expect(model.isActiveOutputMuted)
+}
+
+@Test
+@MainActor
+func speakersTakingOverFromAPoweredOffJabraHeadsetStartMuted() {
+    let defaults = isolatedDefaults()
+    let store = PriorityStore(defaults: defaults)
+    store.mutesSpeakersWhenHeadphonesDisconnect = true
+    let audio = FakeAudio()
+    let speaker = output(1, "speaker")
+    let jabra = output(2, "jabra", "Jabra Link 380")
+    store.setCategory(.headphone, for: jabra)
+    audio.catalog = [speaker, jabra]
+    var isHeadsetOn = true
+    let model = testModel(
+        audio: audio,
+        defaults: defaults,
+        usable: { $0.uid != "jabra" || isHeadsetOn }
+    )
+    model.start()
+    #expect(model.currentOutputID == jabra.platformID)
+
+    // The dongle stays plugged in, so only the link verdict changes.
+    isHeadsetOn = false
+    model.handleLinkChanged()
+
+    #expect(model.currentOutputID == speaker.platformID)
+    #expect(model.isActiveOutputMuted)
+}
+
+@Test
+@MainActor
+func speakersStartMutedWhenMacOSMovesTheOutputAfterTheHeadphonesLeave() {
+    let defaults = isolatedDefaults()
+    let store = PriorityStore(defaults: defaults)
+    store.isManualMode = true
+    store.mutesSpeakersWhenHeadphonesDisconnect = true
+    let audio = FakeAudio()
+    let speaker = output(1, "speaker")
+    let headphones = output(2, "headphones", "AirPods Pro")
+    audio.catalog = [speaker, headphones]
+    audio.defaults[.output] = headphones.platformID
+    let model = testModel(audio: audio, defaults: defaults)
+    model.start()
+
+    // The device list can change while the default still names the
+    // headphones that are already gone.
+    audio.catalog = [speaker]
+    model.handleDevicesChanged()
+    audio.defaults[.output] = speaker.platformID
+    model.handleDefaultChanged(.output)
+
+    #expect(model.isActiveOutputMuted)
+}
+
+@Test
+@MainActor
+func speakersStayUnmutedUnlessThePlayingHeadphonesLeaveWithTheOptionOn() {
+    let defaults = isolatedDefaults()
+    let store = PriorityStore(defaults: defaults)
+    store.isManualMode = true
+    let audio = FakeAudio()
+    let speaker = output(1, "speaker")
+    let headphones = output(2, "headphones", "AirPods Pro")
+    audio.catalog = [speaker, headphones]
+    audio.defaults[.output] = headphones.platformID
+    let model = testModel(audio: audio, defaults: defaults)
+    model.start()
+
+    audio.catalog = [speaker]
+    audio.defaults[.output] = speaker.platformID
+    model.handleDevicesChanged()
+    #expect(!model.isActiveOutputMuted)
+
+    model.setMutesSpeakersWhenHeadphonesDisconnect(true)
+    audio.catalog = [speaker, headphones]
+    model.handleDevicesChanged()
+    audio.catalog = [speaker]
+    model.handleDevicesChanged()
+    #expect(!model.isActiveOutputMuted)
+}
+
+@Test
+@MainActor
 func aPickInControlCenterStaysUntilADeviceConnectsOrDisconnects() {
     let defaults = isolatedDefaults()
     let audio = FakeAudio()

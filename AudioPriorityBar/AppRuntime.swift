@@ -80,7 +80,8 @@ final class AppRuntime {
             ),
             link: LinkOperations(
                 isUsable: { $0.isConnected && jabra.isUsable($0) },
-                state: { jabra.monitoredState(for: $0) }
+                state: { jabra.monitoredState(for: $0) },
+                battery: { jabra.batteryLevel(for: $0) }
             ),
             battery: BluetoothBatteryMonitor(),
             isUserPicking: SystemSoundPicker.isInUse
@@ -100,6 +101,9 @@ final class AppRuntime {
         }
         jabra.onLinkChange = { [weak model] in
             model?.handleLinkChanged()
+        }
+        jabra.onBatteryChange = { [weak model] in
+            model?.handleBatteryChanged()
         }
     }
 
