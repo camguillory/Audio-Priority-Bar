@@ -385,7 +385,7 @@ private struct Footer: View {
             )
             .toggleStyle(.checkbox)
             .font(.system(size: 13))
-            .frame(maxWidth: .infinity, minHeight: 26, alignment: .leading)
+            .frame(maxWidth: .infinity, minHeight: 20, alignment: .leading)
             .padding(.horizontal, 8)
             .background(
                 Color.primary.opacity(isHoveringShowAll ? 0.1 : 0),
@@ -417,17 +417,18 @@ private struct Footer: View {
                     Image(systemName: "gearshape")
                         .font(.system(size: 13))
                         .frame(width: 30, alignment: .center)
+                        .accessibilityHidden(true)
                     Text("Audio Priority Bar Settings…")
                         .font(.system(size: 13))
                     Spacer(minLength: 0)
                 }
                 .frame(maxWidth: .infinity, minHeight: 20, alignment: .leading)
                 .padding(.trailing, 8)
-                    .background(
-                        Color.primary.opacity(isHoveringSettings ? 0.1 : 0),
-                        in: RoundedRectangle(cornerRadius: 6)
-                    )
-                    .contentShape(Rectangle())
+                .background(
+                    Color.primary.opacity(isHoveringSettings ? 0.1 : 0),
+                    in: RoundedRectangle(cornerRadius: 6)
+                )
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .onHover { isHoveringSettings = $0 }
