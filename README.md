@@ -181,6 +181,9 @@ priority, and the active one is highlighted.
   on their own.
 - With **Select headset input and output together** enabled, choosing
   either half of a physical USB headset selects the other too.
+- With **Mute speakers when headphones disconnect** enabled, the speakers
+  start muted when the headphones playing disconnect, are turned off or run
+  out of battery.
 
 Speakers, Headphones, and Microphones remain visible in both modes.
 

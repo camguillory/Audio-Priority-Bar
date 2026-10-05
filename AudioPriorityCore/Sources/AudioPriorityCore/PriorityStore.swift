@@ -24,6 +24,7 @@ public final class PriorityStore {
         static let appliedMicrophoneMutes = "appliedMicrophoneMutes"
         static let showsSwitchNotice = "showsSwitchNotice"
         static let remindsWhenMuted = "remindsWhenMuted"
+        static let mutesSpeakersWhenHeadphonesDisconnect = "mutesSpeakersWhenHeadphonesDisconnect"
         static let outlinesMenuBarIcon = "outlinesMenuBarIcon"
         static let menuBarDevices = "menuBarDevices"
         static let showsMenuBarVolume = "showsMenuBarVolume"
@@ -174,6 +175,11 @@ public final class PriorityStore {
     public var remindsWhenMuted: Bool {
         get { defaults.object(forKey: Key.remindsWhenMuted) as? Bool ?? true }
         set { defaults.set(newValue, forKey: Key.remindsWhenMuted) }
+    }
+
+    public var mutesSpeakersWhenHeadphonesDisconnect: Bool {
+        get { defaults.bool(forKey: Key.mutesSpeakersWhenHeadphonesDisconnect) }
+        set { defaults.set(newValue, forKey: Key.mutesSpeakersWhenHeadphonesDisconnect) }
     }
 
     public var outlinesMenuBarIcon: Bool {

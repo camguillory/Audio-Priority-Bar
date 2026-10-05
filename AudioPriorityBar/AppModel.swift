@@ -77,6 +77,7 @@ final class AppModel {
     var isInputRecording = false
     var showsSwitchNotice: Bool
     var remindsWhenMuted: Bool
+    var mutesSpeakersWhenHeadphonesDisconnect: Bool
     var outlinesMenuBarIcon: Bool
     var menuBarDevices: MenuBarDevices
     var showsMenuBarVolume: Bool
@@ -92,6 +93,8 @@ final class AppModel {
     private var mutedRoles: Set<String> = []
     /// The microphone currently carrying `isMicrophoneMuted`, by UID.
     private var mutedInputUID: String?
+    /// The headphones last seen as the current output, by UID.
+    private var playingHeadphonesUID: String?
     private var connectedInputUIDs: Set<String> = []
     private var connectedOutputUIDs: Set<String> = []
     private var connectedUIDsByID: [DeviceRole: [UInt32: String]] = [:]
@@ -141,6 +144,7 @@ final class AppModel {
         hideNewDisplayOutputs = store.hideNewDisplayOutputs
         showsSwitchNotice = store.showsSwitchNotice
         remindsWhenMuted = store.remindsWhenMuted
+        mutesSpeakersWhenHeadphonesDisconnect = store.mutesSpeakersWhenHeadphonesDisconnect
         outlinesMenuBarIcon = store.outlinesMenuBarIcon
         menuBarDevices = store.menuBarDevices
         showsMenuBarVolume = store.showsMenuBarVolume
@@ -440,6 +444,7 @@ final class AppModel {
     }
 
     func refreshMute() {
+        muteSpeakersIfHeadphonesLeft()
         reconcileMicrophoneMute()
         let connected = inputDevices + speakerDevices + headphoneDevices
         mutedRoles = Set(connected.lazy.filter {
@@ -454,6 +459,23 @@ final class AppModel {
         } ?? false
         isInputRecording = currentInputID.map(audio.isRunning) ?? false
         updateMicFlash()
+    }
+
+    /// Headphones that run out of battery or drop out leave the sound on the
+    /// speakers, so the speaker that takes over starts muted. A Jabra headset
+    /// behind a Link dongle never leaves the device list, it only stops being
+    /// usable. The tracked headphones survive a moment with no known output,
+    /// since the device list and the default can change in either order.
+    private func muteSpeakersIfHeadphonesLeft() {
+        guard let output = currentOutputDevice else { return }
+        let category = store.category(for: output)
+        if mutesSpeakersWhenHeadphonesDisconnect,
+           let uid = playingHeadphonesUID,
+           !(allOutputs.first { $0.uid == uid && $0.isConnected }.map(link.isUsable) ?? false),
+           category == .speaker {
+            _ = audio.setMute(.output, output.platformID, true)
+        }
+        playingHeadphonesUID = category == .headphone ? output.uid : nil
     }
 
     /// Keeps the microphone mute on whichever microphone is current, and
