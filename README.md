@@ -86,6 +86,7 @@ list for each kind of device and uses the highest one that is connected.
   availability status
 - AirPods battery levels on their rows, left and right apart when they
   differ, and the case
+- The battery level of a Jabra headset connected through its Link dongle
 
 **Other**
 
@@ -182,6 +183,9 @@ priority, and the active one is highlighted.
   on their own.
 - With **Select headset input and output together** enabled, choosing
   either half of a physical USB headset selects the other too.
+- With **Mute speakers when headphones disconnect** enabled, the speakers
+  start muted when the headphones playing disconnect, are turned off or run
+  out of battery.
 
 Speakers, Headphones, and Microphones remain visible in both modes.
 
@@ -190,7 +194,7 @@ Speakers, Headphones, and Microphones remain visible in both modes.
 - Drag outputs within or between Speakers and Headphones.
 - Reorder microphones within Microphones.
 - Use each row's actions menu for keyboard-accessible Move Up, Move Down, and
-  Move to commands.
+  Move to commands. Right-click a row to open the same menu.
 - Hide a device to remove it from Speakers, Headphones, or Microphones, or
   keep it visible while blocking automatic selection with **Never
   Auto-Select**.
