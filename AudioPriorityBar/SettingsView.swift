@@ -230,6 +230,14 @@ struct SettingsView: View {
                 Text("Hide new HDMI and DisplayPort outputs")
                 Text("Find them under “Show hidden and disconnected devices” in the panel.")
             }
+
+            Toggle(isOn: Binding(
+                get: { model.mutesSpeakersWhenHeadphonesDisconnect },
+                set: { model.setMutesSpeakersWhenHeadphonesDisconnect($0) }
+            )) {
+                Text("Mute speakers when headphones disconnect")
+                Text("Including when they're turned off or run out of battery.")
+            }
         }
     }
 }

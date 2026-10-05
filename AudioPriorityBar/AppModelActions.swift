@@ -38,6 +38,11 @@ extension AppModel {
         store.remindsWhenMuted = enabled
     }
 
+    func setMutesSpeakersWhenHeadphonesDisconnect(_ enabled: Bool) {
+        mutesSpeakersWhenHeadphonesDisconnect = enabled
+        store.mutesSpeakersWhenHeadphonesDisconnect = enabled
+    }
+
     func setOutlinesMenuBarIcon(_ enabled: Bool) {
         outlinesMenuBarIcon = enabled
         store.outlinesMenuBarIcon = enabled
