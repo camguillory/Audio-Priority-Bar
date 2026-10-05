@@ -27,6 +27,7 @@ struct DeviceRow: View {
     @Binding var highlightedPairedDeviceID: String?
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
     @State private var confirmsForget = false
     @State private var isHovering = false
     @State private var isHoveringSelectionOverride = false
@@ -195,9 +196,15 @@ struct DeviceRow: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())
 
-            selectionOverride
-
-            actions
+            // Faded rather than removed, so the name keeps its width and does
+            // not reflow as the pointer crosses rows.
+            HStack(spacing: 6) {
+                selectionOverride
+                actions
+            }
+            .opacity(showsRowControls ? 1 : 0)
+            .allowsHitTesting(showsRowControls)
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.12), value: showsRowControls)
         }
         .padding(.horizontal, 8)
         .frame(height: DeviceRowMetrics.height)
@@ -281,6 +288,11 @@ struct DeviceRow: View {
     }
 
     private var showsDragHandle: Bool { isHovering || isLifted }
+
+    /// The selection override and actions menu appear only on hover, like
+    /// the system's own lists, but stay visible to VoiceOver, which has no
+    /// pointer to hover with.
+    private var showsRowControls: Bool { isHovering || voiceOverEnabled }
 
     private var nameColor: Color {
         !device.isConnected || isUnavailable || isNeverUse ? .secondary : .primary

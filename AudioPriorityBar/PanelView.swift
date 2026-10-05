@@ -387,15 +387,16 @@ private struct Footer: View {
             .frame(maxWidth: .infinity, minHeight: 30, alignment: .leading)
             .padding(.horizontal, 12)
 
-            Divider().padding(.horizontal, 12)
-
             Button(action: showSettings) {
                 // A plain button only hits its visible pixels, so give the
                 // label the whole row to click.
                 Text("Audio Priority Bar Settings…")
                     .font(.system(size: 13))
                     .frame(maxWidth: .infinity, minHeight: 26, alignment: .leading)
-                    .padding(.horizontal, 8)
+                    // Lines the text up with the checkbox title above, which
+                    // starts 22 points past the box's leading edge.
+                    .padding(.leading, 30)
+                    .padding(.trailing, 8)
                     .background(
                         Color.primary.opacity(isHoveringSettings ? 0.1 : 0),
                         in: RoundedRectangle(cornerRadius: 6)
