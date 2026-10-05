@@ -400,20 +400,29 @@ private struct Footer: View {
             .onHover { isHoveringShowAll = $0 }
             .animation(.easeInOut(duration: 0.12), value: isHoveringShowAll)
             .padding(.horizontal, 4)
-            .padding(.vertical, 2)
+            // Matches the system Wifi menu, which keeps equal space around its
+            // show-hidden toggle. Both values sit outside the highlight box.
+            .padding(.top, 6)
+            .padding(.bottom, 6)
 
             Divider().padding(.horizontal, 12)
 
             Button(action: showSettings) {
                 // A plain button only hits its visible pixels, so give the
                 // label the whole row to click.
-                Text("Audio Priority Bar Settings…")
-                    .font(.system(size: 13))
-                    .frame(maxWidth: .infinity, minHeight: 26, alignment: .leading)
-                    // Lines the text up with the checkbox title above, which
-                    // starts 22 points past the box's leading edge.
-                    .padding(.leading, 30)
-                    .padding(.trailing, 8)
+                HStack(spacing: 0) {
+                    // Fills the gap that lined the text up with the checkbox
+                    // title above, which starts 22 points past the box's
+                    // leading edge.
+                    Image(systemName: "gearshape")
+                        .font(.system(size: 13))
+                        .frame(width: 30, alignment: .center)
+                    Text("Audio Priority Bar Settings…")
+                        .font(.system(size: 13))
+                    Spacer(minLength: 0)
+                }
+                .frame(maxWidth: .infinity, minHeight: 20, alignment: .leading)
+                .padding(.trailing, 8)
                     .background(
                         Color.primary.opacity(isHoveringSettings ? 0.1 : 0),
                         in: RoundedRectangle(cornerRadius: 6)
@@ -424,7 +433,8 @@ private struct Footer: View {
             .onHover { isHoveringSettings = $0 }
             .animation(.easeInOut(duration: 0.12), value: isHoveringSettings)
             .padding(.horizontal, 4)
-            .padding(.vertical, 4)
+            .padding(.top, 6)
+            .padding(.bottom, 6)
         }
     }
 }
