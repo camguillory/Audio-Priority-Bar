@@ -22,6 +22,7 @@ struct AudioOperations {
 struct LinkOperations {
     let isUsable: (AudioDevice) -> Bool
     let state: (AudioDevice) -> LinkState?
+    var battery: (AudioDevice) -> Int? = { _ in nil }
 }
 
 enum OutputSkipReason: Equatable {
@@ -588,9 +589,17 @@ final class AppModel {
     }
 
     /// AirPods battery levels, read again when devices come or go and
-    /// whenever the panel opens.
+    /// whenever the panel opens, or a Jabra headset's, which it reports itself.
     func batteryLevels(for device: AudioDevice) -> BatteryLevels? {
-        battery.levels(for: device)
+        _ = linkRevision
+        if let levels = battery.levels(for: device) { return levels }
+        guard device.isConnected else { return nil }
+        return link.battery(device).map { BatteryLevels(headset: $0) }
+    }
+
+    /// A Jabra headset reported a new battery level.
+    func handleBatteryChanged() {
+        linkRevision &+= 1
     }
 
     func linkState(for device: AudioDevice) -> LinkState? {

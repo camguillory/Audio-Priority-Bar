@@ -295,6 +295,28 @@ public enum JabraGNP {
         }
     }
 
+    // MARK: - Headset battery
+
+    /// The headset behind a dongle, as a GNP address.
+    public static let headsetAddress: UInt8 = 0x04
+    public static let statusGroup: UInt8 = 0x12
+    /// Answered with `[flags, percent, ...]`, and also sent unasked when the
+    /// level changes, per jabridge.
+    public static let batteryOp: UInt8 = 0x02
+
+    /// The headset's battery percentage, from its answer to a battery query or
+    /// from an update it sent unasked.
+    public static func batteryLevel(_ message: Message) -> Int? {
+        guard message.destination == hostAddress,
+              message.source == headsetAddress,
+              message.kind == replyKind || message.kind == eventKind,
+              message.group == statusGroup,
+              message.op == batteryOp,
+              message.arguments.count >= 2,
+              message.arguments[1] <= 100 else { return nil }
+        return Int(message.arguments[1])
+    }
+
     // MARK: - Link evidence
 
     public enum Evidence: Equatable, Sendable {

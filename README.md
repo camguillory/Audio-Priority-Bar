@@ -85,6 +85,7 @@ list for each kind of device and uses the highest one that is connected.
   availability status
 - AirPods battery levels on their rows, left and right apart when they
   differ, and the case
+- The battery level of a Jabra headset connected through its Link dongle
 
 **Other**
 

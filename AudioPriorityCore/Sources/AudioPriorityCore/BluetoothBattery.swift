@@ -9,16 +9,25 @@ public struct BatteryLevels: Equatable, Sendable {
     public var `case`: Int?
     /// Headphones with one battery, such as AirPods Max.
     public var main: Int?
+    /// A headset other than AirPods, such as a Jabra behind its Link dongle.
+    public var headset: Int?
 
-    public init(left: Int? = nil, right: Int? = nil, case: Int? = nil, main: Int? = nil) {
+    public init(
+        left: Int? = nil,
+        right: Int? = nil,
+        case: Int? = nil,
+        main: Int? = nil,
+        headset: Int? = nil
+    ) {
         self.left = left
         self.right = right
         self.case = `case`
         self.main = main
+        self.headset = headset
     }
 
     public var isEmpty: Bool {
-        left == nil && right == nil && `case` == nil && main == nil
+        left == nil && right == nil && `case` == nil && main == nil && headset == nil
     }
 }
 
@@ -50,6 +59,11 @@ extension BatteryLevels {
         if let main {
             result.append(BatteryBadge(
                 icon: "airpodsmax", text: "\(main)%", spokenText: "Battery \(main)%", level: main
+            ))
+        }
+        if let headset {
+            result.append(BatteryBadge(
+                icon: "headphones", text: "\(headset)%", spokenText: "Battery \(headset)%", level: headset
             ))
         }
         let sides = [("L", "Left", left), ("R", "Right", right)]
