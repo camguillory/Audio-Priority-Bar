@@ -63,6 +63,20 @@ public struct AudioDevice: Identifiable, Equatable, Hashable, Sendable {
             : uid
     }
 
+    /// Whether `other` is the other half of the same physical device: a USB
+    /// headset's numbered UIDs, or a Bluetooth headset's `:input` and
+    /// `:output`, which `pairingKey` keeps apart so selecting AirPods never
+    /// pulls in their microphone.
+    public func isSameDevice(as other: AudioDevice) -> Bool {
+        func hardwareKey(_ device: AudioDevice) -> String {
+            for suffix in [":input", ":output"] where device.uid.hasSuffix(suffix) {
+                return String(device.uid.dropLast(suffix.count))
+            }
+            return device.pairingKey
+        }
+        return hardwareKey(self) == hardwareKey(other)
+    }
+
     public init(
         platformID: UInt32,
         uid: String,
