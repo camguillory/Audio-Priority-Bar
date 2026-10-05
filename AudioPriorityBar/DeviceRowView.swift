@@ -32,6 +32,8 @@ struct DeviceRow: View {
     @State private var isHovering = false
     @State private var isHoveringSelectionOverride = false
     @State private var highlightedPartnerID: String?
+    @FocusState private var isOverrideFocused: Bool
+    @FocusState private var isActionsFocused: Bool
 
     private var linkState: LinkState? { model.linkState(for: device) }
     private var isUnavailable: Bool { linkState == .down }
@@ -292,8 +294,10 @@ struct DeviceRow: View {
 
     /// The selection override and actions menu appear only on hover, like
     /// the system's own lists, but stay visible to VoiceOver, which has no
-    /// pointer to hover with.
-    private var showsRowControls: Bool { isHovering || voiceOverEnabled }
+    /// pointer to hover with, and while one has keyboard focus.
+    private var showsRowControls: Bool {
+        isHovering || voiceOverEnabled || isOverrideFocused || isActionsFocused
+    }
 
     private var nameColor: Color {
         !device.isConnected || isUnavailable || isNeverUse ? .secondary : .primary
@@ -350,6 +354,7 @@ struct DeviceRow: View {
         .buttonStyle(.plain)
         .help(selectionOverrideHelp)
         .accessibilityLabel(selectionOverrideHelp)
+        .focused($isOverrideFocused)
         .onHover { hovering in
             isHoveringSelectionOverride = hovering
             if model.selectsPairedDevice {
@@ -386,6 +391,7 @@ struct DeviceRow: View {
         .menuIndicator(.hidden)
         .frame(width: 28)
         .accessibilityLabel("Actions for \(device.name)")
+        .focused($isActionsFocused)
     }
 
     @ViewBuilder
