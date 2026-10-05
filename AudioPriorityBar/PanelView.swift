@@ -387,6 +387,8 @@ private struct Footer: View {
             .frame(maxWidth: .infinity, minHeight: 30, alignment: .leading)
             .padding(.horizontal, 12)
 
+            Divider().padding(.horizontal, 12)
+
             Button(action: showSettings) {
                 // A plain button only hits its visible pixels, so give the
                 // label the whole row to click.
