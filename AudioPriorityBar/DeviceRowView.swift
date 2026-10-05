@@ -240,6 +240,7 @@ struct DeviceRow: View {
         .onTapGesture {
             if device.isConnected, !isUnavailable, !isSelected { select() }
         }
+        .contextMenu { actionItems }
         // Undo the content inset for layout, so the row's text lines up with
         // the section heading while its highlight and hover area overhang it.
         .padding(.horizontal, -8)
@@ -376,87 +377,7 @@ struct DeviceRow: View {
 
     private var actions: some View {
         Menu {
-            if device.isConnected {
-                Button(action: select) {
-                    Label(
-                        activationTitle,
-                        systemImage: "checkmark.circle"
-                    )
-                }
-                    .disabled(isSelected || isUnavailable)
-                Divider()
-            }
-
-            Button {
-                move(index - 1)
-            } label: {
-                Label("Move Up", systemImage: "arrow.up")
-            }
-            .disabled(index == 0)
-            Button {
-                move(index + 1)
-            } label: {
-                Label("Move Down", systemImage: "arrow.down")
-            }
-            .disabled(index == count - 1)
-
-            if device.role == .output, let category {
-                Divider()
-                Button {
-                    let target: OutputCategory = category == .speaker
-                        ? .headphone
-                        : .speaker
-                    model.setCategory(target, for: device)
-                } label: {
-                    Label(
-                        category == .speaker
-                            ? "Move to Headphones"
-                            : "Move to Speakers",
-                        systemImage: category == .speaker
-                            ? "headphones"
-                            : "speaker.wave.2.fill"
-                    )
-                }
-            }
-
-            Divider()
-            if isHidden {
-                Button {
-                    model.unhide(device)
-                } label: {
-                    Label("Unhide Device", systemImage: "eye")
-                }
-            } else {
-                Button {
-                    model.hide(device)
-                } label: {
-                    Label("Hide Device", systemImage: "eye.slash")
-                }
-                .disabled(isSelected)
-            }
-
-            if device.isConnected {
-                Divider()
-                Button {
-                    model.setNeverUse(device, !isNeverUse)
-                } label: {
-                    Label(
-                        isNeverUse
-                            ? "Allow Auto-Selection"
-                            : "Never Auto-Select",
-                        systemImage: isNeverUse ? "checkmark.circle" : "nosign"
-                    )
-                }
-            }
-
-            if !device.isConnected {
-                Divider()
-                Button(role: .destructive) {
-                    confirmsForget = true
-                } label: {
-                    Label("Forget Device", systemImage: "trash")
-                }
-            }
+            actionItems
         } label: {
             Image(systemName: "ellipsis.circle")
                 .frame(width: 28, height: 28)
@@ -465,6 +386,91 @@ struct DeviceRow: View {
         .menuIndicator(.hidden)
         .frame(width: 28)
         .accessibilityLabel("Actions for \(device.name)")
+    }
+
+    @ViewBuilder
+    private var actionItems: some View {
+        if device.isConnected {
+            Button(action: select) {
+                Label(
+                    activationTitle,
+                    systemImage: "checkmark.circle"
+                )
+            }
+                .disabled(isSelected || isUnavailable)
+            Divider()
+        }
+
+        Button {
+            move(index - 1)
+        } label: {
+            Label("Move Up", systemImage: "arrow.up")
+        }
+        .disabled(index == 0)
+        Button {
+            move(index + 1)
+        } label: {
+            Label("Move Down", systemImage: "arrow.down")
+        }
+        .disabled(index == count - 1)
+
+        if device.role == .output, let category {
+            Divider()
+            Button {
+                let target: OutputCategory = category == .speaker
+                    ? .headphone
+                    : .speaker
+                model.setCategory(target, for: device)
+            } label: {
+                Label(
+                    category == .speaker
+                        ? "Move to Headphones"
+                        : "Move to Speakers",
+                    systemImage: category == .speaker
+                        ? "headphones"
+                        : "speaker.wave.2.fill"
+                )
+            }
+        }
+
+        Divider()
+        if isHidden {
+            Button {
+                model.unhide(device)
+            } label: {
+                Label("Unhide Device", systemImage: "eye")
+            }
+        } else {
+            Button {
+                model.hide(device)
+            } label: {
+                Label("Hide Device", systemImage: "eye.slash")
+            }
+            .disabled(isSelected)
+        }
+
+        if device.isConnected {
+            Divider()
+            Button {
+                model.setNeverUse(device, !isNeverUse)
+            } label: {
+                Label(
+                    isNeverUse
+                        ? "Allow Auto-Selection"
+                        : "Never Auto-Select",
+                    systemImage: isNeverUse ? "checkmark.circle" : "nosign"
+                )
+            }
+        }
+
+        if !device.isConnected {
+            Divider()
+            Button(role: .destructive) {
+                confirmsForget = true
+            } label: {
+                Label("Forget Device", systemImage: "trash")
+            }
+        }
     }
 
     private var activationTitle: String {

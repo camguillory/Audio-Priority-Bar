@@ -189,7 +189,7 @@ Speakers, Headphones, and Microphones remain visible in both modes.
 - Drag outputs within or between Speakers and Headphones.
 - Reorder microphones within Microphones.
 - Use each row's actions menu for keyboard-accessible Move Up, Move Down, and
-  Move to commands.
+  Move to commands. Right-click a row to open the same menu.
 - Hide a device to remove it from Speakers, Headphones, or Microphones, or
   keep it visible while blocking automatic selection with **Never
   Auto-Select**.
