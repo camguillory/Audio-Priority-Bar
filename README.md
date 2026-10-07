@@ -25,7 +25,7 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="screenshot-dark.png">
-    <img src="screenshot-light.png" width="380" alt="Audio Priority Bar panel showing automatic switching, output and microphone levels, and the Speakers, Headphones and Microphones priority lists, with paired Bluetooth devices dimmed while they are off">
+    <img src="screenshot-light.png" width="380" alt="Audio Priority Bar panel showing output and microphone levels and the Speakers, Headphones and Microphones priority lists, with AirPods connected and showing their battery, and paired Bluetooth devices dimmed while they are off">
   </picture>
 </p>
 
