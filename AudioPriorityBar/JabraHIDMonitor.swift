@@ -642,10 +642,12 @@ final class JabraHIDMonitor {
     }
 
     /// Asks the headset for its battery without waiting: the answer is picked
-    /// up like an unasked update, and a lost one is retried a minute later.
+    /// up like an unasked update. A headset that just connected may not answer
+    /// yet, so until it does every walk asks again.
     private func requestBattery(_ dongle: Dongle) {
         let now = ProcessInfo.processInfo.systemUptime
-        guard now - dongle.lastBatteryQueryAt >= Self.batteryRefreshInterval,
+        guard dongle.battery == nil
+                || now - dongle.lastBatteryQueryAt >= Self.batteryRefreshInterval,
               let interface = dongle.managementInterface,
               let layout = interface.management,
               let output = interface.managementOutput,
