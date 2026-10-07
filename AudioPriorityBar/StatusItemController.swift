@@ -91,6 +91,9 @@ final class StatusItemController: NSObject, NSWindowDelegate {
     /// narrows with its glyphs, like the muted microphone, and re-centering on
     /// it would slide the open panel sideways.
     private var panelAnchorX: CGFloat?
+    /// The panel content's size as SwiftUI last measured it, which the panel
+    /// opens at and follows.
+    private var contentSize: CGSize = .zero
     /// Rereads AirPods battery levels while the panel stays open.
     private var batteryTimer: Timer?
     private lazy var notice = NoticePanel { [weak self] size in
@@ -171,10 +174,14 @@ final class StatusItemController: NSObject, NSWindowDelegate {
                 showSettings: { [weak self] in
                     self?.hidePanel()
                     self?.showSettings()
-                }
+                },
+                fit: { [weak self] in self?.fitPanel(to: $0) }
             )
         )
-        hostingController.sizingOptions = [.preferredContentSize]
+        // The panel sizes itself in `fitPanel`. Left to the hosting
+        // controller, AppKit resizes it around its bottom edge and the rows
+        // slide under the pointer until it is placed again.
+        hostingController.sizingOptions = []
         panel.contentViewController = hostingController
         // Liquid Glass leaves the window square to the shadow, which draws a
         // rectangle around the rounded panel. Matches `PanelBackground`.
@@ -289,9 +296,8 @@ final class StatusItemController: NSObject, NSWindowDelegate {
                 return
             }
         }
-        guard let content = panel.contentViewController?.view else { return }
-        content.layoutSubtreeIfNeeded()
-        panel.setContentSize(content.fittingSize)
+        panel.contentViewController?.view.layoutSubtreeIfNeeded()
+        panel.setContentSize(contentSize)
         panelAnchorX = button.window.map {
             $0.convertToScreen(button.convert(button.bounds, to: nil)).midX
         }
@@ -341,6 +347,16 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         batteryTimer?.invalidate()
         batteryTimer = nil
         notice.isSuppressed = false
+    }
+
+    /// Applies a new content size in one step, keeping the top edge under the
+    /// status item so the panel grows and shrinks only at the bottom.
+    private func fitPanel(to size: CGSize) {
+        contentSize = size
+        guard panel.isVisible, size != panel.frame.size,
+              let button = statusItem.button,
+              let origin = origin(under: button, size: size, centeredAt: panelAnchorX) else { return }
+        panel.setFrame(NSRect(origin: origin, size: size), display: true)
     }
 
     private func positionPanel(relativeTo button: NSStatusBarButton) {
