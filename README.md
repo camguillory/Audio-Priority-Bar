@@ -23,8 +23,10 @@
 </p>
 
 <p align="center">
-  <img src="screenshot-light.png" width="49%" alt="Audio Priority Bar light panel showing automatic switching, output and microphone levels with mute buttons, and three device priority lists">
-  <img src="screenshot-dark.png" width="49%" alt="Audio Priority Bar dark panel showing automatic switching, output and microphone levels with mute buttons, and three device priority lists">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="screenshot-dark.png">
+    <img src="screenshot-light.png" width="380" alt="Audio Priority Bar panel showing automatic switching, output and microphone levels, and the Speakers, Headphones and Microphones priority lists, with paired Bluetooth devices dimmed while they are off">
+  </picture>
 </p>
 
 ## Why
