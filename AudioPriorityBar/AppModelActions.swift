@@ -1,4 +1,5 @@
 import AudioPriorityCore
+import IOBluetooth
 import SwiftUI
 
 extension AppModel {
@@ -56,6 +57,82 @@ extension AppModel {
     func setShowsMenuBarVolume(_ enabled: Bool) {
         showsMenuBarVolume = enabled
         store.showsMenuBarVolume = enabled
+    }
+
+    func setExpandsBluetoothDevices(_ expanded: Bool) {
+        expandsBluetoothDevices = expanded
+        store.expandsBluetoothDevices = expanded
+    }
+
+    func canConnect(_ device: AudioDevice) -> Bool {
+        !device.isConnected && battery.report.bluetoothDevice(for: device) != nil
+    }
+
+    func isConnecting(_ device: AudioDevice) -> Bool {
+        battery.report.bluetoothDevice(for: device)
+            .map { connectingBluetoothAttempts[$0.address] != nil } ?? false
+    }
+
+    /// A connected device's Bluetooth address, from its UID or, for a UID in
+    /// another shape, from the paired device of the same name.
+    func bluetoothAddress(of device: AudioDevice) -> String? {
+        BluetoothBattery.address(of: device)
+            ?? (device.isBluetooth ? battery.report.bluetoothDevice(for: device)?.address : nil)
+    }
+
+    /// Whether this device, or the other half of the same hardware, is the
+    /// current output or microphone.
+    func isInUse(_ device: AudioDevice) -> Bool {
+        [currentOutputDevice, currentInputDevice].contains { $0?.isSameDevice(as: device) == true }
+    }
+
+    /// Opens the Bluetooth link and leaves the rest to CoreAudio, which adds
+    /// the device a few seconds later, and to automatic switching. The first
+    /// attempt asks for Bluetooth permission.
+    func connect(_ device: AudioDevice) {
+        guard let address = battery.report.bluetoothDevice(for: device)?.address,
+              connectingBluetoothAttempts[address] == nil else { return }
+        let attempt = UUID()
+        connectingBluetoothAttempts[address] = attempt
+        Task {
+            if await bluetooth(address, { $0.openConnection() }) {
+                // Covers the gap before CoreAudio adds the device, which
+                // ends the spinner sooner through refreshDevices.
+                try? await Task.sleep(for: .seconds(10))
+            } else {
+                NSSound.beep()
+            }
+            if connectingBluetoothAttempts[address] == attempt {
+                connectingBluetoothAttempts[address] = nil
+            }
+        }
+    }
+
+    func canDisconnect(_ device: AudioDevice) -> Bool {
+        device.isConnected && device.isBluetooth && bluetoothAddress(of: device) != nil
+    }
+
+    /// CoreAudio then removes the device, and automatic switching moves on as
+    /// it would for headphones switched off.
+    func disconnect(_ device: AudioDevice) {
+        guard let address = bluetoothAddress(of: device) else { return }
+        Task {
+            if await !bluetooth(address, { $0.closeConnection() }) { NSSound.beep() }
+        }
+    }
+
+    /// IOBluetooth calls block for seconds, so they run on a dispatch queue
+    /// rather than tie up a Swift concurrency thread.
+    private func bluetooth(
+        _ address: String,
+        _ call: @escaping @Sendable (IOBluetoothDevice) -> IOReturn
+    ) async -> Bool {
+        await withCheckedContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
+                let result = IOBluetoothDevice(addressString: address).map(call)
+                continuation.resume(returning: result == kIOReturnSuccess)
+            }
+        }
     }
     func setMicrophoneMuted(_ muted: Bool) {
         isMicrophoneMuted = muted

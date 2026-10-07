@@ -20,11 +20,16 @@ struct PanelView: View {
     @State private var highlightedPairedDeviceID: String?
 
     private var layout: PanelLayout {
-        PanelLayout(sections: [
-            (.speaker, model.speakerDevices.count),
-            (.headphone, model.headphoneDevices.count),
-            (.input, model.inputDevices.count),
-        ])
+        PanelLayout(
+            sections: [
+                (.speaker, model.speakerDevices.count),
+                (.headphone, model.headphoneDevices.count),
+                (.input, model.inputDevices.count),
+            ],
+            bluetoothRows: model.pairedBluetoothDevices.isEmpty
+                ? nil
+                : (model.expandsBluetoothDevices ? model.pairedBluetoothDevices.count : 0)
+        )
     }
 
     private var renderedDeviceIDs: [String] {
@@ -126,6 +131,7 @@ struct PanelView: View {
 
             Divider().padding(.horizontal, 12)
 
+            ScrollViewReader { proxy in
             ScrollView(
                 .vertical,
                 showsIndicators: listHeight >= maximumListHeight
@@ -169,6 +175,9 @@ struct PanelView: View {
                         highlightedPairedDeviceID: $highlightedPairedDeviceID
                     )
                     .zIndex(drag?.section == .input ? 1 : 0)
+                    if !model.pairedBluetoothDevices.isEmpty {
+                        BluetoothGroup(model: model).id(BluetoothGroup.id)
+                    }
                 }
                 .padding(.horizontal, PanelLayout.horizontalPadding)
                 .padding(.top, PanelLayout.topPadding)
@@ -176,6 +185,12 @@ struct PanelView: View {
                 .coordinateSpace(name: PanelLayout.space)
             }
             .frame(height: listHeight)
+            // Opening the group at the bottom of a full list would otherwise
+            // show nothing until scrolled.
+            .onChange(of: model.expandsBluetoothDevices) { _, expanded in
+                if expanded { proxy.scrollTo(BluetoothGroup.id, anchor: .bottom) }
+            }
+            }
 
             Divider().padding(.horizontal, 12)
             Footer(model: model, showSettings: showSettings)
@@ -361,6 +376,109 @@ private struct LevelControl: View {
         if isMuted { values.insert("Muted", at: 0) }
         if let deviceName { values.append(deviceName) }
         return values.joined(separator: ", ")
+    }
+}
+
+/// Paired speakers and headphones that are off, under the lists and collapsed
+/// by default like the Wi-Fi menu's Other Networks. Clicking a row connects
+/// it; once connected it leaves the group for its ranked section. Sized by
+/// `PanelLayout.bluetoothRows`, so it keeps to the section metrics.
+private struct BluetoothGroup: View {
+    static let id = "bluetooth"
+
+    @Bindable var model: AppModel
+    @State private var isHoveringHeader = false
+    @State private var hoveredID: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: DeviceRowMetrics.spacing) {
+            Button {
+                model.setExpandsBluetoothDevices(!model.expandsBluetoothDevices)
+            } label: {
+                HStack {
+                    Text("Bluetooth")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .rotationEffect(.degrees(model.expandsBluetoothDevices ? 90 : 0))
+                }
+                .frame(height: DeviceRowMetrics.sectionHeader)
+                .padding(.horizontal, 8)
+                .background(
+                    Color.primary.opacity(isHoveringHeader ? 0.06 : 0),
+                    in: RoundedRectangle(cornerRadius: 6)
+                )
+                .contentShape(Rectangle())
+                .padding(.horizontal, -8)
+            }
+            .buttonStyle(.plain)
+            .onHover { isHoveringHeader = $0 }
+            .accessibilityLabel("Bluetooth devices")
+            .accessibilityValue(model.expandsBluetoothDevices ? "Expanded" : "Collapsed")
+            .accessibilityAddTraits(.isHeader)
+
+            if model.expandsBluetoothDevices {
+                ForEach(model.pairedBluetoothDevices) { device in
+                    row(device)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .overlay(alignment: .top) {
+            Divider()
+                .offset(y: PanelLayout.separatorInset - PanelLayout.sectionGap)
+                .accessibilityHidden(true)
+        }
+        // A row removed while hovered, as a connected one is, never reports
+        // the pointer leaving, so it would come back highlighted.
+        .onChange(of: model.pairedBluetoothDevices.map(\.id)) { _, ids in
+            if let hoveredID, !ids.contains(hoveredID) { self.hoveredID = nil }
+        }
+    }
+
+    private func row(_ device: AudioDevice) -> some View {
+        let isConnecting = model.isConnecting(device)
+        return Button { model.connect(device) } label: {
+            HStack(spacing: 8) {
+                Image(systemName: device.hardwareIcon(category: model.store.category(for: device)))
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 26, height: 26)
+                    .background(Color.primary.opacity(0.1), in: Circle())
+                Text(device.name).lineLimit(1)
+                Spacer()
+                if isConnecting {
+                    ProgressView().controlSize(.small)
+                } else if hoveredID == device.id {
+                    Text("Connect")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .frame(height: DeviceRowMetrics.height)
+            .padding(.horizontal, 8)
+            .background(
+                Color.primary.opacity(hoveredID == device.id ? 0.06 : 0),
+                in: RoundedRectangle(cornerRadius: 8)
+            )
+            .contentShape(Rectangle())
+            .padding(.horizontal, -8)
+        }
+        .buttonStyle(.plain)
+        .disabled(isConnecting)
+        .onHover { hovering in
+            if hovering {
+                hoveredID = device.id
+            } else if hoveredID == device.id {
+                hoveredID = nil
+            }
+        }
+        .help("Connect \(device.name) over Bluetooth")
+        .accessibilityLabel("Connect \(device.name)")
+        .accessibilityValue(isConnecting ? "Connecting" : "")
     }
 }
 

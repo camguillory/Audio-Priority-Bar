@@ -1,4 +1,5 @@
 import AudioPriorityCore
+import CoreAudio
 import Foundation
 import Testing
 @testable import AudioPriorityBar
@@ -242,6 +243,110 @@ func showAllRevealsHiddenDevicesInTheirOwnList() {
 
     #expect(model.speakerDevices == [kept, hidden])
     #expect(model.hiddenSpeakerDevices.isEmpty)
+}
+
+/// A started model whose Bluetooth read returns the Echo Dot under `list`,
+/// `device_connected` or `device_not_connected`.
+@MainActor
+private func modelWithPairedEcho(_ audio: FakeAudio, list: String) async throws -> AppModel {
+    let profile = Data("""
+    {"SPBluetoothDataType": [{"\(list)": [
+      {"Echo Dot-65W": {"device_address": "AC:41:6A:C5:C3:F1", "device_minorType": "Speaker"}}
+    ]}]}
+    """.utf8)
+    let battery = BluetoothBatteryMonitor(read: { profile })
+    let model = AppModel(
+        store: PriorityStore(defaults: isolatedDefaults()),
+        audio: audio.operations,
+        link: LinkOperations(isUsable: { _ in true }, state: { _ in nil }),
+        battery: battery
+    )
+    model.start()
+    for _ in 0..<1000 where battery.report.pairedAudio.isEmpty { await Task.yield() }
+    try #require(!battery.report.pairedAudio.isEmpty)
+    return model
+}
+
+private let echo = output(2, "AC-41-6A-C5-C3-F1:output", "Echo Dot-65W")
+
+@Test
+@MainActor
+func aDisconnectedBluetoothSpeakerJoinsTheBluetoothGroupWithoutWaitingForTheProfiler() async throws {
+    let audio = FakeAudio()
+    audio.catalog = [output(1, "speaker"), echo]
+    // Measured: right after the Echo Dot dropped, system_profiler still listed
+    // it as connected.
+    let model = try await modelWithPairedEcho(audio, list: "device_connected")
+    #expect(model.pairedBluetoothDevices.isEmpty)
+
+    audio.catalog = [output(1, "speaker")]
+    model.handleDevicesChanged()
+
+    #expect(model.pairedBluetoothDevices.map(\.uid) == [echo.uid])
+    #expect(model.speakerDevices.map(\.uid) == ["speaker"])
+}
+
+@Test
+@MainActor
+func aHiddenBluetoothSpeakerStaysOutOfTheBluetoothGroup() async throws {
+    let audio = FakeAudio()
+    audio.catalog = [output(1, "speaker")]
+    let model = try await modelWithPairedEcho(audio, list: "device_not_connected")
+    let paired = try #require(model.pairedBluetoothDevices.first)
+
+    model.hide(paired)
+
+    #expect(model.pairedBluetoothDevices.isEmpty)
+}
+
+@Test
+@MainActor
+func theIdleMicOfHeadphonesPlayingCountsAsInUse() {
+    // AirPods play while the Mac's own mic records, so the AirPods mic row is
+    // not current yet disconnecting it would cut the sound.
+    let airpods = output(1, "70-AE-2A-5E-21-CD:output", "AirPods Pro")
+    let airpodsMic = input(3, "70-AE-2A-5E-21-CD:input", "AirPods Pro")
+    let audio = FakeAudio()
+    audio.catalog = [airpods, echo, airpodsMic, input(4, "BuiltInMicrophoneDevice")]
+    audio.defaults = [.output: 1, .input: 4]
+    let model = testModel(audio: audio, defaults: isolatedDefaults())
+
+    model.refreshDevices()
+
+    #expect(model.isInUse(airpodsMic))
+    #expect(!model.isInUse(echo))
+}
+
+@Test
+@MainActor
+func aBluetoothDeviceStopsShowingConnectingOnceCoreAudioHasIt() {
+    let audio = FakeAudio()
+    audio.catalog = [output(1, "speaker")]
+    let model = testModel(audio: audio, defaults: isolatedDefaults())
+    model.start()
+    model.connectingBluetoothAttempts = ["AC-41-6A-C5-C3-F1": UUID()]
+
+    audio.catalog.append(output(2, "AC-41-6A-C5-C3-F1:output", "Echo Dot-65W"))
+    model.handleDevicesChanged()
+
+    #expect(model.connectingBluetoothAttempts.isEmpty)
+}
+
+@Test
+@MainActor
+func aBluetoothDeviceWithAnUnfamiliarUIDIsMatchedByName() async throws {
+    // Not seen on hardware: an LE Audio device whose UID is not built from its
+    // address must still leave the Bluetooth group and offer Disconnect.
+    var oddEcho = output(2, "le-audio-echo", "Echo Dot-65W")
+    oddEcho.transportType = kAudioDeviceTransportTypeBluetoothLE
+    let audio = FakeAudio()
+    audio.catalog = [output(1, "speaker"), oddEcho]
+
+    let model = try await modelWithPairedEcho(audio, list: "device_connected")
+
+    #expect(model.pairedBluetoothDevices.isEmpty)
+    #expect(model.bluetoothAddress(of: oddEcho) == "AC-41-6A-C5-C3-F1")
+    #expect(model.canDisconnect(oddEcho))
 }
 
 @Test

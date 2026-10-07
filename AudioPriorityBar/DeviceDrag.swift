@@ -59,6 +59,9 @@ struct PanelLayout {
     static let bottomPadding: CGFloat = 8
 
     let sections: [(section: DeviceSection, count: Int)]
+    /// The Bluetooth group under the lists: nil while it is not shown,
+    /// otherwise how many of its rows are open. It takes no drops.
+    var bluetoothRows: Int?
 
     /// Nearest gap to `y`, measured from the top of a section.
     static func insertionIndex(y: CGFloat, rowCount: Int) -> Int {
@@ -85,7 +88,10 @@ struct PanelLayout {
     var contentHeight: CGFloat {
         let chrome = Self.topPadding + Self.bottomPadding
             + CGFloat(max(sections.count - 1, 0)) * Self.sectionGap
-        return sections.reduce(chrome) { $0 + height($1.count) }
+        let lists = sections.reduce(chrome) { $0 + height($1.count) }
+        guard let bluetoothRows else { return lists }
+        return lists + Self.sectionGap + DeviceRowMetrics.sectionHeader
+            + CGFloat(bluetoothRows) * DeviceRowMetrics.pitch
     }
 
     func sectionTop(of section: DeviceSection) -> CGFloat? {

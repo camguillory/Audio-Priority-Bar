@@ -87,7 +87,9 @@ struct DeviceRow: View {
                 tint: .orange
             ))
         }
-        if !device.isConnected {
+        if model.isConnecting(device) {
+            result.append(Status(icon: "dot.radiowaves.left.and.right", text: "Connecting…"))
+        } else if !device.isConnected {
             let seen = model.store.storedDevice(
                 uid: device.uid,
                 role: device.role
@@ -97,6 +99,8 @@ struct DeviceRow: View {
                 text: ["Disconnected", seen.map { "Last seen \($0)" }]
                     .compactMap { $0 }.joined(separator: " · ")
             ))
+        } else if device.isBluetooth, !model.isInUse(device) {
+            result.append(Status(icon: "dot.radiowaves.left.and.right", text: "Connected"))
         }
         // The antenna-slash glyph means a proven verdict, so it belongs to
         // `.down` alone: that state dims the row and blocks selection, while
@@ -201,6 +205,7 @@ struct DeviceRow: View {
             // Faded rather than removed, so the name keeps its width and does
             // not reflow as the pointer crosses rows.
             HStack(spacing: 6) {
+                connectControl
                 selectionOverride
                 actions
             }
@@ -334,6 +339,32 @@ struct DeviceRow: View {
         }
     }
 
+    @ViewBuilder
+    private var connectControl: some View {
+        if model.canConnect(device) {
+            if !model.isConnecting(device) {
+                bluetoothPill("Connect") { model.connect(device) }
+            }
+        } else if model.canDisconnect(device), !model.isInUse(device) {
+            bluetoothPill("Disconnect") { model.disconnect(device) }
+        }
+    }
+
+    private func bluetoothPill(_ title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 6)
+                .frame(height: 18)
+                .background(Capsule().fill(Color.primary.opacity(0.06)))
+        }
+        .buttonStyle(.plain)
+        .help("\(title) \(device.name) over Bluetooth")
+        .accessibilityLabel("\(title) \(device.name)")
+        .focused($isOverrideFocused)
+    }
+
     private func selectionOverridePill(
         partner: AudioDevice,
         label: String,
@@ -405,6 +436,12 @@ struct DeviceRow: View {
             }
                 .disabled(isSelected || isUnavailable)
             Divider()
+        } else if model.canConnect(device) {
+            Button { model.connect(device) } label: {
+                Label("Connect", systemImage: "link")
+            }
+            .disabled(model.isConnecting(device))
+            Divider()
         }
 
         Button {
@@ -466,6 +503,11 @@ struct DeviceRow: View {
                         : "Never Auto-Select",
                     systemImage: isNeverUse ? "checkmark.circle" : "nosign"
                 )
+            }
+            if model.canDisconnect(device) {
+                Button { model.disconnect(device) } label: {
+                    Label("Disconnect", systemImage: "xmark.circle")
+                }
             }
         }
 
