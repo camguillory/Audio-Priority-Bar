@@ -9,7 +9,9 @@ installs it. Nothing about you or your Mac is sent. You can turn automatic
 updates off in Settings.
 
 Input Monitoring, if you grant it, is used only to read whether a Jabra Link
-dongle's headset is on. The **Microphone muted** reminder checks whether a
+dongle's headset is on. Accessibility, if you allow it in Settings, is used
+only to check whether the pointer is on the menu bar icon before showing its
+preview. The **Microphone muted** reminder checks whether a
 microphone is in use, and never records or reads audio.
 
 Questions: [open an issue](https://github.com/camguillory/Audio-Priority-Bar/issues).

@@ -81,6 +81,7 @@ list for each kind of device and uses the highest one that is connected.
   outlined in Settings to tell it apart from the Sound icon, and can show
   the volume level beside any device icon. Settings previews the icon as you
   change it
+- Hovering the menu bar icon shows the current output and microphone
 - Liquid Glass on macOS 26, VoiceOver support, and keyboard-accessible actions
 - Output volume and microphone level by slider or scroll wheel, with mute and
   availability status
@@ -238,9 +239,11 @@ unverified on hardware
 ([details](https://github.com/tobi/AudioPriorityBar/pull/32)). An
 unrecognised dongle fails open rather than being treated as off.
 
-May prompt for **Input Monitoring** permission. Open at Login may separately
-need approval in **System Settings > General > Login Items**, which Settings
-opens for you while approval is pending.
+May prompt for **Input Monitoring** permission. **Accessibility** is optional
+and asked for only from Settings, to keep the hover preview off while macOS
+hides the icon. Open at Login may separately need approval in **System
+Settings > General > Login Items**, which Settings opens for you while
+approval is pending.
 
 <details>
 <summary>Upgrading from V1</summary>
