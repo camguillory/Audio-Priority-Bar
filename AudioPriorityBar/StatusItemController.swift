@@ -365,8 +365,8 @@ final class StatusItemController: NSObject, NSWindowDelegate {
     }
 
     /// Follows the pointer across the whole screen rather than through a
-    /// tracking area, which never fires for a pointer sliding in along the
-    /// screen's top edge. Moves over other apps arrive through the global
+    /// tracking area, which macOS 27 never delivers to the status item
+    /// button. Moves over other apps arrive through the global
     /// monitor and moves over this app's own windows through the local one.
     private func observePointer() {
         NSEvent.addGlobalMonitorForEvents(matching: .mouseMoved) { [weak self] _ in
@@ -379,7 +379,7 @@ final class StatusItemController: NSObject, NSWindowDelegate {
     }
 
     private func updateHoverPreview() {
-        guard isPointInHoverColumn(NSEvent.mouseLocation) else {
+        guard isPointOnStatusItem(NSEvent.mouseLocation) else {
             isHoverDismissed = false
             hideHoverPreview()
             return
@@ -390,7 +390,8 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         // flash the preview.
         hoverTask = Task { [weak self] in
             try? await Task.sleep(for: .milliseconds(300))
-            guard let self, !Task.isCancelled else { return }
+            guard let self, !Task.isCancelled, await isIconUnderPointer(),
+                  !Task.isCancelled else { return }
             hoverTask = nil
             guard !isHoverDismissed, !panel.isVisible else { return }
             notice.isSuppressed = true
@@ -398,16 +399,33 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         }
     }
 
-    /// The status item's window from the bottom of the menu bar up through
-    /// the screen's top edge, where the pointer reports a point just outside
-    /// the window. Capped at that edge so a display stacked above does not
-    /// count.
-    private func isPointInHoverColumn(_ point: NSPoint) -> Bool {
-        guard let window = statusItem.button?.window,
-              let screen = window.screen else { return false }
-        let frame = window.frame
-        return point.x >= frame.minX && point.x < frame.maxX
-            && point.y >= frame.minY && point.y <= screen.frame.maxY
+    /// The status item's window, which macOS leaves parked under its hidden
+    /// items arrow while the icon is tucked behind it.
+    private func isPointOnStatusItem(_ point: NSPoint) -> Bool {
+        statusItem.button?.window?.frame.contains(point) ?? false
+    }
+
+    /// Whether the icon itself is under the pointer rather than the hidden
+    /// items arrow drawn over a tucked icon's window. Only Accessibility can
+    /// tell, so without it the window alone decides.
+    private func isIconUnderPointer() async -> Bool {
+        guard AXIsProcessTrusted(),
+              let top = NSScreen.screens.first?.frame.maxY else { return true }
+        let point = NSEvent.mouseLocation
+        // Off the main thread, which has to answer the request when the
+        // element under the pointer is this app's own icon.
+        return await Task.detached {
+            var element: AXUIElement?
+            var pid: pid_t = 0
+            guard AXUIElementCopyElementAtPosition(
+                AXUIElementCreateSystemWide(),
+                Float(point.x),
+                Float(top - point.y),
+                &element
+            ) == .success, let element,
+                AXUIElementGetPid(element, &pid) == .success else { return true }
+            return pid == getpid()
+        }.value
     }
 
     private func hideHoverPreview() {

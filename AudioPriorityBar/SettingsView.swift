@@ -42,6 +42,7 @@ struct SettingsView: View {
     @Bindable var launchAtLogin: LaunchAtLoginController
     @Bindable var updates: UpdateChecker
     let pane: SettingsPane
+    @State private var isAccessibilityTrusted = false
 
     private static let homePageURL = URL(
         string: "https://github.com/camguillory/Audio-Priority-Bar/"
@@ -107,6 +108,28 @@ struct SettingsView: View {
                 set: { model.setRemindsWhenMuted($0) }
             ))
         }
+
+        Section("Hover preview") {
+            LabeledContent {
+                if isAccessibilityTrusted {
+                    Text("Allowed").foregroundStyle(.secondary)
+                } else {
+                    Button("Allow…") {
+                        AXIsProcessTrustedWithOptions(
+                            ["AXTrustedCheckOptionPrompt": true] as CFDictionary
+                        )
+                    }
+                }
+            } label: {
+                Text("Show only over the icon")
+                Text("Needs Accessibility. Without it, the preview also opens over \(Image(systemName: "chevron.left.2")) when macOS hides the icon.")
+            }
+        }
+        .onAppear { isAccessibilityTrusted = AXIsProcessTrusted() }
+        // Allowing it in System Settings happens while this window stays open.
+        .onReceive(NotificationCenter.default.publisher(
+            for: NSApplication.didBecomeActiveNotification
+        )) { _ in isAccessibilityTrusted = AXIsProcessTrusted() }
     }
 
     /// The real menu bar icon between the system items it sits beside, so
