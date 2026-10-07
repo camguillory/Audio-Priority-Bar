@@ -152,25 +152,6 @@ func layoutResolvesRawTargetSection() {
 
 @Test
 @MainActor
-func theBluetoothGroupAddsItsHeaderAndOpenRowsButTakesNoDrops() {
-    let none = PanelLayout(sections: [(.speaker, 1), (.headphone, 1), (.input, 1)])
-    let collapsed = PanelLayout(
-        sections: [(.speaker, 1), (.headphone, 1), (.input, 1)],
-        bluetoothRows: 0
-    )
-    let open = PanelLayout(
-        sections: [(.speaker, 1), (.headphone, 1), (.input, 1)],
-        bluetoothRows: 2
-    )
-
-    #expect(collapsed.contentHeight - none.contentHeight
-        == PanelLayout.sectionGap + DeviceRowMetrics.sectionHeader)
-    #expect(open.contentHeight - collapsed.contentHeight == 2 * DeviceRowMetrics.pitch)
-    #expect(open.target(at: CGPoint(x: 10, y: open.contentHeight - 10)) == nil)
-}
-
-@Test
-@MainActor
 func roleMismatchesAreForbiddenUntilTheDragReentersAValidSection() {
     let layout = PanelLayout(sections: [
         (.speaker, 1), (.headphone, 1), (.input, 1),

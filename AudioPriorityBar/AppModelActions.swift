@@ -59,11 +59,6 @@ extension AppModel {
         store.showsMenuBarVolume = enabled
     }
 
-    func setExpandsBluetoothDevices(_ expanded: Bool) {
-        expandsBluetoothDevices = expanded
-        store.expandsBluetoothDevices = expanded
-    }
-
     func canConnect(_ device: AudioDevice) -> Bool {
         !device.isConnected && battery.report.bluetoothDevice(for: device) != nil
     }
@@ -87,11 +82,13 @@ extension AppModel {
     }
 
     /// Opens the Bluetooth link and leaves the rest to CoreAudio, which adds
-    /// the device a few seconds later, and to automatic switching. The first
-    /// attempt asks for Bluetooth permission.
-    func connect(_ device: AudioDevice) {
-        guard let address = battery.report.bluetoothDevice(for: device)?.address,
-              connectingBluetoothAttempts[address] == nil else { return }
+    /// the device a few seconds later. With `selecting`, the device is then
+    /// selected as a click on a connected row would; otherwise automatic
+    /// switching decides. The first attempt asks for Bluetooth permission.
+    func connect(_ device: AudioDevice, selecting: Bool = false) {
+        guard let address = battery.report.bluetoothDevice(for: device)?.address else { return }
+        if selecting { selectingBluetoothAddress = address }
+        guard connectingBluetoothAttempts[address] == nil else { return }
         let attempt = UUID()
         connectingBluetoothAttempts[address] = attempt
         Task {
@@ -104,6 +101,9 @@ extension AppModel {
             }
             if connectingBluetoothAttempts[address] == attempt {
                 connectingBluetoothAttempts[address] = nil
+                // A device that fails or never shows up is not selected later,
+                // out of the blue.
+                if selectingBluetoothAddress == address { selectingBluetoothAddress = nil }
             }
         }
     }

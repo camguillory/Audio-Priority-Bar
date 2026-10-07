@@ -248,7 +248,11 @@ func showAllRevealsHiddenDevicesInTheirOwnList() {
 /// A started model whose Bluetooth read returns the Echo Dot under `list`,
 /// `device_connected` or `device_not_connected`.
 @MainActor
-private func modelWithPairedEcho(_ audio: FakeAudio, list: String) async throws -> AppModel {
+private func modelWithPairedEcho(
+    _ audio: FakeAudio,
+    list: String,
+    defaults: UserDefaults = isolatedDefaults()
+) async throws -> AppModel {
     let profile = Data("""
     {"SPBluetoothDataType": [{"\(list)": [
       {"Echo Dot-65W": {"device_address": "AC:41:6A:C5:C3:F1", "device_minorType": "Speaker"}}
@@ -256,7 +260,7 @@ private func modelWithPairedEcho(_ audio: FakeAudio, list: String) async throws 
     """.utf8)
     let battery = BluetoothBatteryMonitor(read: { profile })
     let model = AppModel(
-        store: PriorityStore(defaults: isolatedDefaults()),
+        store: PriorityStore(defaults: defaults),
         audio: audio.operations,
         link: LinkOperations(isUsable: { _ in true }, state: { _ in nil }),
         battery: battery
@@ -271,32 +275,75 @@ private let echo = output(2, "AC-41-6A-C5-C3-F1:output", "Echo Dot-65W")
 
 @Test
 @MainActor
-func aDisconnectedBluetoothSpeakerJoinsTheBluetoothGroupWithoutWaitingForTheProfiler() async throws {
+func aDisconnectedBluetoothSpeakerStaysListedDimmedWithoutWaitingForTheProfiler() async throws {
     let audio = FakeAudio()
     audio.catalog = [output(1, "speaker"), echo]
     // Measured: right after the Echo Dot dropped, system_profiler still listed
     // it as connected.
     let model = try await modelWithPairedEcho(audio, list: "device_connected")
-    #expect(model.pairedBluetoothDevices.isEmpty)
+    #expect(model.speakerDevices.map(\.uid) == ["speaker", echo.uid])
+    #expect(model.speakerDevices.map(\.isConnected) == [true, true])
 
     audio.catalog = [output(1, "speaker")]
     model.handleDevicesChanged()
 
-    #expect(model.pairedBluetoothDevices.map(\.uid) == [echo.uid])
-    #expect(model.speakerDevices.map(\.uid) == ["speaker"])
+    #expect(model.speakerDevices.map(\.uid) == ["speaker", echo.uid])
+    #expect(model.speakerDevices.map(\.isConnected) == [true, false])
+    #expect(model.canConnect(try #require(model.speakerDevices.last)))
 }
 
 @Test
 @MainActor
-func aHiddenBluetoothSpeakerStaysOutOfTheBluetoothGroup() async throws {
+func aBluetoothSpeakerClickedWhileOffIsSelectedOnceItConnects() async throws {
     let audio = FakeAudio()
     audio.catalog = [output(1, "speaker")]
     let model = try await modelWithPairedEcho(audio, list: "device_not_connected")
-    let paired = try #require(model.pairedBluetoothDevices.first)
+    #expect(model.currentOutputID == 1)
+    model.selectingBluetoothAddress = "AC-41-6A-C5-C3-F1"
+
+    // The built-in speaker ranks first, so automatic switching alone would
+    // keep it.
+    audio.catalog.append(echo)
+    model.handleDevicesChanged()
+
+    #expect(model.currentOutputID == echo.platformID)
+    #expect(model.isManualMode)
+    #expect(model.selectingBluetoothAddress == nil)
+}
+
+@Test
+@MainActor
+func aHiddenBluetoothSpeakerIsListedOnlyWhenShowingEverything() async throws {
+    let audio = FakeAudio()
+    audio.catalog = [output(1, "speaker")]
+    let model = try await modelWithPairedEcho(audio, list: "device_not_connected")
+    let paired = try #require(model.speakerDevices.first { $0.uid == echo.uid })
 
     model.hide(paired)
+    #expect(model.speakerDevices.map(\.uid) == ["speaker"])
+    #expect(model.hiddenSpeakerDevices.map(\.uid) == [echo.uid])
 
-    #expect(model.pairedBluetoothDevices.isEmpty)
+    model.showAll = true
+    model.refreshDevices()
+    #expect(model.speakerDevices.map(\.uid) == ["speaker", echo.uid])
+}
+
+@Test
+@MainActor
+func aPairedSpeakerRememberedAsHeadphonesIsListedUnderSpeakers() async throws {
+    // Measured: a JBL Xtreme was remembered as headphones before a Bluetooth
+    // headphones claim was ignored, while Bluetooth reports it as a speaker.
+    let defaults = isolatedDefaults()
+    var remembered = echo
+    remembered.declaredCategory = .headphone
+    PriorityStore(defaults: defaults).remember([remembered])
+    let audio = FakeAudio()
+    audio.catalog = [output(1, "speaker")]
+
+    let model = try await modelWithPairedEcho(audio, list: "device_not_connected", defaults: defaults)
+
+    #expect(model.speakerDevices.map(\.uid) == ["speaker", echo.uid])
+    #expect(model.headphoneDevices.isEmpty)
 }
 
 @Test
@@ -336,7 +383,8 @@ func aBluetoothDeviceStopsShowingConnectingOnceCoreAudioHasIt() {
 @MainActor
 func aBluetoothDeviceWithAnUnfamiliarUIDIsMatchedByName() async throws {
     // Not seen on hardware: an LE Audio device whose UID is not built from its
-    // address must still leave the Bluetooth group and offer Disconnect.
+    // address must be listed once, not also as a paired device that is off,
+    // and offer Disconnect.
     var oddEcho = output(2, "le-audio-echo", "Echo Dot-65W")
     oddEcho.transportType = kAudioDeviceTransportTypeBluetoothLE
     let audio = FakeAudio()
@@ -344,7 +392,7 @@ func aBluetoothDeviceWithAnUnfamiliarUIDIsMatchedByName() async throws {
 
     let model = try await modelWithPairedEcho(audio, list: "device_connected")
 
-    #expect(model.pairedBluetoothDevices.isEmpty)
+    #expect(model.speakerDevices.map(\.uid) == ["speaker", "le-audio-echo"])
     #expect(model.bluetoothAddress(of: oddEcho) == "AC-41-6A-C5-C3-F1")
     #expect(model.canDisconnect(oddEcho))
 }
