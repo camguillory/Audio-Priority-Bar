@@ -403,7 +403,7 @@ private struct BluetoothGroup: View {
                 model.setExpandsBluetoothDevices(!model.expandsBluetoothDevices)
             } label: {
                 HStack {
-                    Text("Bluetooth")
+                    Text("Disconnected Bluetooth devices")
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(.secondary)
                     Spacer()
@@ -423,7 +423,7 @@ private struct BluetoothGroup: View {
             }
             .buttonStyle(.plain)
             .onHover { isHoveringHeader = $0 }
-            .accessibilityLabel("Bluetooth devices")
+            .accessibilityLabel("Disconnected Bluetooth devices")
             .accessibilityValue(model.expandsBluetoothDevices ? "Expanded" : "Collapsed")
             .accessibilityAddTraits(.isHeader)
 

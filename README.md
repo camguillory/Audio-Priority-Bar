@@ -205,8 +205,9 @@ Speakers, Headphones, and Microphones remain visible in both modes.
   disconnected remembered devices.
 - Forget a disconnected device to remove its saved settings.
 - Paired Bluetooth speakers and headphones that are off are listed under
-  **Bluetooth**, below Microphones. Expand it and click one to connect it,
-  and automatic switching treats it like any device that just connected.
+  **Disconnected Bluetooth devices**, below Microphones. Expand it and click
+  one to connect it, and automatic switching treats it like any device that
+  just connected.
 - A Bluetooth device that is connected but not in use shows **Connected**.
   Hover it and click **Disconnect** to release it.
 - The first connect or disconnect asks for **Bluetooth** permission.
