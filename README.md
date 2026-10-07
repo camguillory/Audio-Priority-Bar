@@ -70,6 +70,8 @@ list for each kind of device and uses the highest one that is connected.
   dragging
 - Hide a device, keep one visible but never picked automatically, and remember
   disconnected devices
+- Connect and disconnect paired Bluetooth speakers and headphones from the
+  panel
 - Output categories taken from what each device reports, in any system language
 
 **Panel and menu bar**
@@ -202,6 +204,13 @@ Speakers, Headphones, and Microphones remain visible in both modes.
 - Use **Show hidden and disconnected devices** to manage hidden and
   disconnected remembered devices.
 - Forget a disconnected device to remove its saved settings.
+- Paired Bluetooth speakers and headphones stay listed at their rank while
+  they are off, dimmed. Click one to connect it, and automatic switching
+  treats it like any device that just connected. Hide one you never use to
+  take it off the list.
+- A Bluetooth device that is connected but not in use shows **Connected**.
+  Hover it and click **Disconnect** to release it.
+- The first connect or disconnect asks for **Bluetooth** permission.
 - A device with a paired counterpart, like a USB headset's input and output
   halves, shows an override for the current default: **Mic only** or
   **Output only** while **Select headset input and output together** is on,

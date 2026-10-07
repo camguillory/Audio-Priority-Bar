@@ -1,5 +1,6 @@
 import AudioPriorityCore
 import AppKit
+import CoreAudio
 import Foundation
 import Observation
 
@@ -82,6 +83,12 @@ final class AppModel {
     var outlinesMenuBarIcon: Bool
     var menuBarDevices: MenuBarDevices
     var showsMenuBarVolume: Bool
+    /// Bluetooth addresses with a connection attempt in flight, each tagged so
+    /// a finished attempt cannot end a newer one.
+    var connectingBluetoothAttempts: [String: UUID] = [:]
+    /// The address of a Bluetooth device clicked while off, selected as soon
+    /// as CoreAudio adds it.
+    var selectingBluetoothAddress: String?
     /// Called with the devices Automatic mode just switched to because the
     /// hardware changed, output first. Never for the user's own choices.
     var onAutomaticSwitch: (([AudioDevice]) -> Void)?
@@ -149,6 +156,7 @@ final class AppModel {
         outlinesMenuBarIcon = store.outlinesMenuBarIcon
         menuBarDevices = store.menuBarDevices
         showsMenuBarVolume = store.showsMenuBarVolume
+        battery.onPairedAudioChange = { [weak self] in self?.refreshDevices() }
     }
 
     func start() {
@@ -194,6 +202,15 @@ final class AppModel {
         for (role, added) in additions where !added.isEmpty {
             recentlyAddedUIDs[role] = added
             topologyChangedAt[role] = ProcessInfo.processInfo.systemUptime
+        }
+        if hasStarted, let address = selectingBluetoothAddress,
+           let device = allOutputs.first(where: {
+               $0.isConnected && bluetoothAddress(of: $0) == address
+           }) {
+            selectingBluetoothAddress = nil
+            selectManually(device)
+            refreshMute()
+            return
         }
         guard !isManualMode, hasStarted else {
             refreshMute()
@@ -351,6 +368,11 @@ final class AppModel {
 
     func refreshDevices() {
         let connected = audio.devices()
+        if !connectingBluetoothAttempts.isEmpty {
+            for address in connected.compactMap(bluetoothAddress(of:)) {
+                connectingBluetoothAttempts[address] = nil
+            }
+        }
         let inputUIDs = Set(connected.lazy.filter { $0.role == .input }.map(\.uid))
         let outputUIDs = Set(connected.lazy.filter { $0.role == .output }.map(\.uid))
         if inputUIDs != connectedInputUIDs || outputUIDs != connectedOutputUIDs {
@@ -374,18 +396,37 @@ final class AppModel {
 
         var inputs = connected.filter { $0.role == .input }
         var outputs = connected.filter { $0.role == .output }
+        // Every paired Bluetooth speaker and headphones that is off is listed
+        // at its rank, dimmed, so it can be connected where it stands. A
+        // connected one whose UID is not built from its address is still
+        // found by name.
+        let connectedNames = Set(connected.filter(\.isBluetooth).map(\.name))
+        let pairedOff = battery.report.pairedAudio.map(\.device).filter {
+            !connectedOutputUIDs.contains($0.uid) && !connectedNames.contains($0.name)
+        }
+        let pairedOffUIDs = Set(pairedOff.map(\.uid))
         if showAll {
             for stored in store.knownDevices {
                 let connectedUIDs = stored.role == .input
                     ? connectedInputUIDs
                     : connectedOutputUIDs
-                guard !connectedUIDs.contains(stored.uid) else { continue }
+                guard !connectedUIDs.contains(stored.uid),
+                      !pairedOffUIDs.contains(stored.uid) else { continue }
                 if stored.role == .input {
                     inputs.append(stored.disconnectedDevice())
                 } else {
                     outputs.append(stored.disconnectedDevice())
                 }
             }
+        }
+        for paired in pairedOff {
+            var device = store.storedDevice(uid: paired.uid, role: .output)?
+                .disconnectedDevice() ?? paired
+            // The class of device beats a remembered claim, which may predate
+            // ignoring a Bluetooth headphones terminal.
+            device.declaredCategory = paired.declaredCategory
+            device.transportType = kAudioDeviceTransportTypeBluetooth
+            outputs.append(device)
         }
         // Hiding the active microphone would leave no way to see which one is
         // in use, so it stays listed and shows as hidden, matching outputs.

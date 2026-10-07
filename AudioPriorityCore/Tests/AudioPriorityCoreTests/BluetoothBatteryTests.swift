@@ -113,3 +113,43 @@ func batteryBadgesFlagLowLevelsByTheLowestEarbud() {
     #expect(badges.map(\.isLow) == [true, false])
     #expect(BatteryLevels(main: 5).badges.first?.isLow == true)
 }
+
+@Test
+func pairedSpeakersAndHeadphonesBecomeOutputsWithCoreAudioUIDs() throws {
+    // Measured on macOS 27 with a JBL Xtreme and Galaxy Buds FE paired but
+    // off, next to a paired mouse and iPhone. The Echo Dot is connected, and
+    // CoreAudio named its output AC-41-6A-C5-C3-F1:output.
+    let report = BluetoothBattery.parse(Data("""
+    {"SPBluetoothDataType": [{
+      "device_connected": [
+        {"Echo Dot-65W": {"device_address": "AC:41:6A:C5:C3:F1", "device_minorType": "Speaker"}}
+      ],
+      "device_not_connected": [
+        {"1.JBL Xtreme": {"device_address": "20:18:5B:E4:7C:CD", "device_minorType": "Speaker"}},
+        {"Galaxy Buds FE": {"device_address": "AC:80:FB:D0:0C:82", "device_minorType": "Headset"}},
+        {"iPhone": {"device_address": "88:20:0D:BC:8C:1E"}},
+        {"MX Master 3S": {"device_address": "DD:4A:BE:F5:3B:07", "device_minorType": "Mouse"}}
+      ]
+    }]}
+    """.utf8))
+    let devices = report.pairedAudio.map(\.device)
+    #expect(devices.map(\.uid) == [
+        "20-18-5B-E4-7C-CD:output", "AC-41-6A-C5-C3-F1:output", "AC-80-FB-D0-0C-82:output",
+    ])
+    #expect(devices.map(\.declaredCategory) == [.speaker, .speaker, .headphone])
+
+    let budsMic = AudioDevice(platformID: 0, uid: "AC-80-FB-D0-0C-82:input", name: "Buds", role: .input)
+    #expect(try #require(report.bluetoothDevice(for: budsMic)).name == "Galaxy Buds FE")
+    let oddUID = AudioDevice(platformID: 0, uid: "le-audio-1", name: "Galaxy Buds FE", role: .output)
+    #expect(report.bluetoothDevice(for: oddUID)?.address == "AC-80-FB-D0-0C-82")
+    let echo = AudioDevice(platformID: 1, uid: "AC-41-6A-C5-C3-F1:output", name: "Echo", role: .output)
+    #expect(BluetoothBattery.address(of: echo) == "AC-41-6A-C5-C3-F1")
+    #expect(BluetoothBattery.address(of: budsMic) == "AC-80-FB-D0-0C-82")
+    let usb = AudioDevice(
+        platformID: 2,
+        uid: "AppleUSBAudioEngine:Unknown Manufacturer:Jabra Link 380:50C275445423:1",
+        name: "Jabra Link 380",
+        role: .output
+    )
+    #expect(BluetoothBattery.address(of: usb) == nil)
+}

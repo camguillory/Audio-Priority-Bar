@@ -32,6 +32,8 @@ struct DeviceRow: View {
     @State private var isHovering = false
     @State private var isHoveringSelectionOverride = false
     @State private var highlightedPartnerID: String?
+    @State private var controlsWidth: CGFloat = 0
+    @State private var isHoveringBluetoothPill = false
     @FocusState private var isOverrideFocused: Bool
     @FocusState private var isActionsFocused: Bool
 
@@ -87,16 +89,22 @@ struct DeviceRow: View {
                 tint: .orange
             ))
         }
-        if !device.isConnected {
+        if model.isConnecting(device) {
+            result.append(Status(icon: "dot.radiowaves.left.and.right", text: "Connecting…"))
+        } else if !device.isConnected {
             let seen = model.store.storedDevice(
                 uid: device.uid,
                 role: device.role
             )?.relativeLastSeen()
+            // The dimmed row and the glyph already say disconnected, so the
+            // text keeps to when, which fits beside a long name.
             result.append(Status(
                 icon: "wifi.slash",
-                text: ["Disconnected", seen.map { "Last seen \($0)" }]
-                    .compactMap { $0 }.joined(separator: " · ")
+                text: seen.map { "Last seen \($0)" } ?? "Disconnected",
+                spokenText: seen.map { "Disconnected, last seen \($0)" }
             ))
+        } else if device.isBluetooth, !model.isInUse(device) {
+            result.append(Status(icon: "dot.radiowaves.left.and.right", text: "Connected"))
         }
         // The antenna-slash glyph means a proven verdict, so it belongs to
         // `.down` alone: that state dims the row and blocks selection, while
@@ -195,19 +203,11 @@ struct DeviceRow: View {
                     .accessibilityHidden(true)
                 }
             }
+            .padding(.trailing, controlsRoom)
             .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())
-
-            // Faded rather than removed, so the name keeps its width and does
-            // not reflow as the pointer crosses rows.
-            HStack(spacing: 6) {
-                selectionOverride
-                actions
-            }
-            .opacity(showsRowControls ? 1 : 0)
-            .allowsHitTesting(showsRowControls)
-            .animation(reduceMotion ? nil : .easeInOut(duration: 0.12), value: showsRowControls)
         }
+        .overlay(alignment: .trailing) { rowControls }
         .padding(.horizontal, 8)
         .frame(height: DeviceRowMetrics.height)
         .background {
@@ -239,9 +239,7 @@ struct DeviceRow: View {
             highlightedPairedDeviceID = pairedDevice.id
         }
         .contentShape(Rectangle())
-        .onTapGesture {
-            if device.isConnected, !isUnavailable, !isSelected { select() }
-        }
+        .onTapGesture { activate() }
         .contextMenu { actionItems }
         // Undo the content inset for layout, so the row's text lines up with
         // the section heading while its highlight and hover area overhang it.
@@ -249,20 +247,8 @@ struct DeviceRow: View {
         .accessibilityElement(children: .contain)
         .accessibilityLabel(device.name)
         .accessibilityValue(accessibilityValue)
-        .accessibilityHint(
-            !device.isConnected
-                ? "Use the actions menu to manage this device"
-                : (isUnavailable
-                    ? "This device is unavailable"
-                    : (isSelected
-                        ? "Current device"
-                        : (model.isManualMode
-                            ? "Activate to make this device active"
-                            : "Activate to select this device and turn off automatic switching")))
-        )
-        .accessibilityAction {
-            if device.isConnected, !isUnavailable, !isSelected { select() }
-        }
+        .accessibilityHint(accessibilityHint)
+        .accessibilityAction { activate() }
         .accessibilityAddTraits(isSelected ? .isSelected : [])
         .accessibilityAction(named: "Move Up") {
             if index > 0 { move(index - 1) }
@@ -281,6 +267,29 @@ struct DeviceRow: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("Its saved priority, category, and visibility will be removed.")
+        }
+    }
+
+    private var accessibilityHint: String {
+        if !device.isConnected {
+            return model.canConnect(device)
+                ? "Activate to connect and use this device"
+                : "Use the actions menu to manage this device"
+        }
+        if isUnavailable { return "This device is unavailable" }
+        if isSelected { return "Current device" }
+        return model.isManualMode
+            ? "Activate to make this device active"
+            : "Activate to select this device and turn off automatic switching"
+    }
+
+    /// Selects a connected device, or connects a paired Bluetooth one that is
+    /// off and selects it once it is there.
+    private func activate() {
+        if device.isConnected {
+            if !isUnavailable, !isSelected { select() }
+        } else if model.canConnect(device) {
+            model.connect(device, selecting: true)
         }
     }
 
@@ -332,6 +341,63 @@ struct DeviceRow: View {
                 )
             }
         }
+    }
+
+    /// Drawn over the end of the row and room made for them only while they
+    /// show, so statuses keep the full width until the row is hovered. The
+    /// name has layout priority, so it holds still as the pointer crosses rows.
+    private var rowControls: some View {
+        HStack(spacing: 6) {
+            connectControl
+            selectionOverride
+            actions
+        }
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { controlsWidth = $0 }
+        .opacity(showsRowControls ? 1 : 0)
+        .allowsHitTesting(showsRowControls)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.12), value: showsRowControls)
+    }
+
+    private var controlsRoom: CGFloat {
+        showsRowControls ? controlsWidth + 6 : 0
+    }
+
+    @ViewBuilder
+    private var connectControl: some View {
+        if model.canConnect(device) {
+            if !model.isConnecting(device) {
+                bluetoothPill("Connect", tint: .accentColor) { model.connect(device) }
+            }
+        } else if model.canDisconnect(device), !model.isInUse(device) {
+            bluetoothPill("Disconnect") { model.disconnect(device) }
+        }
+    }
+
+    /// Connect, the one thing a dimmed row offers, takes the accent colour
+    /// and fills with it under the pointer; Disconnect stays as quiet as the
+    /// other row controls and only brightens, like the selection override.
+    private func bluetoothPill(
+        _ title: String,
+        tint: Color? = nil,
+        action: @escaping () -> Void
+    ) -> some View {
+        let hovering = isHoveringBluetoothPill
+        return Button(action: action) {
+            Text(title)
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(tint.map { hovering ? .white : $0 } ?? .secondary)
+                .padding(.horizontal, 6)
+                .frame(height: 18)
+                .background(Capsule().fill(
+                    tint.map { $0.opacity(hovering ? 1 : 0.2) }
+                        ?? .primary.opacity(hovering ? 0.12 : 0.06)
+                ))
+        }
+        .onHover { isHoveringBluetoothPill = $0 }
+        .buttonStyle(.plain)
+        .help("\(title) \(device.name) over Bluetooth")
+        .accessibilityLabel("\(title) \(device.name)")
+        .focused($isOverrideFocused)
     }
 
     private func selectionOverridePill(
@@ -405,6 +471,12 @@ struct DeviceRow: View {
             }
                 .disabled(isSelected || isUnavailable)
             Divider()
+        } else if model.canConnect(device) {
+            Button { model.connect(device) } label: {
+                Label("Connect", systemImage: "link")
+            }
+            .disabled(model.isConnecting(device))
+            Divider()
         }
 
         Button {
@@ -466,6 +538,11 @@ struct DeviceRow: View {
                         : "Never Auto-Select",
                     systemImage: isNeverUse ? "checkmark.circle" : "nosign"
                 )
+            }
+            if model.canDisconnect(device) {
+                Button { model.disconnect(device) } label: {
+                    Label("Disconnect", systemImage: "xmark.circle")
+                }
             }
         }
 

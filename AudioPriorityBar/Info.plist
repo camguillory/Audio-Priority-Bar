@@ -22,6 +22,8 @@
     <string>public.app-category.utilities</string>
     <key>LSUIElement</key>
     <true/>
+    <key>NSBluetoothAlwaysUsageDescription</key>
+    <string>Audio Priority Bar connects and disconnects the Bluetooth speakers and headphones you choose in its panel.</string>
     <key>CFBundleURLTypes</key>
     <array>
         <dict>

@@ -6,6 +6,8 @@ import SwiftUI
 struct PanelView: View {
     @Bindable var model: AppModel
     let showSettings: () -> Void
+    /// Reports the size the content needs, which the panel takes on.
+    var fit: (CGSize) -> Void = { _ in }
 
     /// The AirPods page, which holds their Connect to This Mac setting.
     private static let headphoneSettingsURL = URL(
@@ -204,6 +206,11 @@ struct PanelView: View {
             drag = nil
         }
         .modifier(PanelBackground())
+        .fixedSize(horizontal: false, vertical: true)
+        .onGeometryChange(for: CGSize.self) { $0.size } action: { fit($0) }
+        // Holds the content to the top while the window catches up with a new
+        // height, rather than centering it for a frame.
+        .frame(maxHeight: .infinity, alignment: .top)
     }
 
     /// The current output's hardware icon, so it is clear which device the
