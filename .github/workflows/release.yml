@@ -96,12 +96,26 @@ jobs:
           security list-keychains -d user -s "$keychain" \
             $(security list-keychains -d user | tr -d '"')
 
+      - name: Download previous releases for delta updates
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          previous="$RUNNER_TEMP/previous"
+          mkdir -p "$previous"
+          # ponytail: deltas from the last three releases only; Macs further
+          # behind download the full archive instead.
+          for tag in $(gh release list --exclude-drafts --exclude-pre-releases --limit 3 \
+              --json tagName --jq '.[].tagName'); do
+            gh release download "$tag" -p AudioPriorityBar.zip -O "$previous/$tag.zip"
+          done
+          echo "PREVIOUS_RELEASES=$previous" >> "$GITHUB_ENV"
+
       - name: Build and verify release artifact
         env:
           REQUIRE_SIGNING_CERTIFICATE: "1"
           SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
           SPARKLE_FEED_URL: https://github.com/${{ github.repository }}/releases/latest/download/appcast.xml
-          DOWNLOAD_URL: https://github.com/${{ github.repository }}/releases/download/${{ inputs.tag }}/AudioPriorityBar.zip
+          DOWNLOAD_BASE: https://github.com/${{ github.repository }}/releases/download/${{ inputs.tag }}
         run: |
           if [[ -z "$SPARKLE_PRIVATE_KEY" ]]; then
             echo "The SPARKLE_PRIVATE_KEY secret is required to sign updates." >&2
@@ -120,6 +134,8 @@ jobs:
           files: |
             release/AudioPriorityBar.zip
             release/AudioPriorityBar.zip.sha256
+            release/AudioPriorityBar-update.zip
+            release/AudioPriorityBar-from-*.delta
             release/appcast.xml
           draft: true
           prerelease: ${{ inputs.prerelease }}

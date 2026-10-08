@@ -7,6 +7,8 @@ derived_data="${DERIVED_DATA:-$root/build}"
 output_dir="${OUTPUT_DIR:-$root/release}"
 app="$derived_data/Build/Products/Release/AudioPriorityBar.app"
 zip="$output_dir/AudioPriorityBar.zip"
+# Sparkle's copy of the archive; Homebrew and manual installs keep the plain zip.
+update_zip="$output_dir/AudioPriorityBar-update.zip"
 appcast="$output_dir/appcast.xml"
 sparkle_bin="$derived_data/SourcePackages/artifacts/sparkle/Sparkle/bin"
 # Served from the newest non-prerelease, so prereleases never reach the feed.
@@ -73,16 +75,39 @@ test -s "$app/Contents/Resources/LICENSE"
 
 # The appcast is what installed copies poll; without a key there is nothing
 # they could verify, so CI's packaging check stops at the zip.
+sign() {
+  printf '%s' "$SPARKLE_PRIVATE_KEY" | "$sparkle_bin/sign_update" --ed-key-file - "$1"
+}
 if [[ -n "${SPARKLE_PRIVATE_KEY:-}" ]]; then
-  signature=$(printf '%s' "$SPARKLE_PRIVATE_KEY" \
-    | "$sparkle_bin/sign_update" --ed-key-file - "$zip")
+  cp "$zip" "$update_zip"
+  signature=$(sign "$update_zip")
 else
   signature=""
   echo "No Sparkle key set; skipping appcast.xml."
 fi
 
 if [[ -n "$signature" ]]; then
-  download_url="${DOWNLOAD_URL:-https://github.com/camguillory/Audio-Priority-Bar/releases/download/v$version/AudioPriorityBar.zip}"
+  download_base="${DOWNLOAD_BASE:-https://github.com/camguillory/Audio-Priority-Bar/releases/download/v$version}"
+  # Sparkle picks the delta matching the installed build and falls back to
+  # the full archive when none applies.
+  deltas=""
+  for old_zip in ${PREVIOUS_RELEASES:+"$PREVIOUS_RELEASES"/*.zip}; do
+    [[ -f "$old_zip" ]] || continue
+    old_dir=$(mktemp -d)
+    /usr/bin/ditto -x -k "$old_zip" "$old_dir"
+    old_plist="$old_dir/AudioPriorityBar.app/Contents/Info.plist"
+    old_version=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$old_plist")
+    old_build=$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$old_plist")
+    delta="AudioPriorityBar-from-$old_version.delta"
+    "$sparkle_bin/BinaryDelta" create "$old_dir/AudioPriorityBar.app" "$app" "$output_dir/$delta"
+    deltas+="
+        <enclosure url=\"$download_base/$delta\" sparkle:deltaFrom=\"$old_build\" type=\"application/octet-stream\" $(sign "$output_dir/$delta")/>"
+    rm -rf "$old_dir"
+  done
+  if [[ -n "$deltas" ]]; then
+    deltas="<sparkle:deltas>$deltas
+      </sparkle:deltas>"
+  fi
   minimum_system=$(/usr/libexec/PlistBuddy \
     -c "Print :LSMinimumSystemVersion" "$app/Contents/Info.plist")
   # Shown in the update window; install steps only matter for a first install.
@@ -103,7 +128,8 @@ if [[ -n "$signature" ]]; then
       <sparkle:shortVersionString>$version</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>$minimum_system</sparkle:minimumSystemVersion>
       $notes
-      <enclosure url="$download_url" type="application/octet-stream" $signature/>
+      <enclosure url="$download_base/AudioPriorityBar-update.zip" type="application/octet-stream" $signature/>
+      $deltas
     </item>
   </channel>
 </rss>
