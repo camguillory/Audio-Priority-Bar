@@ -12,6 +12,7 @@ public final class PriorityStore {
         static let hideNewDisplayOutputs = "hideNewDisplayOutputs"
         static let displayDefaultsApplied = "displayDefaultsApplied"
         static let knownDevices = "knownDevices"
+        static let forgottenPairedDevices = "forgottenPairedDevices"
         static let legacyNeverUse = "neverUseDevices"
         static let neverUseInputs = "neverUseInputs"
         static let neverUseOutputs = "neverUseOutputs"
@@ -111,6 +112,18 @@ public final class PriorityStore {
             defaults.set(true, forKey: Key.virtualDefaults)
         }
         saveKnownDevices(known)
+        // ponytail: matched by UID only, so a Bluetooth device whose CoreAudio
+        // UID is not built from its address stays forgotten; clear by name too
+        // if one turns up.
+        let seen = Set(devices.map(\.uid))
+        let forgotten = defaults.stringArray(forKey: Key.forgottenPairedDevices) ?? []
+        defaults.set(forgotten.filter { !seen.contains($0) }, forKey: Key.forgottenPairedDevices)
+    }
+
+    /// A Bluetooth device forgotten while off stays out of the panel, though
+    /// macOS still pairs it, until it is seen connected again.
+    public func isForgotten(uid: String) -> Bool {
+        defaults.stringArray(forKey: Key.forgottenPairedDevices)?.contains(uid) == true
     }
 
     public func storedDevice(
@@ -145,6 +158,7 @@ public final class PriorityStore {
             // Forgetting clears every saved choice, so a display seen again
             // afterwards is genuinely new and gets the default once more.
             remove(uid, from: Key.displayDefaultsApplied)
+            add(uid, to: Key.forgottenPairedDevices)
         }
     }
 
