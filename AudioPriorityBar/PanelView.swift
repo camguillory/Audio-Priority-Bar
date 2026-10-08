@@ -290,9 +290,9 @@ private struct LevelControl: View {
                 toggleMute()
             } label: {
                 Image(systemName: isHoveringMute && canToggleMute && !isPreviewSuppressed ? toggledIcon : icon)
-                    .foregroundStyle(isMuted ? AnyShapeStyle(.red) : AnyShapeStyle(.primary))
+                    .foregroundStyle(isMuted ? AnyShapeStyle(.white) : AnyShapeStyle(.primary))
                     .frame(width: Self.buttonSize, height: Self.buttonSize)
-                    .background(Circle().fill(muteBackground))
+                    .background(Circle().fill(muteBackground).brightness(isMuted && isHoveringMute ? -0.12 : 0))
                     .contentShape(Circle())
                     .animation(.easeInOut(duration: 0.15), value: icon)
                     .animation(.easeInOut(duration: 0.15), value: isHoveringMute)
@@ -356,10 +356,12 @@ private struct LevelControl: View {
         "\(isMuted ? "Unmute" : "Mute") \(deviceName ?? name)"
     }
 
-    /// Always filled so the icon reads as a button, and tinted while muted.
+    /// Always filled so the icon reads as a button, and solid red under a
+    /// white glyph while muted: a red glyph on a translucent red tint takes
+    /// its contrast from whatever the glass shows behind it.
     private var muteBackground: AnyShapeStyle {
         isMuted
-            ? AnyShapeStyle(Color.red.opacity(isHoveringMute ? 0.3 : 0.2))
+            ? AnyShapeStyle(Color.red)
             : AnyShapeStyle(Color.primary.opacity(isHoveringMute ? 0.24 : 0.16))
     }
 
