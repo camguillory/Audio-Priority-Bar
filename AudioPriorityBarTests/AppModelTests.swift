@@ -330,6 +330,26 @@ func aHiddenBluetoothSpeakerIsListedOnlyWhenShowingEverything() async throws {
 
 @Test
 @MainActor
+func aForgottenBluetoothSpeakerStaysGoneUntilItConnectsAgain() async throws {
+    let audio = FakeAudio()
+    audio.catalog = [output(1, "speaker")]
+    let model = try await modelWithPairedEcho(audio, list: "device_not_connected")
+    let paired = try #require(model.speakerDevices.first { $0.uid == echo.uid })
+
+    model.forget(paired)
+    model.showAll = true
+    model.refreshDevices()
+    #expect(model.speakerDevices.map(\.uid) == ["speaker"])
+
+    audio.catalog.append(echo)
+    model.handleDevicesChanged()
+    audio.catalog.removeLast()
+    model.handleDevicesChanged()
+    #expect(model.speakerDevices.map(\.uid) == ["speaker", echo.uid])
+}
+
+@Test
+@MainActor
 func aPairedSpeakerRememberedAsHeadphonesIsListedUnderSpeakers() async throws {
     // Measured: a JBL Xtreme was remembered as headphones before a Bluetooth
     // headphones claim was ignored, while Bluetooth reports it as a speaker.

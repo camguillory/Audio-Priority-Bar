@@ -403,6 +403,7 @@ final class AppModel {
         let connectedNames = Set(connected.filter(\.isBluetooth).map(\.name))
         let pairedOff = battery.report.pairedAudio.map(\.device).filter {
             !connectedOutputUIDs.contains($0.uid) && !connectedNames.contains($0.name)
+                && !store.isForgotten(uid: $0.uid)
         }
         let pairedOffUIDs = Set(pairedOff.map(\.uid))
         if showAll {
