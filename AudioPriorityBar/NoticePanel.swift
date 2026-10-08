@@ -333,7 +333,7 @@ private struct HoverPreviewView: View {
         let isMuted = device.map(model.isMuted) ?? false
         HStack(spacing: 8) {
             // No circle, unlike the panel's buttons, since nothing here can
-            // be clicked. Muted shows as the panel's mute button does.
+            // be clicked. Muted is red, like the panel's mute button.
             Image(systemName: isMuted ? mutedIcon(device) : device.map(icon) ?? "questionmark")
                 .font(.system(size: 14))
                 .foregroundStyle(isMuted ? AnyShapeStyle(.red) : AnyShapeStyle(.secondary))

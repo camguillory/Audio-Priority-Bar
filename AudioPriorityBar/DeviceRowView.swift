@@ -133,7 +133,7 @@ struct DeviceRow: View {
         }
         if model.isMuted(device) {
             result.append(Status(
-                icon: device.role == .input ? "mic.slash.fill" : "speaker.slash.fill",
+                icon: device.role == .input ? "mic.slash" : "speaker.slash",
                 text: "Muted",
                 tint: .red
             ))
@@ -373,9 +373,12 @@ struct DeviceRow: View {
         }
     }
 
-    /// Connect, the one thing a dimmed row offers, takes the accent colour
-    /// and fills with it under the pointer; Disconnect stays as quiet as the
-    /// other row controls and only brightens, like the selection override.
+    /// Connect, the one thing a dimmed row offers, is filled with the accent
+    /// colour like a default button: a translucent tint takes the colour of
+    /// whatever the glass shows behind it, and accent text on it can vanish.
+    /// It darkens under the pointer, which keeps the white label legible.
+    /// Disconnect stays as quiet as the other row controls and only brightens,
+    /// like the selection override.
     private func bluetoothPill(
         _ title: String,
         tint: Color? = nil,
@@ -385,13 +388,12 @@ struct DeviceRow: View {
         return Button(action: action) {
             Text(title)
                 .font(.caption2.weight(.semibold))
-                .foregroundStyle(tint.map { hovering ? .white : $0 } ?? .secondary)
+                .foregroundStyle(tint == nil ? Color.secondary : .white)
                 .padding(.horizontal, 6)
                 .frame(height: 18)
                 .background(Capsule().fill(
-                    tint.map { $0.opacity(hovering ? 1 : 0.2) }
-                        ?? .primary.opacity(hovering ? 0.12 : 0.06)
-                ))
+                    tint ?? .primary.opacity(hovering ? 0.12 : 0.06)
+                ).brightness(tint != nil && hovering ? -0.12 : 0))
         }
         .onHover { isHoveringBluetoothPill = $0 }
         .buttonStyle(.plain)
