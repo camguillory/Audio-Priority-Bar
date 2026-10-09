@@ -86,8 +86,6 @@ final class StatusItemController: NSObject, NSWindowDelegate {
     /// the system dims it on an inactive display and tints it when highlighted.
     /// While muted it is drawn by `muted(_:microphone:)` instead.
     private let labelRenderer: ImageRenderer<StatusLabel>
-    /// The red muted microphone alone, laid over the label while muted.
-    private let microphoneRenderer: ImageRenderer<StatusLabel>
     private var labelChange: AnyCancellable?
     private var suppressNextClickAt: TimeInterval?
     /// The status item's center when the panel opened. The item widens and
@@ -123,7 +121,6 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         self.updates = updates
         statusItem = statusBar.statusItem(withLength: NSStatusItem.variableLength)
         labelRenderer = ImageRenderer(content: StatusLabel(model: model, mode: .glyphs))
-        microphoneRenderer = ImageRenderer(content: StatusLabel(model: model, mode: .micRed))
         super.init()
         configureStatusItem()
         configurePanel()
@@ -237,8 +234,8 @@ final class StatusItemController: NSObject, NSWindowDelegate {
             _ = model.outlinesMenuBarIcon
             _ = model.menuBarDevices
             _ = model.showsMenuBarVolume
-            // Only the microphone layer reads the pulse, and nothing watches
-            // that renderer.
+            // Only the microphone layer reads the pulse, and it has no
+            // renderer of its own to watch.
             _ = model.micFlashState
         } onChange: { [weak self] in
             Task { @MainActor [weak self] in
@@ -252,8 +249,11 @@ final class StatusItemController: NSObject, NSWindowDelegate {
     private func updateStatus() {
         let scale = NSScreen.screens.map(\.backingScaleFactor).max() ?? 2
         labelRenderer.scale = scale
-        microphoneRenderer.scale = scale
         let image = labelRenderer.nsImage
+        // Fresh each time: a renderer kept between updates can hand back the
+        // previous pulse frame, which left the microphone dim.
+        let microphoneRenderer = ImageRenderer(content: StatusLabel(model: model, mode: .micRed))
+        microphoneRenderer.scale = scale
         if model.isActiveInputMuted, let image, let microphone = microphoneRenderer.nsImage {
             statusItem.button?.image = Self.muted(image, microphone: microphone)
         } else {
