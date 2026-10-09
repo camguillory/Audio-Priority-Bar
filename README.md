@@ -5,139 +5,72 @@
 <h1 align="center">Audio Priority Bar</h1>
 
 <p align="center">
-  A native macOS menu bar app that automatically switches to your
-  highest-priority connected headphones, speakers, and microphone.
+  Rank your headphones, speakers, and microphones once.<br>
+  Your Mac uses the best one that's connected.
 </p>
 
 <p align="center">
+  <a href="https://github.com/camguillory/Audio-Priority-Bar/releases/latest/download/AudioPriorityBar.zip"><img src="https://img.shields.io/badge/Download_for_macOS-000000?style=for-the-badge&logo=apple&logoColor=white" alt="Download for macOS"></a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/camguillory/Audio-Priority-Bar/releases/latest"><img src="https://img.shields.io/github/v/release/camguillory/Audio-Priority-Bar?label=release" alt="Latest release"></a>
   <img src="https://img.shields.io/badge/macOS-14%2B-blue" alt="macOS 14+">
-  <img src="https://img.shields.io/badge/Swift-6-orange" alt="Swift 6">
-  <img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License"></a>
 </p>
 
 <p align="center">
-  <a href="#install">Install</a> ·
-  <a href="#features">Features</a> ·
-  <a href="#use">Use</a> ·
-  <a href="#contributing">Contributing</a>
-</p>
-
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="screenshot-dark.png">
-    <img src="screenshot-light.png" width="380" alt="Audio Priority Bar panel showing output and microphone levels and the Speakers, Headphones and Microphones priority lists, with AirPods connected and showing their battery, and paired Bluetooth devices dimmed while they are off">
-  </picture>
+  <img src="demo.gif" width="800" alt="A tour of Audio Priority Bar in the menu bar. A Jabra headset and then AirPods connect and the Mac switches to each with a notice. The panel shows the AirPods buds and case battery and the Jabra battery, dragging the Jabra above the AirPods switches the sound at once, the app switches back when macOS takes over, and unplugging the Jabra hands the sound to the AirPods. Option-Shift-M mutes the microphone and turns the icon red, a reminder appears when an app records while muted, a URL unmutes it, and hovering the icon shows the current output and microphone">
 </p>
 
 ## Why
 
-Connect a display and your sound can move to its speakers. Undock or power on a
-headset, and you pick devices by hand again. Audio Priority Bar keeps a ranked
-list for each kind of device and uses the highest one that is connected.
+| When | macOS on its own | Audio Priority Bar |
+| --- | --- | --- |
+| A display connects | Sound can move to its speakers | Sound stays on your top device |
+| AirPods take over on their own | They keep the sound | It switches back to your choice |
+| You mute your microphone | In each app | Once, for every app |
 
-## Features
+## Highlights
 
-**Switching**
-
-- Uses your top available headphones first, then speakers, and your top
-  microphone
-- One click in the panel picks a device by hand; turn automatic switching back
-  on to resume
-- A device you pick stays when macOS or another app changes it
-- A USB headset's input and output are selected together, with per-row
-  **Mic only** and **Output only** overrides
-- A brief notice below the menu bar icon shows which device automatic
-  switching just picked
-
-**Microphone mute**
-
-- Output and microphone rows at the top of the panel: click the round icon
-  button to mute, and it turns red while muted. Drag the slider to set the
-  level
-- Mute the microphone from the right-click menu, or by Option-clicking the
-  menu bar icon
-- Mute with Option-Shift-M from any app, with no extra permission. Change the
-  shortcut in Settings
-- Mute from Shortcuts, Raycast, or a Stream Deck with
-  [`audioprioritybar://` URLs](#automation)
-- The mute follows automatic switching to the next microphone, and quitting
-  the app restores it
-- A **Microphone muted** reminder appears when an app starts recording while
-  you are muted. Click it to hide it until you next record while muted. It
-  and the switch notices can each be turned off in Settings
-
-**Device lists**
-
-- Separate ranked lists for Speakers, Headphones, and Microphones, reordered by
-  dragging
-- Hide a device, keep one visible but never picked automatically, and remember
-  disconnected devices
-- Connect and disconnect paired Bluetooth speakers and headphones from the
-  panel
-- Output categories taken from what each device reports, in any system language
-
-**Panel and menu bar**
-
-- A panel laid out like the macOS Sound menu, with an icon for every device
-- The menu bar icon shows the current output, like AirPods or headphones, and
-  optionally the microphone, labeled in and out if you like. Unlabeled, a mic
-  that belongs to the output, like the AirPods mic, shares its icon. It can be
-  outlined in Settings to tell it apart from the Sound icon, and can show
-  the volume level beside any device icon. Settings previews the icon as you
-  change it
-- A muted microphone shows in red in the menu bar and pulses, unless you turn
-  the pulse off in Settings
-- Hovering the menu bar icon shows the current output and microphone
-- Liquid Glass on macOS 26, VoiceOver support, and keyboard-accessible actions
-- Output volume and microphone level by slider or scroll wheel, with mute and
-  availability status
-- AirPods battery levels on their rows, left and right apart when they
-  differ, and the case
-- The battery level of a Jabra headset connected through its Link dongle
-
-**Other**
-
-- Jabra Link headset power-off detection, asked of the dongle rather than
-  guessed
-- Right-click the menu bar icon to mute the microphone, or for Settings, Check
-  for Updates, and Quit
-- Open at Login
-- Automatic updates: new releases install in the background and the app
-  restarts itself, with a manual check and an opt-out
+- **Switches for you.** Headphones first, then speakers, and your top microphone.
+- **Tells you.** A brief notice under the menu bar icon names the device it just picked.
+- **Mute from anywhere.** <kbd>⌥</kbd> <kbd>⇧</kbd> <kbd>M</kbd> in any app, or from Shortcuts, Raycast, or a Stream Deck. The menu bar icon turns red while muted.
+- **Bluetooth in one click.** Connect and disconnect paired speakers and headphones from the panel.
+- **Battery at a glance.** AirPods buds and case, and Jabra headsets on a Link dongle.
+- **Native.** Laid out like the macOS Sound menu, with Liquid Glass on macOS 26, VoiceOver support, and automatic updates.
 
 ## Install
-
-Requires macOS 14 Sonoma or later. Releases are universal for Apple silicon
-and Intel Macs.
-
-### Homebrew
 
 ```bash
 brew install --cask camguillory/tap/audio-priority-bar
 ```
 
-### Direct download
+Or [download the app](https://github.com/camguillory/Audio-Priority-Bar/releases/latest/download/AudioPriorityBar.zip),
+unzip it, and move `AudioPriorityBar.app` to `/Applications`. Requires macOS 14
+Sonoma or later, on Apple silicon or Intel.
 
-1. Download `AudioPriorityBar.zip` and `AudioPriorityBar.zip.sha256` from the
-   [latest release](https://github.com/camguillory/Audio-Priority-Bar/releases/latest)
-   into the same folder.
-2. Verify the archive before unzipping it:
-
-   ```bash
-   cd ~/Downloads
-   shasum -a 256 -c AudioPriorityBar.zip.sha256
-   ```
-
-3. Move `AudioPriorityBar.app` to `/Applications`.
-
-### First launch
-
-Audio Priority Bar is signed with its own certificate, not an Apple Developer
-ID, and it isn't notarized. If macOS blocks the first launch, open
-**System Settings > Privacy & Security** and click **Open Anyway**.
+> [!NOTE]
+> Audio Priority Bar is signed with its own certificate, not an Apple Developer
+> ID, and it isn't notarized. If macOS blocks the first launch, open
+> **System Settings > Privacy & Security** and click **Open Anyway**.
 
 <details>
-<summary>Or remove the quarantine attribute</summary>
+<summary>Verify the download</summary>
+
+Download `AudioPriorityBar.zip.sha256` from the
+[latest release](https://github.com/camguillory/Audio-Priority-Bar/releases/latest)
+into the same folder as the archive, and check it before unzipping:
+
+```bash
+cd ~/Downloads
+shasum -a 256 -c AudioPriorityBar.zip.sha256
+```
+
+</details>
+
+<details>
+<summary>Remove the quarantine attribute instead</summary>
 
 Advanced users may instead remove only this app's quarantine attribute:
 
@@ -148,30 +81,28 @@ xattr -d com.apple.quarantine /Applications/AudioPriorityBar.app
 </details>
 
 <details>
-<summary>Build from source</summary>
+<summary>Upgrading from V1</summary>
 
-```bash
-git clone https://github.com/camguillory/Audio-Priority-Bar.git
-cd Audio-Priority-Bar
-./build.sh
-```
-
-The universal app is written to `dist/AudioPriorityBar.app`, signed with the
-release certificate when it is in your keychain and ad-hoc otherwise.
-You can also open `AudioPriorityBar.xcodeproj` in Xcode and build with Command-R.
-
-For local development, `./build.sh --dev` builds only your machine's
-architecture in the Debug configuration, which is much faster, and writes
-`dist/AudioPriorityBar-dev.app`, signed the same way.
+V2 imports V1 settings once on first launch (existing V2 values win). The new
+bundle identifier may require re-approving Input Monitoring or Open at Login.
 
 </details>
 
 ## Use
 
-Click the icon in the menu bar to open the panel. Your devices are listed by
-priority, and the active one is highlighted.
+Click the icon in the menu bar to open the panel. Drag devices to rank them;
+the active one is highlighted. Picking a device by hand turns automatic
+switching off until you turn it back on.
 
-### Automatic and manual switching
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="screenshot-dark.png">
+    <img src="screenshot-light.png" width="380" alt="Audio Priority Bar panel showing output and microphone levels and the Speakers, Headphones and Microphones priority lists, with AirPods connected and showing their battery, and paired Bluetooth devices dimmed while they are off">
+  </picture>
+</p>
+
+<details>
+<summary>How switching works</summary>
 
 - Automatic switching uses the first available headphone, then the first speaker.
 - Selecting a device in the panel turns automatic switching off so that
@@ -193,10 +124,15 @@ priority, and the active one is highlighted.
 - With **Mute speakers when headphones disconnect** enabled, the speakers
   start muted when the headphones playing disconnect, are turned off or run
   out of battery.
+- The microphone mute follows automatic switching to the next microphone,
+  and quitting the app restores it.
 
 Speakers, Headphones, and Microphones remain visible in both modes.
 
-### Device controls
+</details>
+
+<details>
+<summary>Device controls</summary>
 
 - Drag outputs within or between Speakers and Headphones.
 - Reorder microphones within Microphones.
@@ -214,16 +150,56 @@ Speakers, Headphones, and Microphones remain visible in both modes.
   take it off the list.
 - A Bluetooth device that is connected but not in use shows **Connected**.
   Hover it and click **Disconnect** to release it.
-- The first connect or disconnect asks for **Bluetooth** permission.
 - A device with a paired counterpart, like a USB headset's input and output
   halves, shows an override for the current default: **Mic only** or
   **Output only** while **Select headset input and output together** is on,
   or **Use both** while it's off. It appears only when picking it would
   change something.
+- Set the output volume and microphone level by slider or scroll wheel. Click
+  the round icon beside a slider to mute; it turns red while muted.
+- Speakers and headphones are sorted by what each device reports, in any
+  system language.
 
 New HDMI and DisplayPort outputs start hidden; showing one is permanent, and
 **Hide new HDMI and DisplayPort outputs** turns this off for future devices.
 The active device always stays listed, even when hidden.
+
+</details>
+
+<details>
+<summary>Menu bar icon</summary>
+
+- The icon shows the current output, like AirPods or headphones, and
+  optionally the microphone, labeled in and out if you like. Unlabeled, a mic
+  that belongs to the output, like the AirPods mic, shares its icon.
+- It can be outlined in Settings to tell it apart from the Sound icon, and can
+  show the volume level beside any device icon. Settings previews the icon as
+  you change it.
+- A muted microphone shows in red and pulses, unless you turn the pulse off in
+  Settings.
+- Hovering the icon shows the current output and microphone.
+- Option-click the icon to mute the microphone. Right-click it to mute the
+  microphone, or for Settings, Check for Updates, and Quit.
+- A **Microphone muted** reminder appears when an app starts recording while
+  you are muted. Click it to hide it until you next record while muted. It
+  and the switch notices can each be turned off in Settings.
+
+</details>
+
+<details>
+<summary>Jabra Link headsets</summary>
+
+The app asks a Jabra Link dongle directly whether its wireless headset is
+powered off, since CoreAudio can't tell, and falls back automatically in
+under a second. Right after replugging, it briefly shows the headset as off
+while the wireless link re-establishes, which is expected, not a bug.
+
+Link 380 is hardware-verified. Link 390 uses the same detection but is
+unverified on hardware
+([details](https://github.com/tobi/AudioPriorityBar/pull/32)). An
+unrecognised dongle fails open rather than being treated as off.
+
+</details>
 
 ### Automation
 
@@ -240,44 +216,38 @@ In Shortcuts, add an **Open URLs** action with one of them. The app opens if it
 isn't running. Any other form of the URL is ignored. The Shortcuts tab in
 Settings lists them with a Copy button.
 
-### Jabra Link monitoring
+### Permissions
 
-The app asks a Jabra Link dongle directly whether its wireless headset is
-powered off, since CoreAudio can't tell, and falls back automatically in
-under a second. Right after replugging, it briefly shows the headset as off
-while the wireless link re-establishes, which is expected, not a bug.
+| Permission | When it's asked |
+| --- | --- |
+| Bluetooth | The first time you connect or disconnect a device from the panel |
+| Input Monitoring | May be asked, to tell when a Jabra Link headset is off |
+| Accessibility | Optional, only from Settings, to keep the hover preview off while macOS hides the icon |
+| Login Items | Open at Login may need approval in **System Settings > General > Login Items**, which Settings opens for you |
 
-Link 380 is hardware-verified. Link 390 uses the same detection but is
-unverified on hardware
-([details](https://github.com/tobi/AudioPriorityBar/pull/32)). An
-unrecognised dongle fails open rather than being treated as off.
-
-May prompt for **Input Monitoring** permission. **Accessibility** is optional
-and asked for only from Settings, to keep the hover preview off while macOS
-hides the icon. Open at Login may separately need approval in **System
-Settings > General > Login Items**, which Settings opens for you while
-approval is pending.
-
-<details>
-<summary>Upgrading from V1</summary>
-
-V2 imports V1 settings once on first launch (existing V2 values win). The new
-bundle identifier may require re-approving Input Monitoring or Open at Login.
-
-</details>
+The mute shortcut needs no permission.
 
 ## Contributing
 
 Issues and pull requests are welcome. Open an issue first for anything
-substantial. `main` is the latest release; `develop` is next.
+substantial, then branch from `develop` and open the pull request against
+`develop`. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
-- Work from a fork rather than pushing to this repository.
-- Branch from `develop` and open the pull request against `develop`. GitHub
-  bases new pull requests on `main`, so switch it before submitting.
-- Every pull request runs both Swift Testing suites and a universal build.
-- Releases are tagged and published manually. The release workflow signs
-  the update feed with the `SPARKLE_PRIVATE_KEY` secret, the Sparkle EdDSA
-  key exported with `generate_keys --account app.audioprioritybar -x`.
+### Build from source
+
+```bash
+git clone https://github.com/camguillory/Audio-Priority-Bar.git
+cd Audio-Priority-Bar
+./build.sh
+```
+
+The universal app is written to `dist/AudioPriorityBar.app`, signed with the
+release certificate when it is in your keychain and ad-hoc otherwise.
+You can also open `AudioPriorityBar.xcodeproj` in Xcode and build with Command-R.
+
+For local development, `./build.sh --dev` builds only your machine's
+architecture in the Debug configuration, which is much faster, and writes
+`dist/AudioPriorityBar-dev.app`, signed the same way.
 
 ## License
 
