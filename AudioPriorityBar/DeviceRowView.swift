@@ -212,7 +212,7 @@ struct DeviceRow: View {
         .frame(height: DeviceRowMetrics.height)
         .background {
             RoundedRectangle(cornerRadius: 8)
-                .fill(isLifted ? Color(nsColor: .controlBackgroundColor) : rowBackground)
+                .fill(isLifted ? AnyShapeStyle(.regularMaterial) : AnyShapeStyle(rowBackground))
         }
         .scaleEffect(isLifted && !reduceMotion ? 1.02 : 1)
         .shadow(
