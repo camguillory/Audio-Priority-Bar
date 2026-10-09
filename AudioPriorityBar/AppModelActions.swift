@@ -59,9 +59,9 @@ extension AppModel {
         store.showsMenuBarVolume = enabled
     }
 
-    func setMutedMicPulsing(_ enabled: Bool) {
-        mutedMicPulsing = enabled
-        store.mutedMicPulsing = enabled
+    func setPulsesMutedMicrophone(_ enabled: Bool) {
+        pulsesMutedMicrophone = enabled
+        store.pulsesMutedMicrophone = enabled
         refreshMute()
     }
 

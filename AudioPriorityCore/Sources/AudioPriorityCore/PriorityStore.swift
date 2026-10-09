@@ -29,7 +29,7 @@ public final class PriorityStore {
         static let outlinesMenuBarIcon = "outlinesMenuBarIcon"
         static let menuBarDevices = "menuBarDevices"
         static let showsMenuBarVolume = "showsMenuBarVolume"
-        static let mutedMicPulsing = "mutedMicPulsing"
+        static let pulsesMutedMicrophone = "pulsesMutedMicrophone"
     }
 
     /// Marks a microphone muted through its mute property rather than by
@@ -216,10 +216,9 @@ public final class PriorityStore {
     }
 
     /// Whether the menu bar icon pulses while the active microphone is muted.
-    /// Defaults ON so existing users keep the previous pulsing behaviour.
-    public var mutedMicPulsing: Bool {
-        get { defaults.object(forKey: Key.mutedMicPulsing) as? Bool ?? true }
-        set { defaults.set(newValue, forKey: Key.mutedMicPulsing) }
+    public var pulsesMutedMicrophone: Bool {
+        get { defaults.object(forKey: Key.pulsesMutedMicrophone) as? Bool ?? true }
+        set { defaults.set(newValue, forKey: Key.pulsesMutedMicrophone) }
     }
 
     /// Microphones this app muted and has not restored yet, by UID: the input

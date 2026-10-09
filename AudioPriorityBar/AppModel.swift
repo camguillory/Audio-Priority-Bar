@@ -83,7 +83,7 @@ final class AppModel {
     var outlinesMenuBarIcon: Bool
     var menuBarDevices: MenuBarDevices
     var showsMenuBarVolume: Bool
-    var mutedMicPulsing: Bool
+    var pulsesMutedMicrophone: Bool
     /// Bluetooth addresses with a connection attempt in flight, each tagged so
     /// a finished attempt cannot end a newer one.
     var connectingBluetoothAttempts: [String: UUID] = [:]
@@ -157,7 +157,7 @@ final class AppModel {
         outlinesMenuBarIcon = store.outlinesMenuBarIcon
         menuBarDevices = store.menuBarDevices
         showsMenuBarVolume = store.showsMenuBarVolume
-        mutedMicPulsing = store.mutedMicPulsing
+        pulsesMutedMicrophone = store.pulsesMutedMicrophone
         battery.onPairedAudioChange = { [weak self] in self?.refreshDevices() }
     }
 
@@ -826,7 +826,7 @@ final class AppModel {
     }
 
     private func updateMicFlash() {
-        if isActiveInputMuted, reduceMotion() || !mutedMicPulsing {
+        if isActiveInputMuted, reduceMotion() || !pulsesMutedMicrophone {
             micFlashTimer?.invalidate()
             micFlashTimer = nil
             micFlashState = true

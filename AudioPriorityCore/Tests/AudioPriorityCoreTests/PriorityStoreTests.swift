@@ -412,11 +412,11 @@ func menuBarVolumeIsOffUntilTurnedOn() throws {
 }
 
 @Test
-func mutedMicPulsingIsOnUntilTurnedOff() throws {
+func mutedMicrophonePulsesUntilTurnedOff() throws {
     try withDefaults { defaults in
-        #expect(PriorityStore(defaults: defaults).mutedMicPulsing)
-        PriorityStore(defaults: defaults).mutedMicPulsing = false
-        #expect(!PriorityStore(defaults: defaults).mutedMicPulsing)
+        #expect(PriorityStore(defaults: defaults).pulsesMutedMicrophone)
+        PriorityStore(defaults: defaults).pulsesMutedMicrophone = false
+        #expect(!PriorityStore(defaults: defaults).pulsesMutedMicrophone)
     }
 }
 

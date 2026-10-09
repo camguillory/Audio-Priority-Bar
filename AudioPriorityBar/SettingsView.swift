@@ -97,11 +97,11 @@ struct SettingsView: View {
             }
 
             Toggle(isOn: Binding(
-                get: { model.mutedMicPulsing },
-                set: { model.setMutedMicPulsing($0) }
+                get: { model.pulsesMutedMicrophone },
+                set: { model.setPulsesMutedMicrophone($0) }
             )) {
-                Text("Muted microphone pulsing")
-                Text("Pulses the icon while the microphone is muted.")
+                Text("Pulse muted microphone")
+                Text("Steady while Reduce Motion is on.")
             }
         }
 

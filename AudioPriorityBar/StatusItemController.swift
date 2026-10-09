@@ -84,7 +84,10 @@ final class StatusItemController: NSObject, NSWindowDelegate {
     )
     /// Drawn into the button's template image rather than layered over it, so
     /// the system dims it on an inactive display and tints it when highlighted.
+    /// While muted it is drawn by `muted(_:microphone:)` instead.
     private let labelRenderer: ImageRenderer<StatusLabel>
+    /// The red muted microphone alone, laid over the label while muted.
+    private let microphoneRenderer: ImageRenderer<StatusLabel>
     private var labelChange: AnyCancellable?
     private var suppressNextClickAt: TimeInterval?
     /// The status item's center when the panel opened. The item widens and
@@ -119,7 +122,8 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         self.settings = settings
         self.updates = updates
         statusItem = statusBar.statusItem(withLength: NSStatusItem.variableLength)
-        labelRenderer = ImageRenderer(content: StatusLabel(model: model))
+        labelRenderer = ImageRenderer(content: StatusLabel(model: model, mode: .glyphs))
+        microphoneRenderer = ImageRenderer(content: StatusLabel(model: model, mode: .micRed))
         super.init()
         configureStatusItem()
         configurePanel()
@@ -233,8 +237,8 @@ final class StatusItemController: NSObject, NSWindowDelegate {
             _ = model.outlinesMenuBarIcon
             _ = model.menuBarDevices
             _ = model.showsMenuBarVolume
-            // The muted mic's opacity pulses with this, so the off-screen
-            // render must follow every toggle to keep blinking.
+            // Only the microphone layer reads the pulse, and nothing watches
+            // that renderer.
             _ = model.micFlashState
         } onChange: { [weak self] in
             Task { @MainActor [weak self] in
@@ -246,23 +250,16 @@ final class StatusItemController: NSObject, NSWindowDelegate {
     }
 
     private func updateStatus() {
-        let image: NSImage?
-        if model.isActiveInputMuted {
-            // Robust compositing: keep every other glyph a fully adaptive,
-            // monochrome template image and lay only the microphone on top in
-            // red. A single non-template render would recolour the whole item;
-            // this keeps just the mic reading as muted.
-            let scheme = menuBarColorScheme
-            let base = render(StatusLabel(model: model), scheme: scheme)
-            let mic = render(StatusLabel(model: model, mode: .micRed), scheme: scheme)
-            image = Self.composite(base: base, overlay: mic)
+        let scale = NSScreen.screens.map(\.backingScaleFactor).max() ?? 2
+        labelRenderer.scale = scale
+        microphoneRenderer.scale = scale
+        let image = labelRenderer.nsImage
+        if model.isActiveInputMuted, let image, let microphone = microphoneRenderer.nsImage {
+            statusItem.button?.image = Self.muted(image, microphone: microphone)
         } else {
-            labelRenderer.scale = NSScreen.screens.map(\.backingScaleFactor).max() ?? 2
-            let rendered = labelRenderer.nsImage
-            rendered?.isTemplate = true
-            image = rendered
+            image?.isTemplate = true
+            statusItem.button?.image = image
         }
-        statusItem.button?.image = image
         statusItem.length = ceil(image?.size.width ?? 0)
         // Sighted users get the hover preview instead, which names the
         // devices behind the glyphs.
@@ -272,53 +269,19 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         }
     }
 
-    /// The menu bar's light/dark state, so an off-screen render resolves
-    /// `.primary` to the same colour the system would tint a template image.
-    private var menuBarColorScheme: ColorScheme {
-        let appearance = statusItem.button?.effectiveAppearance ?? NSApp.effectiveAppearance
-        return appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? .dark : .light
-    }
-
-    /// Renders a label off-screen at the menu bar's scale and appearance.
-    private func render(_ label: StatusLabel, scheme: ColorScheme) -> NSImage? {
-        let renderer = ImageRenderer(content: label.environment(\.colorScheme, scheme))
-        renderer.scale = NSScreen.screens.map(\.backingScaleFactor).max() ?? 2
-        return renderer.nsImage
-    }
-
-    /// Flattens a monochrome base and a red microphone overlay into one image,
-    /// drawing both at full pixel resolution so the result stays crisp.
-    nonisolated static func composite(base: NSImage?, overlay: NSImage?) -> NSImage? {
-        guard let base else { return overlay }
-        let pointSize = base.size
-        let scale = NSScreen.screens.map(\.backingScaleFactor).max() ?? 2
-        let pixelsWide = max(Int(pointSize.width * scale), 1)
-        let pixelsHigh = max(Int(pointSize.height * scale), 1)
-        guard let rep = NSBitmapImageRep(
-            bitmapDataPlanes: nil,
-            pixelsWide: pixelsWide,
-            pixelsHigh: pixelsHigh,
-            bitsPerSample: 8,
-            samplesPerPixel: 4,
-            hasAlpha: true,
-            isPlanar: false,
-            colorSpaceName: .deviceRGB,
-            bytesPerRow: 0,
-            bitsPerPixel: 0
-        ) else { return overlay }
-        rep.size = pointSize
-
-        NSGraphicsContext.saveGraphicsState()
-        if let context = NSGraphicsContext(bitmapImageRep: rep) {
-            NSGraphicsContext.current = context
-            base.draw(in: NSRect(origin: .zero, size: pointSize))
-            overlay?.draw(in: NSRect(origin: .zero, size: pointSize))
+    /// The glyphs in the menu bar's text color with the red microphone on
+    /// top. A template image would tint the microphone too, so this one is
+    /// drawn on demand and follows a light or dark menu bar at draw time.
+    // ponytail: not a template, so the system no longer dims the icon on an
+    // inactive display while muted; draw the dimming here if that matters.
+    nonisolated static func muted(_ glyphs: NSImage, microphone: NSImage) -> NSImage {
+        NSImage(size: glyphs.size, flipped: false) { rect in
+            glyphs.draw(in: rect)
+            NSColor.labelColor.set()
+            rect.fill(using: .sourceAtop)
+            microphone.draw(in: rect)
+            return true
         }
-        NSGraphicsContext.restoreGraphicsState()
-
-        let image = NSImage(size: pointSize)
-        image.addRepresentation(rep)
-        return image
     }
 
     @objc private func handleClick() {
@@ -597,12 +560,11 @@ final class StatusItemController: NSObject, NSWindowDelegate {
 struct StatusLabel: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Bindable var model: AppModel
-    /// How this label renders into an image. `.base` draws every glyph in its
-    /// normal monochrome form; `.micRed` keeps the same layout but shows only
-    /// the muted microphone, so it can be composited over a template base.
-    var mode: RenderMode = .base
+    /// The menu bar draws `.glyphs` and `.micRed` as two layers so only the
+    /// microphone is red; both keep the full layout so they line up.
+    var mode: RenderMode = .full
 
-    enum RenderMode { case base, micRed }
+    enum RenderMode { case full, glyphs, micRed }
 
     var body: some View {
         HStack(spacing: 2) {
@@ -696,8 +658,6 @@ struct StatusLabel: View {
 
     private var isLabeled: Bool { model.menuBarDevices == .bothLabeled }
 
-    /// In `.micRed` mode every glyph but the microphone fades out, keeping its
-    /// space so the overlay lines up exactly with the base render.
     private var isolateMic: Bool { mode == .micRed }
 
     /// Whether the microphone gets its own glyph. Unlabeled, a mic that is
@@ -714,11 +674,11 @@ struct StatusLabel: View {
     }
 
     private var mutedMicrophone: some View {
-        // Red, not a template tint: the menu bar composites this over an
-        // adaptive monochrome base so only the mic reads as muted.
+        // The glyphs layer must not read the pulse, or its renderer would
+        // redraw the item a second time on every tick.
         Image(systemName: "mic.slash.fill")
             .foregroundStyle(.red)
-            .opacity(reduceMotion || model.micFlashState ? 1 : 0.45)
+            .opacity(mode == .glyphs ? 0 : reduceMotion || model.micFlashState ? 1 : 0.45)
     }
 
     /// The current output's hardware icon, or nil for a generic speaker,

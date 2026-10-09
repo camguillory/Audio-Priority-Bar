@@ -135,20 +135,38 @@ func aSwitchNoticeOutranksTheMutedReminderButNeverCoversThePanel() {
 }
 
 @Test
-func theRedMicrophoneCompositesOverTheAdaptiveBaseWithoutResizing() {
-    let size = NSSize(width: 24, height: 18)
-    let base = NSImage(size: size)
-    let overlay = NSImage(size: size)
+func theMutedIconFollowsTheMenuBarAppearanceAndKeepsTheMicrophoneRed() throws {
+    let size = NSSize(width: 2, height: 1)
+    let glyphs = NSImage(size: size, flipped: false) { _ in
+        NSColor.black.set()
+        NSRect(x: 0, y: 0, width: 1, height: 1).fill()
+        return true
+    }
+    let microphone = NSImage(size: size, flipped: false) { _ in
+        NSColor.red.set()
+        NSRect(x: 1, y: 0, width: 1, height: 1).fill()
+        return true
+    }
+    let muted = StatusItemController.muted(glyphs, microphone: microphone)
 
-    // No base falls back to the overlay alone.
-    #expect(StatusItemController.composite(base: nil, overlay: overlay) === overlay)
+    func pixels(in appearance: NSAppearance.Name) throws -> (NSColor, NSColor) {
+        let rep = try #require(NSBitmapImageRep(
+            bitmapDataPlanes: nil, pixelsWide: 2, pixelsHigh: 1,
+            bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+            colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0
+        ))
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
+        NSAppearance(named: appearance)?.performAsCurrentDrawingAppearance {
+            muted.draw(in: NSRect(origin: .zero, size: size))
+        }
+        NSGraphicsContext.restoreGraphicsState()
+        return try (#require(rep.colorAt(x: 0, y: 0)), #require(rep.colorAt(x: 1, y: 0)))
+    }
 
-    // A base with no overlay still yields a full-size image.
-    #expect(StatusItemController.composite(base: base, overlay: nil)?.size == size)
-
-    // The composite keeps the base's footprint so the item does not resize,
-    // and it is not a template (it carries the red microphone).
-    let combined = StatusItemController.composite(base: base, overlay: overlay)
-    #expect(combined?.size == size)
-    #expect(combined?.isTemplate == false)
+    let (darkGlyph, darkMicrophone) = try pixels(in: .darkAqua)
+    #expect(darkGlyph.brightnessComponent > 0.5)
+    #expect(darkMicrophone.redComponent > 0.9 && darkMicrophone.greenComponent < 0.3)
+    let (lightGlyph, _) = try pixels(in: .aqua)
+    #expect(lightGlyph.brightnessComponent < 0.5)
 }

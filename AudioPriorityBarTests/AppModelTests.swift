@@ -1027,9 +1027,9 @@ func reduceMotionKeepsMutedMicrophoneIndicatorSteady() {
 
 @Test
 @MainActor
-func mutedMicPulsingOffKeepsMutedMicrophoneIndicatorSteady() {
+func turningOffThePulseKeepsTheMutedMicrophoneSteady() {
     let defaults = isolatedDefaults()
-    PriorityStore(defaults: defaults).mutedMicPulsing = false
+    PriorityStore(defaults: defaults).pulsesMutedMicrophone = false
     let audio = FakeAudio()
     let microphone = input(1, "microphone")
     audio.catalog = [microphone]
