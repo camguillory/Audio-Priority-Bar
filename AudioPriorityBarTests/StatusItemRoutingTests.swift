@@ -133,3 +133,22 @@ func aSwitchNoticeOutranksTheMutedReminderButNeverCoversThePanel() {
         switchNotice: notice, showsMutedReminder: true, isSuppressed: true
     ) == nil)
 }
+
+@Test
+func theRedMicrophoneCompositesOverTheAdaptiveBaseWithoutResizing() {
+    let size = NSSize(width: 24, height: 18)
+    let base = NSImage(size: size)
+    let overlay = NSImage(size: size)
+
+    // No base falls back to the overlay alone.
+    #expect(StatusItemController.composite(base: nil, overlay: overlay) === overlay)
+
+    // A base with no overlay still yields a full-size image.
+    #expect(StatusItemController.composite(base: base, overlay: nil)?.size == size)
+
+    // The composite keeps the base's footprint so the item does not resize,
+    // and it is not a template (it carries the red microphone).
+    let combined = StatusItemController.composite(base: base, overlay: overlay)
+    #expect(combined?.size == size)
+    #expect(combined?.isTemplate == false)
+}

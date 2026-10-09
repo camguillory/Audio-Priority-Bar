@@ -412,6 +412,15 @@ func menuBarVolumeIsOffUntilTurnedOn() throws {
 }
 
 @Test
+func mutedMicPulsingIsOnUntilTurnedOff() throws {
+    try withDefaults { defaults in
+        #expect(PriorityStore(defaults: defaults).mutedMicPulsing)
+        PriorityStore(defaults: defaults).mutedMicPulsing = false
+        #expect(!PriorityStore(defaults: defaults).mutedMicPulsing)
+    }
+}
+
+@Test
 func menuBarShowsOnlyTheOutputUntilChanged() throws {
     try withDefaults { defaults in
         #expect(PriorityStore(defaults: defaults).menuBarDevices == .outputOnly)
