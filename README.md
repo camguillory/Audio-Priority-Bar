@@ -85,6 +85,8 @@ list for each kind of device and uses the highest one that is connected.
   outlined in Settings to tell it apart from the Sound icon, and can show
   the volume level beside any device icon. Settings previews the icon as you
   change it
+- A muted microphone shows in red in the menu bar and pulses, unless you turn
+  the pulse off in Settings
 - Hovering the menu bar icon shows the current output and microphone
 - Liquid Glass on macOS 26, VoiceOver support, and keyboard-accessible actions
 - Output volume and microphone level by slider or scroll wheel, with mute and

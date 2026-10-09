@@ -59,6 +59,12 @@ extension AppModel {
         store.showsMenuBarVolume = enabled
     }
 
+    func setPulsesMutedMicrophone(_ enabled: Bool) {
+        pulsesMutedMicrophone = enabled
+        store.pulsesMutedMicrophone = enabled
+        refreshMute()
+    }
+
     func canConnect(_ device: AudioDevice) -> Bool {
         !device.isConnected && battery.report.bluetoothDevice(for: device) != nil
     }

@@ -1025,6 +1025,30 @@ func reduceMotionKeepsMutedMicrophoneIndicatorSteady() {
     #expect(!model.micFlashState)
 }
 
+@Test
+@MainActor
+func turningOffThePulseKeepsTheMutedMicrophoneSteady() {
+    let defaults = isolatedDefaults()
+    PriorityStore(defaults: defaults).pulsesMutedMicrophone = false
+    let audio = FakeAudio()
+    let microphone = input(1, "microphone")
+    audio.catalog = [microphone]
+    audio.defaults[.input] = microphone.platformID
+    audio.muted = ["input:1"]
+    let model = AppModel(
+        store: PriorityStore(defaults: defaults),
+        audio: audio.operations,
+        link: LinkOperations(isUsable: { _ in true }, state: { _ in nil })
+    )
+
+    model.start()
+
+    #expect(model.isActiveInputMuted)
+    #expect(model.micFlashState)
+    model.stop()
+    #expect(!model.micFlashState)
+}
+
 // Jabra Link 380 and the MacBook Pro microphone both expose a settable input
 // mute on the main element (macOS 26, probed 2026-09-26), which FakeAudio
 // models by default. ZoomAudioDevice has none and rests at zero volume.
