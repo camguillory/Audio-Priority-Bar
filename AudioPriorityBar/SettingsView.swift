@@ -96,13 +96,10 @@ struct SettingsView: View {
                 Text("Shown beside AirPods and other device icons.")
             }
 
-            Toggle(isOn: Binding(
+            Toggle("Pulse muted microphone", isOn: Binding(
                 get: { model.pulsesMutedMicrophone },
                 set: { model.setPulsesMutedMicrophone($0) }
-            )) {
-                Text("Pulse muted microphone")
-                Text("Steady while Reduce Motion is on.")
-            }
+            ))
         }
 
         Section("Notices") {
