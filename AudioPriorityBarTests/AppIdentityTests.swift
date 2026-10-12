@@ -38,6 +38,13 @@ func launchAtLoginShowsApprovalAndRegistrationErrors() {
 }
 
 @Test
+func theAppPollsItsOwnCopyOfTheUpdateFeed() {
+    #expect(UpdateChecker.appFeed(from: "https://github.com/example/app/releases/latest/download/appcast.xml")
+        == "https://github.com/example/app/releases/latest/download/appcast-app.xml")
+    #expect(UpdateChecker.appFeed(from: "") == nil)
+}
+
+@Test
 @MainActor
 func aDownloadedUpdateWaitsUntilTheMicrophoneIsIdle() {
     var idle = false

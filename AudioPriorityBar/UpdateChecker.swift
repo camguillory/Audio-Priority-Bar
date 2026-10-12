@@ -18,6 +18,9 @@ final class UpdateChecker: NSObject {
     /// themselves with the published release.
     let isAvailable: Bool
     private(set) var automaticUpdatesEnabled = false
+    /// Update checkers such as Latest poll `SUFeedURL`, so the app polls its own
+    /// copy and download counts tell running copies apart from them.
+    private let appFeed: String?
 
     @ObservationIgnored private var controller: SPUStandardUpdaterController!
     @ObservationIgnored private let defaults: UserDefaults
@@ -34,6 +37,7 @@ final class UpdateChecker: NSObject {
         self.isIdle = isIdle
         let feed = bundle.object(forInfoDictionaryKey: "SUFeedURL") as? String ?? ""
         isAvailable = !feed.isEmpty
+        appFeed = Self.appFeed(from: feed)
         super.init()
         controller = SPUStandardUpdaterController(
             startingUpdater: false,
@@ -91,9 +95,19 @@ final class UpdateChecker: NSObject {
         pendingInstall = nil
         install()
     }
+
+    /// The release workflow uploads `appcast-app.xml` next to `appcast.xml`.
+    nonisolated static func appFeed(from feed: String) -> String? {
+        guard !feed.isEmpty, let url = URL(string: feed) else { return nil }
+        return url.deletingLastPathComponent().appendingPathComponent("appcast-app.xml").absoluteString
+    }
 }
 
 extension UpdateChecker: SPUUpdaterDelegate {
+    func feedURLString(for updater: SPUUpdater) -> String? {
+        appFeed
+    }
+
     /// Sparkle would otherwise wait for a quit that a menu bar app rarely
     /// sees, so a downloaded update is installed and relaunched once idle.
     func updater(

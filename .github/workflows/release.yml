@@ -125,6 +125,7 @@ jobs:
           # keep rising from one release to the next.
           scripts/package-release.sh "$VERSION" "$GITHUB_RUN_NUMBER"
           test -s release/appcast.xml
+          test -s release/appcast-app.xml
 
       - name: Create release draft
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
@@ -137,6 +138,7 @@ jobs:
             release/AudioPriorityBar-update.zip
             release/AudioPriorityBar-from-*.delta
             release/appcast.xml
+            release/appcast-app.xml
           draft: true
           prerelease: ${{ inputs.prerelease }}
           # Curated notes above are the complete release body.

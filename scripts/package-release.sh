@@ -10,6 +10,8 @@ zip="$output_dir/AudioPriorityBar.zip"
 # Sparkle's copy of the archive; Homebrew and manual installs keep the plain zip.
 update_zip="$output_dir/AudioPriorityBar-update.zip"
 appcast="$output_dir/appcast.xml"
+# The copy UpdateChecker polls, so download counts leave out update checkers.
+app_appcast="$output_dir/appcast-app.xml"
 sparkle_bin="$derived_data/SourcePackages/artifacts/sparkle/Sparkle/bin"
 # Served from the newest non-prerelease, so prereleases never reach the feed.
 feed_url="${SPARKLE_FEED_URL:-https://github.com/camguillory/Audio-Priority-Bar/releases/latest/download/appcast.xml}"
@@ -135,6 +137,7 @@ if [[ -n "$signature" ]]; then
 </rss>
 XML
   /usr/bin/xmllint --noout "$appcast"
+  cp "$appcast" "$app_appcast"
 fi
 
 echo "Packaged AudioPriorityBar $version ($build_number)"
