@@ -1389,3 +1389,33 @@ func urlCommandsTurnAutomaticSwitchingOffAndBackOntoTheTopDevice() {
     #expect(!model.isManualMode)
     #expect(model.currentOutputID == headphones.platformID)
 }
+
+@Test
+@MainActor
+func aShortcutPicksAConnectedDeviceAndRefusesOneThatIsNot() throws {
+    let defaults = isolatedDefaults()
+    let speaker = output(1, "speaker", "MacBook Air Speakers")
+    let headphones = output(2, "headphones", "AirPods Pro")
+    let mic = input(3, "mic", "MacBook Air Microphone")
+    let headset = input(4, "headset", "USB Headset")
+    let audio = FakeAudio()
+    audio.catalog = [speaker, headphones, mic, headset]
+    let model = testModel(audio: audio, defaults: defaults)
+    model.start()
+    audio.catalog = [speaker, mic, headset]
+    model.refreshDevices()
+    audio.selections.removeAll()
+
+    #expect(throws: ShortcutError.self) {
+        try model.selectManually(uid: "headphones", role: .output)
+    }
+    #expect(throws: ShortcutError.self) {
+        try model.selectManually(uid: "nothing", role: .input)
+    }
+    #expect(!model.isManualMode)
+    #expect(audio.selections.isEmpty)
+
+    try model.selectManually(uid: "headset", role: .input)
+    #expect(model.isManualMode)
+    #expect(model.currentInputID == headset.platformID)
+}

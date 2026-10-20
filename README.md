@@ -36,6 +36,7 @@
 - **Switches for you.** Headphones first, then speakers, and your top microphone.
 - **Tells you.** A brief notice under the menu bar icon names the device it just picked.
 - **Mute from anywhere.** <kbd>⌥</kbd> <kbd>⇧</kbd> <kbd>M</kbd> in any app, or from Shortcuts, Raycast, or a Stream Deck. The menu bar icon turns red while muted.
+- **Shortcuts actions.** Set the output or microphone, mute, or turn automatic switching on or off from a shortcut.
 - **Bluetooth in one click.** Connect and disconnect paired speakers and headphones from the panel.
 - **Battery at a glance.** AirPods buds and case, and Jabra headsets on a Link dongle.
 - **Native.** Laid out like the macOS Sound menu, with Liquid Glass on macOS 26, VoiceOver support, and automatic updates.
@@ -202,6 +203,11 @@ unrecognised dongle fails open rather than being treated as off.
 </details>
 
 ### Automation
+
+The Shortcuts app lists four actions: **Set Output**, **Set Microphone**,
+**Set Microphone Mute**, and **Set Automatic Switching**. Picking a device
+turns automatic switching off, as a click in the panel does, and a device that
+isn't connected stops the shortcut with its name.
 
 URLs control the microphone mute and automatic switching from Shortcuts,
 Raycast, a Stream Deck, or Terminal:

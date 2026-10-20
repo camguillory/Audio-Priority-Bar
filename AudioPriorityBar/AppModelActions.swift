@@ -177,6 +177,16 @@ extension AppModel {
         select(device)
     }
 
+    /// A Shortcuts action's pick, which acts like a click on the device's row.
+    func selectManually(uid: String, role: DeviceRole) throws(ShortcutError) {
+        let known = role == .input ? inputDevices : speakerDevices + headphoneDevices
+        guard let device = known.first(where: { $0.uid == uid }) else {
+            throw .unknownDevice
+        }
+        guard device.isConnected else { throw .notConnected(device.name) }
+        selectManually(device)
+    }
+
     /// Selects a device with its paired counterpart, regardless of
     /// `selectsPairedDevice`. Output goes first so a failed output
     /// selection, like a plain manual selection, never moves the microphone.

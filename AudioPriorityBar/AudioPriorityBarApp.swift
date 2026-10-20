@@ -31,6 +31,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         configureMainMenu()
         let runtime = AppRuntime()
+        IntentTarget.model = runtime.model
         let settings = SettingsWindowController(
             model: runtime.model,
             launchAtLogin: LaunchAtLoginController(),

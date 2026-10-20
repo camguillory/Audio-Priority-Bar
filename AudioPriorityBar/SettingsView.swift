@@ -186,7 +186,7 @@ struct SettingsView: View {
         } header: {
             Text("URLs")
         } footer: {
-            Text("Open them from Shortcuts, Raycast, a Stream Deck or Terminal.")
+            Text("Open them from Shortcuts, Raycast, a Stream Deck or Terminal. Shortcuts also has actions to set the output or microphone.")
                 .foregroundStyle(.secondary)
         }
     }
