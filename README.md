@@ -16,7 +16,7 @@
 <p align="center">
   <a href="https://github.com/camguillory/Audio-Priority-Bar/releases/latest"><img src="https://img.shields.io/github/v/release/camguillory/Audio-Priority-Bar?label=release" alt="Latest release"></a>
   <img src="https://img.shields.io/badge/macOS-14%2B-blue" alt="macOS 14+">
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0-blue" alt="GPL-3.0 License"></a>
 </p>
 
 <p align="center">
@@ -260,7 +260,7 @@ architecture in the Debug configuration, which is much faster, and writes
 
 ## License
 
-[MIT License](LICENSE)
+[GPL-3.0](LICENSE)
 
 ## Acknowledgments
 

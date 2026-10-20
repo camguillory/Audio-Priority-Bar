@@ -1,6 +1,7 @@
 # Terms
 
-Audio Priority Bar is free and open source under the [MIT License](LICENSE).
+Audio Priority Bar is free and open source under the
+[GNU General Public License v3.0](LICENSE).
 It is provided as is, without warranty, and you use it at your own risk.
 
 Official builds come only from this repository's releases and the

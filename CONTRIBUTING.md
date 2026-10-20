@@ -11,6 +11,8 @@ Thanks for helping improve Audio Priority Bar.
 Every pull request runs both Swift Testing suites and a universal build. See
 [Build from source](README.md#build-from-source) to run the app locally.
 
+Contributions are accepted under the [GPL-3.0](LICENSE) license.
+
 ## Releases
 
 Releases are tagged and published manually. The release workflow signs the
