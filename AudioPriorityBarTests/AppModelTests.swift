@@ -1363,3 +1363,29 @@ func urlCommandsMuteOnlyAMicrophoneThatCanBeMuted() {
     model.perform(.toggleMicMute)
     #expect(!model.isMicrophoneMuted)
 }
+
+@Test
+@MainActor
+func urlCommandsTurnAutomaticSwitchingOffAndBackOntoTheTopDevice() {
+    let speaker = output(1, "speaker", "MacBook Air Speakers")
+    let headphones = output(2, "headphones", "AirPods Pro")
+    let audio = FakeAudio()
+    audio.catalog = [speaker, headphones]
+    let model = testModel(audio: audio, defaults: isolatedDefaults())
+    model.start()
+    #expect(model.currentOutputID == headphones.platformID)
+
+    model.perform(.disableAutomatic)
+    #expect(model.isManualMode)
+    model.selectManually(speaker)
+    model.perform(.toggleAutomatic)
+    #expect(!model.isManualMode)
+    #expect(model.currentOutputID == headphones.platformID)
+
+    model.perform(.toggleAutomatic)
+    #expect(model.isManualMode)
+    model.selectManually(speaker)
+    model.perform(.enableAutomatic)
+    #expect(!model.isManualMode)
+    #expect(model.currentOutputID == headphones.platformID)
+}

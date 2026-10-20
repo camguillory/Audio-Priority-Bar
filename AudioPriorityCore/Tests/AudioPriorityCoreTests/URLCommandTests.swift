@@ -7,11 +7,14 @@ private func command(_ string: String) -> URLCommand? {
 }
 
 @Test
-func theThreeMicrophoneURLsAreRecognised() {
+func theMicrophoneAndAutomaticSwitchingURLsAreRecognised() {
     #expect(command("audioprioritybar://toggle-mic-mute") == .toggleMicMute)
     #expect(command("audioprioritybar://mute-mic") == .muteMic)
     #expect(command("audioprioritybar://unmute-mic") == .unmuteMic)
     #expect(command("AudioPriorityBar://Toggle-Mic-Mute") == .toggleMicMute)
+    #expect(command("audioprioritybar://toggle-automatic") == .toggleAutomatic)
+    #expect(command("audioprioritybar://enable-automatic") == .enableAutomatic)
+    #expect(command("audioprioritybar://disable-automatic") == .disableAutomatic)
 }
 
 @Test

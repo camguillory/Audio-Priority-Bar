@@ -203,13 +203,16 @@ unrecognised dongle fails open rather than being treated as off.
 
 ### Automation
 
-Three URLs control the microphone mute from Shortcuts, Raycast, a Stream Deck,
-or Terminal:
+URLs control the microphone mute and automatic switching from Shortcuts,
+Raycast, a Stream Deck, or Terminal:
 
 ```bash
 open "audioprioritybar://toggle-mic-mute"
 open "audioprioritybar://mute-mic"
 open "audioprioritybar://unmute-mic"
+open "audioprioritybar://toggle-automatic"
+open "audioprioritybar://enable-automatic"
+open "audioprioritybar://disable-automatic"
 ```
 
 In Shortcuts, add an **Open URLs** action with one of them. The app opens if it

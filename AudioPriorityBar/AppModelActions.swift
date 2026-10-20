@@ -151,6 +151,9 @@ extension AppModel {
         case .toggleMicMute: setMicrophoneMuted(!isMicrophoneMuted)
         case .muteMic: setMicrophoneMuted(true)
         case .unmuteMic: setMicrophoneMuted(false)
+        case .toggleAutomatic: setManualMode(!isManualMode)
+        case .enableAutomatic: setManualMode(false)
+        case .disableAutomatic: setManualMode(true)
         }
     }
 

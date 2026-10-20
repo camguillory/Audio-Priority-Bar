@@ -7,6 +7,9 @@ public enum URLCommand: String, CaseIterable, Sendable {
     case toggleMicMute = "toggle-mic-mute"
     case muteMic = "mute-mic"
     case unmuteMic = "unmute-mic"
+    case toggleAutomatic = "toggle-automatic"
+    case enableAutomatic = "enable-automatic"
+    case disableAutomatic = "disable-automatic"
 
     public static let scheme = "audioprioritybar"
 

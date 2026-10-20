@@ -33,6 +33,9 @@ private extension URLCommand {
         case .toggleMicMute: "Toggle microphone mute"
         case .muteMic: "Mute microphone"
         case .unmuteMic: "Unmute microphone"
+        case .toggleAutomatic: "Toggle automatic switching"
+        case .enableAutomatic: "Turn automatic switching on"
+        case .disableAutomatic: "Turn automatic switching off"
         }
     }
 }
