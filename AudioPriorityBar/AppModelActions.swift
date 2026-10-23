@@ -415,9 +415,11 @@ extension AppModel {
     }
 
     /// Adds a copy of the profile in use and switches to it, so the panel
-    /// edits the new one.
+    /// edits the new one, and asks Settings to open its name for editing.
     func addProfile(named name: String = "Untitled") {
-        applyProfile(id: store.addProfile(named: name).id)
+        let added = store.addProfile(named: name)
+        applyProfile(id: added.id)
+        renamingProfileID = added.id
     }
 
     func renameProfile(_ id: UUID, to name: String) {

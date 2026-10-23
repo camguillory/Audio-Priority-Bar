@@ -877,6 +877,9 @@ func profileNamesStayUnique() throws {
 
         store.renameProfile(blank.id, to: "Default")
         #expect(store.profiles.first { $0.id == blank.id }?.name == "Default 2")
+        // Clearing the field while renaming keeps the name it had.
+        store.renameProfile(first.id, to: "   ")
+        #expect(store.profiles.first { $0.id == first.id }?.name == "Desk")
     }
 }
 

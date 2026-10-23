@@ -177,6 +177,11 @@ final class StatusItemController: NSObject, NSWindowDelegate {
                     self?.hidePanel()
                     self?.showSettings()
                 },
+                showProfiles: { [weak self] in
+                    guard let self else { return }
+                    hidePanel()
+                    settings.showSettings(on: statusItem.button?.window?.screen, pane: .profiles)
+                },
                 fit: { [weak self] in self?.fitPanel(to: $0) }
             )
         )

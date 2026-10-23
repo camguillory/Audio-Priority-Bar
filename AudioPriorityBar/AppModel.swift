@@ -74,6 +74,8 @@ final class AppModel {
     var viewedMicrophoneCategory: OutputCategory?
     var profiles: [PriorityProfile] = []
     var activeProfileID: UUID?
+    /// A profile just added, whose name Settings opens for editing.
+    var renamingProfileID: UUID?
     var hideNewDisplayOutputs: Bool
     var isActiveOutputMuted = false
     var isActiveInputMuted = false

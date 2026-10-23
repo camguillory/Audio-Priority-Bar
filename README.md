@@ -218,7 +218,9 @@ whether automatic switching is on, for setups like Desk, Meeting, or Travel.
 Hiding, Never Auto-Select, and the other settings are shared by all of them.
 
 - Your current setup is the first profile, **Default**. Add more in
-  **Settings > Profiles**; each starts as a copy of the one in use.
+  **Settings > Profiles**; each starts as a copy of the one in use. Click a
+  name to rename it, or choose **Edit Profiles…** in the panel's profile
+  menu.
 - Rearranging the panel changes the profile in use, with nothing to save.
 - With two or more, the panel heading shows the profile in use; pick another
   there, in Settings, or with the **Apply Profile** shortcut.

@@ -6,6 +6,7 @@ import SwiftUI
 struct PanelView: View {
     @Bindable var model: AppModel
     let showSettings: () -> Void
+    var showProfiles: () -> Void = {}
     /// Reports the size the content needs, which the panel takes on.
     var fit: (CGSize) -> Void = { _ in }
 
@@ -234,6 +235,8 @@ struct PanelView: View {
             }
             .pickerStyle(.inline)
             .labelsHidden()
+            Divider()
+            Button("Edit Profiles…", action: showProfiles)
         }
         .frame(maxWidth: 140, alignment: .trailing)
         .fixedSize(horizontal: false, vertical: true)

@@ -566,9 +566,11 @@ extension PriorityStore {
         return added
     }
 
+    /// A blank name keeps the current one.
     public func renameProfile(_ id: UUID, to name: String) {
         var all = profiles
-        guard let index = all.firstIndex(where: { $0.id == id }) else { return }
+        guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              let index = all.firstIndex(where: { $0.id == id }) else { return }
         all[index].name = Self.uniqueName(name, among: all.filter { $0.id != id })
         saveProfiles(all, active: activeProfileID)
     }

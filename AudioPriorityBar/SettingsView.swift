@@ -179,7 +179,7 @@ struct SettingsView: View {
             }
             Button("Add Profile") { model.addProfile() }
         } footer: {
-            Text("Each profile keeps its own device and microphone orders and whether automatic switching is on. Rearranging the panel changes the profile in use.")
+            Text("Each profile keeps its own device and microphone orders and whether automatic switching is on. Rearranging the panel changes the profile in use. Click a name to rename it.")
                 .foregroundStyle(.secondary)
         }
 
@@ -334,13 +334,16 @@ enum SettingsPlacement {
     }
 }
 
-/// One profile: its name, edited in place, and the buttons to use or delete it.
+/// One profile: its name, renamed in place, and the buttons to use or delete it.
 private struct ProfileRow: View {
     @Bindable var model: AppModel
     let profile: PriorityProfile
     let isActive: Bool
     let canDelete: Bool
     @State private var name = ""
+    @State private var isHovering = false
+    @State private var isRenaming = false
+    @State private var clickMonitor: Any?
     @State private var isConfirmingDelete = false
     @FocusState private var isEditing: Bool
 
@@ -349,20 +352,17 @@ private struct ProfileRow: View {
             Image(systemName: "checkmark")
                 .opacity(isActive ? 1 : 0)
                 .accessibilityHidden(true)
-            // A grouped form would show a label and push the name to the right.
-            TextField("Profile name", text: $name)
-                .labelsHidden()
-                .textFieldStyle(.plain)
-                .multilineTextAlignment(.leading)
-                .focused($isEditing)
-                .onSubmit(commit)
-                .onChange(of: isEditing) { _, editing in if !editing { commit() } }
-                .accessibilityLabel(isActive ? "\(profile.name), in use" : profile.name)
-            Spacer()
-            Button("Use") { model.applyProfile(id: profile.id) }
-                .disabled(isActive)
+            nameField
+            Spacer(minLength: 8)
+            if isActive {
+                Text("In Use").foregroundStyle(.secondary)
+            } else {
+                Button("Use") { model.applyProfile(id: profile.id) }
+                    .accessibilityLabel("Use \(profile.name)")
+            }
             Button("Delete", role: .destructive) { isConfirmingDelete = true }
                 .disabled(!canDelete)
+                .help(canDelete ? "Delete this profile" : "The last profile can't be deleted")
                 .accessibilityLabel("Delete \(profile.name)")
         }
         .confirmationDialog(
@@ -373,14 +373,133 @@ private struct ProfileRow: View {
         } message: {
             Text("Its device and microphone orders are removed. Devices stay as they are in the other profiles.")
         }
-        .onAppear { name = profile.name }
-        .onChange(of: profile.name) { _, new in name = new }
+        .onAppear {
+            if model.renamingProfileID == profile.id { startRenaming() }
+        }
+        .onChange(of: isRenaming) { _, renaming in
+            if renaming { saveOnClickOutside() } else { stopWatchingClicks() }
+        }
+        // Moving to another app or closing Settings keeps what was typed.
+        .onReceive(NotificationCenter.default.publisher(
+            for: NSWindow.didResignKeyNotification
+        )) { _ in finishRenaming() }
+        .onDisappear {
+            finishRenaming()
+            stopWatchingClicks()
+        }
+        .onChange(of: model.renamingProfileID) { _, id in
+            if id == profile.id { startRenaming() }
+        }
     }
 
-    private func commit() {
-        guard name != profile.name else { return }
-        model.renameProfile(profile.id, to: name)
-        name = model.profiles.first { $0.id == profile.id }?.name ?? name
+    /// Plain text at rest, so the list reads cleanly and nothing takes focus
+    /// when Settings opens. Under the pointer it shows a field and a pencil;
+    /// a click swaps in a text field with the name selected, as renaming in
+    /// place works in Finder.
+    private var nameField: some View {
+        HStack(spacing: 4) {
+            if isRenaming {
+                // A grouped form would show a label and push the name right.
+                TextField("Profile name", text: $name)
+                    .labelsHidden()
+                    .textFieldStyle(.plain)
+                    .fixedSize()
+                    .frame(minWidth: 80, alignment: .leading)
+                    .focused($isEditing)
+                    .onSubmit(finishRenaming)
+                    .onExitCommand(perform: cancelRenaming)
+                    .onChange(of: isEditing) { _, editing in
+                        if !editing { finishRenaming() }
+                    }
+                    .onAppear(perform: focusField)
+            } else {
+                Text(profile.name)
+                    .frame(minWidth: 80, alignment: .leading)
+                Image(systemName: "pencil")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .opacity(isHovering ? 1 : 0)
+                    .accessibilityHidden(true)
+            }
+        }
+        .padding(.horizontal, 6)
+        .padding(.vertical, 3)
+        .background(
+            Color.primary.opacity(isHovering && !isRenaming ? 0.1 : 0),
+            in: RoundedRectangle(cornerRadius: 5)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 5)
+                .strokeBorder(Color.accentColor.opacity(isRenaming ? 0.8 : 0), lineWidth: 2)
+        )
+        // Keeps the text where it sits in the rows around it.
+        .padding(.leading, -6)
+        .contentShape(Rectangle())
+        .onHover { isHovering = $0 }
+        .onTapGesture { if !isRenaming { beginRenaming() } }
+        .animation(.easeInOut(duration: 0.12), value: isHovering)
+        .help(isRenaming ? "Press Return to save or Escape to cancel" : "Click to rename")
+        .accessibilityElement(children: isRenaming ? .contain : .ignore)
+        .accessibilityLabel(isActive ? "\(profile.name), in use" : profile.name)
+        .accessibilityAddTraits(isRenaming ? [] : .isButton)
+        .accessibilityHint(isRenaming ? "" : "Renames the profile.")
+        .accessibilityAction(named: "Rename", beginRenaming)
+    }
+
+    /// Opens a profile just added for naming.
+    private func startRenaming() {
+        model.renamingProfileID = nil
+        beginRenaming()
+    }
+
+    private func beginRenaming() {
+        name = profile.name
+        isRenaming = true
+    }
+
+    /// Focuses the field once it exists, with the name selected so typing
+    /// replaces it.
+    private func focusField() {
+        DispatchQueue.main.async {
+            isEditing = true
+            DispatchQueue.main.async {
+                NSApp.sendAction(#selector(NSText.selectAll(_:)), to: nil, from: nil)
+            }
+        }
+    }
+
+    private func finishRenaming() {
+        guard isRenaming else { return }
+        isRenaming = false
+        if name != profile.name { model.renameProfile(profile.id, to: name) }
+    }
+
+    private func cancelRenaming() {
+        name = profile.name
+        isRenaming = false
+    }
+
+    /// AppKit leaves a text field focused when a click lands on a button or
+    /// on empty space, so a click anywhere outside the field ends the rename
+    /// and saves it. The click still goes on to whatever it landed on.
+    private func saveOnClickOutside() {
+        stopWatchingClicks()
+        clickMonitor = NSEvent.addLocalMonitorForEvents(
+            matching: [.leftMouseDown, .rightMouseDown]
+        ) { event in
+            if let window = event.window,
+               let editor = window.firstResponder as? NSTextView,
+               let field = editor.delegate as? NSTextField,
+               !field.convert(field.bounds, to: nil).contains(event.locationInWindow) {
+                window.makeFirstResponder(nil)
+            }
+            return event
+        }
+    }
+
+    private func stopWatchingClicks() {
+        if let clickMonitor { NSEvent.removeMonitor(clickMonitor) }
+        clickMonitor = nil
     }
 }
 
@@ -435,8 +554,13 @@ final class SettingsWindowController: NSWindowController {
     /// Opens on the screen whose menu bar was used, rather than reappearing
     /// wherever it was last left, which on a multi-screen desk is usually the
     /// wrong one.
-    func showSettings(on screen: NSScreen? = nil) {
+    func showSettings(on screen: NSScreen? = nil, pane: SettingsPane? = nil) {
         NSApp.activate(ignoringOtherApps: true)
+        if let pane,
+           let tabs = window?.contentViewController as? NSTabViewController,
+           let index = SettingsPane.allCases.firstIndex(of: pane) {
+            tabs.selectedTabViewItemIndex = index
+        }
         if let window, let screen = screen ?? NSScreen.main,
            let origin = SettingsPlacement.origin(
                forWindow: window.frame,
