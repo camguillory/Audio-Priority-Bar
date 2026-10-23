@@ -122,6 +122,11 @@ switching off until you turn it back on.
   on their own.
 - With **Select headset input and output together** enabled, choosing
   either half of a physical USB headset selects the other too.
+- With **Microphones follow the output** enabled, speakers and headphones
+  each keep their own microphone order, so moving from headphones to
+  speakers can also move to the desk microphone. A microphone you pick in
+  Control Center or Sound Settings still stays until a device connects or
+  disconnects.
 - With **Mute speakers when headphones disconnect** enabled, the speakers
   start muted when the headphones playing disconnect, are turned off or run
   out of battery.
@@ -136,7 +141,9 @@ Speakers, Headphones, and Microphones remain visible in both modes.
 <summary>Device controls</summary>
 
 - Drag outputs within or between Speakers and Headphones.
-- Reorder microphones within Microphones.
+- Reorder microphones within Microphones. With **Microphones follow the
+  output** on, its heading shows **With speakers** or **With headphones**;
+  pick the other to edit that order without switching anything.
 - Use each row's actions menu for keyboard-accessible Move Up, Move Down, and
   Move to commands. Right-click a row to open the same menu.
 - Hide a device to remove it from Speakers, Headphones, or Microphones, or

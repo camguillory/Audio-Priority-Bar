@@ -371,6 +371,7 @@ final class StatusItemController: NSObject, NSWindowDelegate {
             suppressNextClickAt = ProcessInfo.processInfo.systemUptime
         }
         panel.orderOut(nil)
+        model.showMicrophoneOrderInUse()
         panelAnchorX = nil
         batteryTimer?.invalidate()
         batteryTimer = nil

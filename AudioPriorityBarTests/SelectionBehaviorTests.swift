@@ -1,4 +1,5 @@
 import AudioPriorityCore
+import Foundation
 import Observation
 import Testing
 @testable import AudioPriorityBar
@@ -697,4 +698,207 @@ func deviceCallbackBeforeDefaultCallbackDoesNotEnableManual() {
 
     #expect(!model.isManualMode)
     #expect(model.currentOutputID == speaker.platformID)
+}
+
+/// A desk where the speakers go with a room microphone and the headphones with
+/// a lapel microphone, with Microphones follow the output turned on.
+@MainActor
+private struct FollowingDesk {
+    let defaults = isolatedDefaults()
+    let store: PriorityStore
+    let audio = FakeAudio()
+    let speaker = output(1, "speaker", "Desk Speakers")
+    let headphones = output(2, "headphones", "Studio Headphones")
+    let roomMic = input(3, "room-mic", "Room Mic")
+    let lapelMic = input(4, "lapel-mic", "Lapel Mic")
+    let macMic = input(5, "mac-mic", "MacBook Pro Microphone")
+
+    init(following: Bool = true) {
+        store = PriorityStore(defaults: defaults)
+        store.setCategory(.headphone, for: headphones)
+        store.savePriorities([roomMic, lapelMic, macMic], role: .input)
+        if following {
+            store.microphonesFollowOutput = true
+            store.savePriorities([lapelMic, roomMic, macMic], microphonesFor: .headphone)
+        }
+    }
+
+    func model(isUserPicking: @escaping () -> Bool = { false }) -> AppModel {
+        testModel(audio: audio, defaults: defaults, isUserPicking: isUserPicking)
+    }
+}
+
+@Test
+@MainActor
+func connectingHeadphonesSelectsTheHeadphoneMicrophoneOrder() {
+    let desk = FollowingDesk()
+    desk.audio.catalog = [desk.speaker, desk.roomMic, desk.lapelMic]
+    let model = desk.model()
+    model.start()
+    #expect(model.currentInputID == desk.roomMic.platformID)
+
+    desk.audio.catalog.append(desk.headphones)
+    model.handleDevicesChanged()
+
+    #expect(model.currentOutputID == desk.headphones.platformID)
+    #expect(model.currentInputID == desk.lapelMic.platformID)
+}
+
+@Test
+@MainActor
+func disconnectingHeadphonesReturnsToTheSpeakerMicrophoneOrder() {
+    let desk = FollowingDesk()
+    desk.audio.catalog = [desk.speaker, desk.headphones, desk.roomMic, desk.lapelMic]
+    let model = desk.model()
+    model.start()
+    #expect(model.currentInputID == desk.lapelMic.platformID)
+
+    desk.audio.catalog = [desk.speaker, desk.roomMic, desk.lapelMic]
+    model.handleDevicesChanged()
+
+    #expect(model.currentOutputID == desk.speaker.platformID)
+    #expect(model.currentInputID == desk.roomMic.platformID)
+}
+
+@Test
+@MainActor
+func pickingAnOutputInControlCenterMovesTheMicrophone() {
+    let desk = FollowingDesk()
+    desk.audio.catalog = [desk.speaker, desk.headphones, desk.roomMic, desk.lapelMic]
+    let model = desk.model(isUserPicking: { true })
+    model.start()
+    var notices: [[AudioDevice]] = []
+    model.onAutomaticSwitch = { notices.append($0) }
+
+    desk.audio.defaults[.output] = desk.speaker.platformID
+    model.handleDefaultChanged(.output)
+
+    #expect(!model.isManualMode)
+    #expect(model.currentOutputID == desk.speaker.platformID)
+    #expect(model.currentInputID == desk.roomMic.platformID)
+    #expect(notices.map { $0.map(\.uid) } == [["room-mic"]])
+}
+
+@Test
+@MainActor
+func aPairedUsbHeadsetMicrophoneStillWins() {
+    let desk = FollowingDesk()
+    let headset = dualRole(outputID: 6, inputID: 106)
+    desk.store.setCategory(.headphone, for: headset.output)
+    desk.audio.catalog = [desk.speaker, desk.roomMic, desk.lapelMic]
+    let model = desk.model()
+    model.start()
+
+    desk.audio.catalog += [headset.output, headset.input]
+    model.handleDevicesChanged()
+
+    #expect(model.currentOutputID == headset.output.platformID)
+    #expect(model.currentInputID == headset.input.platformID)
+}
+
+@Test
+@MainActor
+func aMicrophonePickedInControlCenterSurvivesAnOutputChange() {
+    let desk = FollowingDesk()
+    desk.audio.catalog = [
+        desk.speaker, desk.headphones, desk.roomMic, desk.lapelMic, desk.macMic,
+    ]
+    let model = desk.model(isUserPicking: { true })
+    model.start()
+
+    desk.audio.defaults[.input] = desk.macMic.platformID
+    model.handleDefaultChanged(.input)
+    desk.audio.defaults[.output] = desk.speaker.platformID
+    model.handleDefaultChanged(.output)
+
+    #expect(model.currentOutputID == desk.speaker.platformID)
+    #expect(model.currentInputID == desk.macMic.platformID)
+}
+
+@Test
+@MainActor
+func manualModeLeavesTheMicrophoneAlone() {
+    let desk = FollowingDesk()
+    desk.audio.catalog = [desk.speaker, desk.headphones, desk.roomMic, desk.lapelMic]
+    desk.audio.defaults[.output] = desk.speaker.platformID
+    desk.audio.defaults[.input] = desk.roomMic.platformID
+    desk.store.isManualMode = true
+    let model = desk.model()
+    model.start()
+
+    model.selectManually(desk.headphones)
+
+    #expect(model.currentOutputID == desk.headphones.platformID)
+    #expect(model.currentInputID == desk.roomMic.platformID)
+}
+
+@Test
+@MainActor
+func editingTheOtherOrderDoesNotSwitchTheMicrophone() {
+    let desk = FollowingDesk()
+    desk.store.savePriorities([desk.roomMic, desk.lapelMic, desk.macMic], microphonesFor: .headphone)
+    desk.audio.catalog = [desk.speaker, desk.roomMic, desk.lapelMic]
+    let model = desk.model()
+    model.start()
+    desk.audio.selections.removeAll()
+
+    model.viewMicrophoneOrder(for: .headphone)
+    model.moveInput(from: IndexSet(integer: 1), to: 0)
+
+    #expect(model.currentInputID == desk.roomMic.platformID)
+    #expect(desk.audio.selections.isEmpty)
+    #expect(desk.store.sorted([desk.roomMic, desk.lapelMic], microphonesFor: .headphone)
+        .map(\.uid) == ["lapel-mic", "room-mic"])
+    #expect(desk.store.sorted([desk.roomMic, desk.lapelMic], microphonesFor: .speaker)
+        .map(\.uid) == ["room-mic", "lapel-mic"])
+}
+
+@Test
+@MainActor
+func withTheSettingOffOneOrderServesBoth() {
+    let desk = FollowingDesk()
+    desk.store.microphonesFollowOutput = false
+    desk.audio.catalog = [desk.speaker, desk.roomMic, desk.lapelMic]
+    let model = desk.model()
+    model.start()
+
+    desk.audio.catalog.append(desk.headphones)
+    model.handleDevicesChanged()
+
+    #expect(model.currentOutputID == desk.headphones.platformID)
+    #expect(model.currentInputID == desk.roomMic.platformID)
+}
+
+@Test
+@MainActor
+func reorderingInManualModeLeavesTheMicrophoneAlone() {
+    let desk = FollowingDesk()
+    desk.audio.catalog = [desk.speaker, desk.roomMic, desk.lapelMic]
+    desk.audio.defaults[.output] = desk.speaker.platformID
+    desk.audio.defaults[.input] = desk.roomMic.platformID
+    desk.store.isManualMode = true
+    let model = desk.model()
+    model.start()
+
+    model.moveInput(from: IndexSet(integer: 1), to: 0)
+
+    #expect(model.inputDevices.map(\.uid) == ["lapel-mic", "room-mic"])
+    #expect(model.currentInputID == desk.roomMic.platformID)
+    #expect(desk.audio.selections.isEmpty)
+}
+
+@Test
+@MainActor
+func theMicrophoneIsChosenForTheOutputJustSelected() {
+    let desk = FollowingDesk()
+    desk.audio.catalog = [desk.speaker, desk.headphones, desk.roomMic, desk.lapelMic]
+    desk.audio.defaults[.output] = desk.speaker.platformID
+    desk.audio.defaults[.input] = desk.roomMic.platformID
+    let model = desk.model()
+
+    model.start()
+
+    #expect(model.currentOutputID == desk.headphones.platformID)
+    #expect(model.currentInputID == desk.lapelMic.platformID)
+    #expect(desk.audio.selections.map(\.0) == [.output, .input])
 }
