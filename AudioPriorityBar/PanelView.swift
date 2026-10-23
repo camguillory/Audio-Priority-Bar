@@ -6,6 +6,7 @@ import SwiftUI
 struct PanelView: View {
     @Bindable var model: AppModel
     let showSettings: () -> Void
+    var showProfiles: () -> Void = {}
     /// Reports the size the content needs, which the panel takes on.
     var fit: (CGSize) -> Void = { _ in }
 
@@ -57,6 +58,9 @@ struct PanelView: View {
                         .font(.system(size: 13, weight: .semibold))
                         .accessibilityHidden(true)
                     Spacer()
+                    if model.profiles.count > 1 {
+                        profileMenu
+                    }
                     Toggle(
                         "Automatic switching",
                         isOn: Binding(
@@ -211,6 +215,32 @@ struct PanelView: View {
         // Holds the content to the top while the window catches up with a new
         // height, rather than centering it for a frame.
         .frame(maxHeight: .infinity, alignment: .top)
+    }
+
+    /// The profile in use, and the others to switch to. Shown only once there
+    /// is a second profile.
+    private var profileMenu: some View {
+        let active = model.profiles.first { $0.id == model.activeProfileID }
+        return HeadingMenu(
+            label: active?.name ?? "Profile",
+            accessibilityLabel: "Profile"
+        ) {
+            Picker("Profile", selection: Binding(
+                get: { model.activeProfileID },
+                set: { id in if let id { model.applyProfile(id: id) } }
+            )) {
+                ForEach(model.profiles) { profile in
+                    Text(profile.name).tag(Optional(profile.id))
+                }
+            }
+            .pickerStyle(.inline)
+            .labelsHidden()
+            Divider()
+            Button("Edit Profiles…", action: showProfiles)
+        }
+        .frame(maxWidth: 140, alignment: .trailing)
+        .fixedSize(horizontal: false, vertical: true)
+        .help("Switch to another profile")
     }
 
     /// The current output's hardware icon, so it is clear which device the

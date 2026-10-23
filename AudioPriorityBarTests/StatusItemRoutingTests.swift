@@ -56,6 +56,22 @@ func noticesAndThePanelSitCenteredUnderTheStatusItemInsideTheScreen() {
 }
 
 @Test
+func aProfileNoticeNamesTheProfileFirst() {
+    let speakers = output(1, "speakers", "Desk Speakers")
+    let notice = NoticeContent.applied(profile: "Desk", devices: [speakers]) { _ in "hifispeaker" }
+    #expect(notice == NoticeContent(
+        lines: [
+            .init(icon: "rectangle.stack", text: "Desk"),
+            .init(icon: "hifispeaker", text: "Desk Speakers"),
+        ],
+        announcement: "Profile: Desk, Output: Desk Speakers"
+    ))
+    // Devices already in place still show which profile is now in use.
+    #expect(NoticeContent.applied(profile: "Desk", devices: []) { _ in "" }.lines
+        == [.init(icon: "rectangle.stack", text: "Desk")])
+}
+
+@Test
 func aHeadsetSwitchingBothHalvesReadsAsOneDevice() {
     let jabraOut = output(1, "jabra:1", "Jabra Link 380")
     let jabraIn = input(2, "jabra:2", "Jabra Link 380")

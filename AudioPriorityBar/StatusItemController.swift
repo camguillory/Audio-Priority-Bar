@@ -133,6 +133,7 @@ final class StatusItemController: NSObject, NSWindowDelegate {
             self?.refreshMutedReminder()
         }
         model.onAutomaticSwitch = { [weak self] in self?.showSwitchNotice($0) }
+        model.onProfileApplied = { [weak self] in self?.showProfileNotice($0, $1) }
         // Launch with `--args -previewNotices YES` to see both notices without
         // changing any hardware.
         if UserDefaults.standard.bool(forKey: "previewNotices") { previewNotices() }
@@ -175,6 +176,11 @@ final class StatusItemController: NSObject, NSWindowDelegate {
                 showSettings: { [weak self] in
                     self?.hidePanel()
                     self?.showSettings()
+                },
+                showProfiles: { [weak self] in
+                    guard let self else { return }
+                    hidePanel()
+                    settings.showSettings(on: statusItem.button?.window?.screen, pane: .profiles)
                 },
                 fit: { [weak self] in self?.fitPanel(to: $0) }
             )
@@ -499,11 +505,18 @@ final class StatusItemController: NSObject, NSWindowDelegate {
 
     private func showSwitchNotice(_ devices: [AudioDevice]) {
         guard model.showsSwitchNotice, !devices.isEmpty else { return }
-        notice.showSwitch(NoticeContent.switched(to: devices) { device in
-            device.hardwareIcon(
-                category: device.role == .output ? model.store.category(for: device) : nil
-            )
-        })
+        notice.showSwitch(NoticeContent.switched(to: devices, icon: noticeIcon))
+    }
+
+    private func showProfileNotice(_ profile: String, _ devices: [AudioDevice]) {
+        guard model.showsSwitchNotice else { return }
+        notice.showSwitch(NoticeContent.applied(profile: profile, devices: devices, icon: noticeIcon))
+    }
+
+    private func noticeIcon(_ device: AudioDevice) -> String {
+        device.hardwareIcon(
+            category: device.role == .output ? model.store.category(for: device) : nil
+        )
     }
 
     func windowDidResize(_ notification: Notification) {

@@ -902,3 +902,105 @@ func theMicrophoneIsChosenForTheOutputJustSelected() {
     #expect(model.currentInputID == desk.lapelMic.platformID)
     #expect(desk.audio.selections.map(\.0) == [.output, .input])
 }
+
+/// Two profiles over the same hardware: at the desk the desk speakers and the
+/// room microphone come first, while travelling the laptop's own do.
+@MainActor
+private struct TwoProfiles {
+    let defaults = isolatedDefaults()
+    let store: PriorityStore
+    let audio = FakeAudio()
+    let deskSpeakers = output(1, "desk-speakers", "Desk Speakers")
+    let laptopSpeakers = output(2, "laptop-speakers", "MacBook Pro Speakers")
+    let roomMic = input(3, "room-mic", "Room Mic")
+    let laptopMic = input(4, "laptop-mic", "MacBook Pro Microphone")
+    let deskID: UUID
+    let travelID: UUID
+
+    init(travelIsManual: Bool = false) {
+        store = PriorityStore(defaults: defaults)
+        store.savePriorities([deskSpeakers, laptopSpeakers], category: .speaker)
+        store.savePriorities([roomMic, laptopMic], role: .input)
+        deskID = store.profiles[0].id
+        travelID = store.addProfile(named: "Travel").id
+        store.loadProfile(travelID)
+        store.savePriorities([laptopSpeakers, deskSpeakers], category: .speaker)
+        store.savePriorities([laptopMic, roomMic], role: .input)
+        store.isManualMode = travelIsManual
+        store.loadProfile(deskID)
+        audio.catalog = [deskSpeakers, laptopSpeakers, roomMic, laptopMic]
+    }
+
+    func model(isUserPicking: @escaping () -> Bool = { false }) -> AppModel {
+        testModel(audio: audio, defaults: defaults, isUserPicking: isUserPicking)
+    }
+}
+
+@Test
+@MainActor
+func applyingAProfileSelectsItsTopDevicesAtOnce() {
+    let setup = TwoProfiles()
+    let model = setup.model()
+    model.start()
+    #expect(model.currentOutputID == setup.deskSpeakers.platformID)
+    var applied: [(String, [String])] = []
+    model.onProfileApplied = { applied.append(($0, $1.map(\.uid))) }
+
+    #expect(model.applyProfile(id: setup.travelID, announces: true))
+
+    #expect(model.activeProfileID == setup.travelID)
+    #expect(model.currentOutputID == setup.laptopSpeakers.platformID)
+    #expect(model.currentInputID == setup.laptopMic.platformID)
+    #expect(applied.map(\.0) == ["Travel"])
+    #expect(applied.first?.1 == ["laptop-speakers", "laptop-mic"])
+}
+
+@Test
+@MainActor
+func aManualProfileSelectsOnceThenHolds() {
+    let setup = TwoProfiles(travelIsManual: true)
+    let model = setup.model()
+    model.start()
+
+    model.applyProfile(id: setup.travelID)
+    #expect(model.isManualMode)
+    #expect(model.currentOutputID == setup.laptopSpeakers.platformID)
+
+    let headphones = output(5, "headphones", "AirPods Pro")
+    setup.audio.catalog.append(headphones)
+    model.handleDevicesChanged()
+
+    #expect(model.currentOutputID == setup.laptopSpeakers.platformID)
+}
+
+@Test
+@MainActor
+func applyingAProfileClearsAControlCenterPick() {
+    let setup = TwoProfiles()
+    let model = setup.model(isUserPicking: { true })
+    model.start()
+    setup.audio.defaults[.output] = setup.laptopSpeakers.platformID
+    model.handleDefaultChanged(.output)
+    #expect(model.currentOutputID == setup.laptopSpeakers.platformID)
+
+    // Applying the profile already in use is how a shortcut asks for its
+    // devices back.
+    model.applyProfile(id: setup.deskID)
+
+    #expect(model.currentOutputID == setup.deskSpeakers.platformID)
+    #expect(model.keptPicks.isEmpty)
+}
+
+@Test
+@MainActor
+func aProfileWithAMissingDeviceFallsBackByPriority() {
+    let setup = TwoProfiles()
+    setup.audio.catalog = [setup.deskSpeakers, setup.laptopSpeakers, setup.roomMic]
+    let model = setup.model()
+    model.start()
+
+    model.applyProfile(id: setup.travelID)
+
+    #expect(model.currentOutputID == setup.laptopSpeakers.platformID)
+    #expect(model.currentInputID == setup.roomMic.platformID)
+}

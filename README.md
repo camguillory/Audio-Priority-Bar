@@ -37,6 +37,7 @@
 - **Tells you.** A brief notice under the menu bar icon names the device it just picked.
 - **Mute from anywhere.** <kbd>⌥</kbd> <kbd>⇧</kbd> <kbd>M</kbd> in any app, or from Shortcuts, Raycast, or a Stream Deck. The menu bar icon turns red while muted.
 - **Shortcuts actions.** Set the output or microphone, mute, or turn automatic switching on or off from a shortcut.
+- **Profiles.** Keep a set of device orders for each setup and switch from the panel, a shortcut, or a Focus.
 - **Bluetooth in one click.** Connect and disconnect paired speakers and headphones from the panel.
 - **Battery at a glance.** AirPods buds and case, and Jabra headsets on a Link dongle.
 - **Native.** Laid out like the macOS Sound menu, with Liquid Glass on macOS 26, VoiceOver support, and automatic updates.
@@ -209,12 +210,36 @@ unrecognised dongle fails open rather than being treated as off.
 
 </details>
 
+<details>
+<summary>Profiles</summary>
+
+A profile keeps its own Speakers, Headphones, and Microphones orders and
+whether automatic switching is on, for setups like Desk, Meeting, or Travel.
+Hiding, Never Auto-Select, and the other settings are shared by all of them.
+
+- Your current setup is the first profile, **Default**. Add more in
+  **Settings > Profiles**; each starts as a copy of the one in use. Click a
+  name to rename it, or choose **Edit Profiles…** in the panel's profile
+  menu.
+- Rearranging the panel changes the profile in use, with nothing to save.
+- With two or more, the panel heading shows the profile in use; pick another
+  there, in Settings, or with the **Apply Profile** shortcut.
+- Applying a profile selects its top devices at once. One with automatic
+  switching off picks them and then holds them.
+- Under **System Settings > Focus**, add Audio Priority Bar as a Focus filter
+  to apply a profile while that Focus is on. The profile from before returns
+  when it ends.
+- Forgetting a device removes it from every profile. Profiles never drop a
+  device on their own.
+
+</details>
+
 ### Automation
 
-The Shortcuts app lists four actions: **Set Output**, **Set Microphone**,
-**Set Microphone Mute**, and **Set Automatic Switching**. Picking a device
-turns automatic switching off, as a click in the panel does, and a device that
-isn't connected stops the shortcut with its name.
+The Shortcuts app lists five actions: **Set Output**, **Set Microphone**,
+**Set Microphone Mute**, **Set Automatic Switching**, and **Apply Profile**.
+Picking a device turns automatic switching off, as a click in the panel does,
+and a device that isn't connected stops the shortcut with its name.
 
 URLs control the microphone mute and automatic switching from Shortcuts,
 Raycast, a Stream Deck, or Terminal:
