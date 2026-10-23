@@ -28,7 +28,6 @@ struct DeviceRow: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
-    @State private var confirmsForget = false
     @State private var isHovering = false
     @State private var isHoveringSelectionOverride = false
     @State private var highlightedPartnerID: String?
@@ -256,17 +255,20 @@ struct DeviceRow: View {
         .accessibilityAction(named: "Move Down") {
             if index < count - 1 { move(index + 1) }
         }
-        .confirmationDialog(
-            "Forget \(device.name)?",
-            isPresented: $confirmsForget,
-            titleVisibility: .visible
-        ) {
-            Button("Forget Device", role: .destructive) {
-                model.forget(device)
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("Its saved priority, category, and visibility will be removed.")
+    }
+
+    /// An AppKit sheet on the panel: SwiftUI's dialog takes key status from
+    /// the panel before attaching to it, so the panel closes and takes the
+    /// dialog with it. Return forgets and Escape cancels.
+    private func confirmForget() {
+        guard let window = NSApp.keyWindow else { return }
+        let alert = NSAlert()
+        alert.messageText = "Forget \(device.name)?"
+        alert.informativeText = "Its saved priority, category, and visibility will be removed."
+        alert.addButton(withTitle: "Forget Device")
+        alert.addButton(withTitle: "Cancel")
+        alert.beginSheetModal(for: window) { [model, device] response in
+            if response == .alertFirstButtonReturn { model.forget(device) }
         }
     }
 
@@ -550,9 +552,7 @@ struct DeviceRow: View {
 
         if !device.isConnected {
             Divider()
-            Button(role: .destructive) {
-                confirmsForget = true
-            } label: {
+            Button(role: .destructive, action: confirmForget) {
                 Label("Forget Device", systemImage: "trash")
             }
         }
