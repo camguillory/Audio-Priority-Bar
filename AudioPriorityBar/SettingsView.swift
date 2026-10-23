@@ -255,6 +255,14 @@ struct SettingsView: View {
             ))
 
             Toggle(isOn: Binding(
+                get: { model.microphonesFollowOutput },
+                set: { model.setMicrophonesFollowOutput($0) }
+            )) {
+                Text("Microphones follow the output")
+                Text("Speakers and headphones each keep their own microphone order.")
+            }
+
+            Toggle(isOn: Binding(
                 get: { model.hideNewDisplayOutputs },
                 set: { model.setHideNewDisplayOutputs($0) }
             )) {

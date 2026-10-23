@@ -68,6 +68,10 @@ final class AppModel {
     var showAll = false
     var isManualMode: Bool
     var selectsPairedDevice: Bool
+    var microphonesFollowOutput: Bool
+    /// The microphone order the panel shows when the user picks the one not in
+    /// use. Nil shows the order for the output playing.
+    var viewedMicrophoneCategory: OutputCategory?
     var hideNewDisplayOutputs: Bool
     var isActiveOutputMuted = false
     var isActiveInputMuted = false
@@ -107,6 +111,8 @@ final class AppModel {
     private var connectedInputUIDs: Set<String> = []
     private var connectedOutputUIDs: Set<String> = []
     private var connectedUIDsByID: [DeviceRole: [UInt32: String]] = [:]
+    /// The output category the panel's microphone order was last shown for.
+    private var microphoneOrderShownFor: OutputCategory?
     private var recentlyAddedUIDs: [DeviceRole: Set<String>] = [:]
     private var topologyChangedAt: [DeviceRole: TimeInterval] = [:]
     private var micFlashTimer: Timer?
@@ -150,6 +156,7 @@ final class AppModel {
         self.isUserPicking = isUserPicking
         isManualMode = store.isManualMode
         selectsPairedDevice = store.selectsPairedDevice
+        microphonesFollowOutput = store.microphonesFollowOutput
         hideNewDisplayOutputs = store.hideNewDisplayOutputs
         showsSwitchNotice = store.showsSwitchNotice
         remindsWhenMuted = store.remindsWhenMuted
@@ -324,6 +331,12 @@ final class AppModel {
         }
         if role == .output, let output = currentOutputDevice {
             selectPairedDevice(of: output, automatically: !isManualMode)
+            // An output picked elsewhere still brings its own microphone.
+            let moved = currentUIDs
+            followOutputCategory(
+                from: previousDevices[.output].map(store.category(for:))
+            )
+            announceAutomaticSwitches(since: moved)
         }
         refreshMute()
     }
@@ -431,18 +444,34 @@ final class AppModel {
             device.transportType = kAudioDeviceTransportTypeBluetooth
             outputs.append(device)
         }
+        (speakerDevices, hiddenSpeakerDevices) = split(outputs, .speaker)
+        (headphoneDevices, hiddenHeadphoneDevices) = split(outputs, .headphone)
+        // After the outputs, whose category picks the microphone order.
         // Hiding the active microphone would leave no way to see which one is
         // in use, so it stays listed and shows as hidden, matching outputs.
+        resetViewedMicrophoneOrderIfOutputMoved()
         inputDevices = store.sorted(
             inputs.filter {
                 showAll
                     || !store.isHidden($0)
                     || ($0.isConnected && $0.platformID == currentInputID)
             },
-            role: .input
+            microphonesFor: microphoneOrderCategory
         )
-        (speakerDevices, hiddenSpeakerDevices) = split(outputs, .speaker)
-        (headphoneDevices, hiddenHeadphoneDevices) = split(outputs, .headphone)
+    }
+
+    /// The category whose microphone order the panel shows and edits.
+    var microphoneOrderCategory: OutputCategory {
+        viewedMicrophoneCategory ?? activeOutputCategory ?? .speaker
+    }
+
+    /// A different output category playing brings the panel back to its
+    /// microphone order.
+    private func resetViewedMicrophoneOrderIfOutputMoved() {
+        let active = activeOutputCategory
+        guard active != microphoneOrderShownFor else { return }
+        microphoneOrderShownFor = active
+        viewedMicrophoneCategory = nil
     }
 
     /// Splits one output category into the list the panel shows and the list it
@@ -738,9 +767,21 @@ final class AppModel {
         // Deferral covers both roles: picking a microphone now could pair it
         // with an output we are about to change.
         guard !automaticOutputDecision.isDeferred else { return }
+        let category = activeOutputCategory
         if let first = automaticTarget(for: role) {
             select(first, automatically: true)
         }
+        if role == .output { followOutputCategory(from: category) }
+    }
+
+    /// Once the output has moved to the other category, moves the microphone
+    /// to the top of that category's order. Read after the output is applied,
+    /// so the order always belongs to the device now playing.
+    func followOutputCategory(from previous: OutputCategory?) {
+        guard microphonesFollowOutput, activeOutputCategory != previous else { return }
+        resetViewedMicrophoneOrderIfOutputMoved()
+        inputDevices = store.sorted(inputDevices, microphonesFor: microphoneOrderCategory)
+        if !isManualMode { applyHighestPriority(.input) }
     }
 
     private func automaticTarget(for role: DeviceRole) -> AudioDevice? {
@@ -757,8 +798,9 @@ final class AppModel {
                link.isUsable(paired) {
                 return paired
             }
+            // The panel may be showing the other category's order.
             return store.firstSelectable(
-                in: inputDevices,
+                in: store.sorted(inputDevices, microphonesFor: activeOutputCategory),
                 isUsable: link.isUsable
             )
         }

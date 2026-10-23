@@ -667,3 +667,78 @@ func storedDevicesWrittenBeforeDeclarationsStillDecode() throws {
     #expect(decoded.count == 1)
     #expect(decoded.first?.declaredCategory == nil)
 }
+
+private let roomMic = device("room-mic", role: .input)
+private let boomMic = device("boom-mic", role: .input)
+
+private func microphoneUIDs(
+    _ store: PriorityStore,
+    with output: OutputCategory
+) -> [String] {
+    store.sorted([boomMic, roomMic], microphonesFor: output).map(\.uid)
+}
+
+@Test
+func turningMicrophonesFollowOutputOnCopiesTheOrderOnce() throws {
+    try withDefaults { defaults in
+        let store = PriorityStore(defaults: defaults)
+        store.savePriorities([roomMic, boomMic], role: .input)
+
+        store.microphonesFollowOutput = true
+        #expect(microphoneUIDs(store, with: .headphone) == ["room-mic", "boom-mic"])
+
+        store.savePriorities([boomMic, roomMic], microphonesFor: .headphone)
+        store.microphonesFollowOutput = true
+        #expect(microphoneUIDs(store, with: .headphone) == ["boom-mic", "room-mic"])
+    }
+}
+
+@Test
+func eachOutputCategoryKeepsItsOwnMicrophoneOrder() throws {
+    try withDefaults { defaults in
+        let store = PriorityStore(defaults: defaults)
+        store.microphonesFollowOutput = true
+
+        store.savePriorities([roomMic, boomMic], microphonesFor: .speaker)
+        store.savePriorities([boomMic, roomMic], microphonesFor: .headphone)
+
+        #expect(microphoneUIDs(store, with: .speaker) == ["room-mic", "boom-mic"])
+        #expect(microphoneUIDs(store, with: .headphone) == ["boom-mic", "room-mic"])
+        // The speaker order is the one every earlier version kept.
+        #expect(store.sorted([boomMic, roomMic], role: .input).map(\.uid)
+            == ["room-mic", "boom-mic"])
+    }
+}
+
+@Test
+func turningTheSettingOffKeepsTheHeadphoneOrderForLater() throws {
+    try withDefaults { defaults in
+        let store = PriorityStore(defaults: defaults)
+        store.savePriorities([roomMic, boomMic], role: .input)
+        store.microphonesFollowOutput = true
+        store.savePriorities([boomMic, roomMic], microphonesFor: .headphone)
+
+        store.microphonesFollowOutput = false
+        #expect(microphoneUIDs(store, with: .headphone) == ["room-mic", "boom-mic"])
+
+        store.microphonesFollowOutput = true
+        #expect(microphoneUIDs(store, with: .headphone) == ["boom-mic", "room-mic"])
+    }
+}
+
+@Test
+func forgettingAMicrophoneRemovesItFromBothOrders() throws {
+    try withDefaults { defaults in
+        let store = PriorityStore(defaults: defaults)
+        store.remember([roomMic, boomMic])
+        store.savePriorities([roomMic, boomMic], role: .input)
+        store.microphonesFollowOutput = true
+        store.savePriorities([boomMic, roomMic], microphonesFor: .headphone)
+
+        store.forget(uid: "boom-mic", role: .input)
+
+        #expect(defaults.stringArray(forKey: "inputPriorities") == ["room-mic"])
+        #expect(defaults.stringArray(forKey: "microphonePrioritiesWithHeadphones")
+            == ["room-mic"])
+    }
+}

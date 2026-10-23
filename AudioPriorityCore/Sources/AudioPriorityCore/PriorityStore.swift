@@ -3,6 +3,8 @@ import Foundation
 public final class PriorityStore {
     private enum Key {
         static let inputPriorities = "inputPriorities"
+        static let headphoneMicrophonePriorities = "microphonePrioritiesWithHeadphones"
+        static let microphonesFollowOutput = "microphonesFollowOutput"
         static let speakerPriorities = "speakerPriorities"
         static let headphonePriorities = "headphonePriorities"
         static let categories = "deviceCategories"
@@ -143,7 +145,7 @@ public final class PriorityStore {
         })
 
         let priorityKeys = role == .input
-            ? [Key.inputPriorities]
+            ? [Key.inputPriorities, Key.headphoneMicrophonePriorities]
             : [Key.speakerPriorities, Key.headphonePriorities]
         let hiddenKeys = role == .input
             ? [Key.hiddenInputs]
@@ -173,6 +175,23 @@ public final class PriorityStore {
     public var selectsPairedDevice: Bool {
         get { defaults.object(forKey: Key.selectsPairedDevice) as? Bool ?? true }
         set { defaults.set(newValue, forKey: Key.selectsPairedDevice) }
+    }
+
+    /// Whether headphones keep a microphone order of their own, while speakers
+    /// keep the original one. The first time it is turned on, the headphone
+    /// order starts as a copy, so nothing changes until the user reorders it;
+    /// turning it off keeps that order for next time.
+    public var microphonesFollowOutput: Bool {
+        get { defaults.bool(forKey: Key.microphonesFollowOutput) }
+        set {
+            if newValue, defaults.object(forKey: Key.headphoneMicrophonePriorities) == nil {
+                defaults.set(
+                    defaults.stringArray(forKey: Key.inputPriorities) ?? [],
+                    forKey: Key.headphoneMicrophonePriorities
+                )
+            }
+            defaults.set(newValue, forKey: Key.microphonesFollowOutput)
+        }
     }
 
     public var hideNewDisplayOutputs: Bool {
@@ -314,6 +333,22 @@ public final class PriorityStore {
         sorted(devices, key: priorityKey(role: .output, category: category))
     }
 
+    /// Microphones in the order kept for `output`, the category of the device
+    /// playing. A nil category, or the setting off, means the original order.
+    public func sorted(
+        _ devices: [AudioDevice],
+        microphonesFor output: OutputCategory?
+    ) -> [AudioDevice] {
+        sorted(devices, key: priorityKey(role: .input, category: output))
+    }
+
+    public func savePriorities(
+        _ devices: [AudioDevice],
+        microphonesFor output: OutputCategory?
+    ) {
+        savePriorities(devices, key: priorityKey(role: .input, category: output))
+    }
+
     public func savePriorities(
         _ devices: [AudioDevice],
         role: DeviceRole
@@ -427,7 +462,11 @@ public final class PriorityStore {
         role: DeviceRole,
         category: OutputCategory?
     ) -> String {
-        if role == .input { return Key.inputPriorities }
+        if role == .input {
+            return category == .headphone && microphonesFollowOutput
+                ? Key.headphoneMicrophonePriorities
+                : Key.inputPriorities
+        }
         return category == .headphone
             ? Key.headphonePriorities
             : Key.speakerPriorities

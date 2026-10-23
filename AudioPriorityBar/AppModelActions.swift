@@ -24,6 +24,28 @@ extension AppModel {
         }
     }
 
+    func setMicrophonesFollowOutput(_ enabled: Bool) {
+        microphonesFollowOutput = enabled
+        store.microphonesFollowOutput = enabled
+        viewedMicrophoneCategory = nil
+        refreshDevices()
+        if !isManualMode { applyHighestPriorityInput() }
+    }
+
+    /// Shows the other category's microphone order, or the one in use again.
+    func viewMicrophoneOrder(for category: OutputCategory) {
+        viewedMicrophoneCategory = category == (activeOutputCategory ?? .speaker)
+            ? nil
+            : category
+        refreshDevices()
+    }
+
+    func showMicrophoneOrderInUse() {
+        guard viewedMicrophoneCategory != nil else { return }
+        viewedMicrophoneCategory = nil
+        refreshDevices()
+    }
+
     func setHideNewDisplayOutputs(_ enabled: Bool) {
         hideNewDisplayOutputs = enabled
         store.hideNewDisplayOutputs = enabled
@@ -215,9 +237,12 @@ extension AppModel {
     }
 
     func setCategory(_ category: OutputCategory, for device: AudioDevice) {
+        let playing = activeOutputCategory
         preservingVisibility(movingTo: category, device)
         refreshDevices()
         if !isManualMode { applyHighestPriorityOutput() }
+        // Moving the device that plays changes its category without a switch.
+        followOutputCategory(from: playing)
     }
 
     /// Moves a device to a category without changing whether it is hidden:
@@ -286,7 +311,9 @@ extension AppModel {
             return
         }
         inputDevices.move(fromOffsets: source, toOffset: destination)
-        store.savePriorities(inputDevices, role: .input)
+        // Saved to the order shown, which may not be the one in use: the
+        // reapply then finds the same microphone and changes nothing.
+        store.savePriorities(inputDevices, microphonesFor: microphoneOrderCategory)
         if !isManualMode { applyHighestPriorityInput() }
     }
 
@@ -346,6 +373,7 @@ extension AppModel {
             return true
         }
 
+        let playing = activeOutputCategory
         preservingVisibility(movingTo: category, device)
         refreshDevices()
         var devices = category == .speaker
@@ -363,6 +391,7 @@ extension AppModel {
         }
         store.savePriorities(devices, category: category)
         if !isManualMode { applyHighestPriorityOutput() }
+        followOutputCategory(from: playing)
         return true
     }
 
