@@ -178,6 +178,8 @@ struct SettingsView: View {
                 )
             }
             Button("Add Profile") { model.addProfile() }
+                .keyboardShortcut("n", modifiers: .command)
+                .help("Add a copy of the profile in use (⌘N)")
         } footer: {
             Text("Each profile keeps its own device and microphone orders and whether automatic switching is on. Rearranging the panel changes the profile in use. Click a name to rename it.")
                 .foregroundStyle(.secondary)
@@ -185,13 +187,16 @@ struct SettingsView: View {
 
         Section {
             LabeledContent {
-                Button("Open Focus Settings") {
+                Button("Open Focus Settings…") {
                     NSWorkspace.shared.open(Self.focusSettingsURL)
                 }
             } label: {
-                Text("Apply one with a Focus")
-                Text("Add Audio Priority Bar under Focus filters. The profile from before returns when the Focus ends. Shortcuts also has an Apply Profile action.")
+                Text("Switch profiles with a Focus")
+                Text("In System Settings › Focus, choose a Focus such as Work, click Add Filter, choose Audio Priority Bar, and pick a profile. That profile is used while the Focus is on, and your previous one comes back when it ends.")
             }
+        } footer: {
+            Text("Or apply a profile from Shortcuts with the Apply Profile action.")
+                .foregroundStyle(.secondary)
         }
     }
 
@@ -334,6 +339,27 @@ enum SettingsPlacement {
     }
 }
 
+private extension View {
+    /// The shape a profile name sits in: a tint under the pointer, an
+    /// outline while it is being renamed, and the same size in both so the
+    /// row never moves.
+    func nameFrame(isHovering: Bool, isRenaming: Bool) -> some View {
+        padding(.horizontal, 6)
+            .padding(.vertical, 3)
+            .background(
+                Color.primary.opacity(isHovering ? 0.1 : 0),
+                in: RoundedRectangle(cornerRadius: 5)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 5)
+                    .strokeBorder(Color.accentColor.opacity(isRenaming ? 0.8 : 0), lineWidth: 2)
+            )
+            // Keeps the text where it sits in the rows around it.
+            .padding(.leading, -6)
+            .contentShape(Rectangle())
+    }
+}
+
 /// One profile: its name, renamed in place, and the buttons to use or delete it.
 private struct ProfileRow: View {
     @Bindable var model: AppModel
@@ -369,7 +395,12 @@ private struct ProfileRow: View {
             "Delete \(profile.name)?",
             isPresented: $isConfirmingDelete
         ) {
-            Button("Delete", role: .destructive) { model.deleteProfile(profile.id) }
+            // Return deletes and Escape cancels. A destructive role would draw
+            // the default button blue at rest and red while pressed.
+            Button("Delete") { model.deleteProfile(profile.id) }
+                .keyboardShortcut(.defaultAction)
+            Button("Cancel", role: .cancel) {}
+                .keyboardShortcut(.cancelAction)
         } message: {
             Text("Its device and microphone orders are removed. Devices stay as they are in the other profiles.")
         }
@@ -394,56 +425,46 @@ private struct ProfileRow: View {
 
     /// Plain text at rest, so the list reads cleanly and nothing takes focus
     /// when Settings opens. Under the pointer it shows a field and a pencil;
-    /// a click swaps in a text field with the name selected, as renaming in
-    /// place works in Finder.
-    private var nameField: some View {
-        HStack(spacing: 4) {
-            if isRenaming {
-                // A grouped form would show a label and push the name right.
-                TextField("Profile name", text: $name)
-                    .labelsHidden()
-                    .textFieldStyle(.plain)
-                    .fixedSize()
-                    .frame(minWidth: 80, alignment: .leading)
-                    .focused($isEditing)
-                    .onSubmit(finishRenaming)
-                    .onExitCommand(perform: cancelRenaming)
-                    .onChange(of: isEditing) { _, editing in
-                        if !editing { finishRenaming() }
-                    }
-                    .onAppear(perform: focusField)
-            } else {
-                Text(profile.name)
-                    .frame(minWidth: 80, alignment: .leading)
-                Image(systemName: "pencil")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.secondary)
-                    .opacity(isHovering ? 1 : 0)
-                    .accessibilityHidden(true)
+    /// a click, or Space once Tab has reached it, swaps in a text field with
+    /// the name selected, as renaming in place works in Finder. Return or a
+    /// click elsewhere saves, Escape cancels.
+    @ViewBuilder private var nameField: some View {
+        if isRenaming {
+            // A grouped form would show a label and push the name right.
+            TextField("Profile name", text: $name)
+                .labelsHidden()
+                .textFieldStyle(.plain)
+                .fixedSize()
+                .frame(minWidth: 80, alignment: .leading)
+                .focused($isEditing)
+                .onSubmit(finishRenaming)
+                .onExitCommand(perform: cancelRenaming)
+                .onChange(of: isEditing) { _, editing in
+                    if !editing { finishRenaming() }
+                }
+                .onAppear(perform: focusField)
+                .nameFrame(isHovering: false, isRenaming: true)
+                .help("Press Return to save or Escape to cancel")
+        } else {
+            Button(action: beginRenaming) {
+                HStack(spacing: 4) {
+                    Text(profile.name)
+                        .frame(minWidth: 80, alignment: .leading)
+                    Image(systemName: "pencil")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(.secondary)
+                        .opacity(isHovering ? 1 : 0)
+                        .accessibilityHidden(true)
+                }
+                .nameFrame(isHovering: isHovering, isRenaming: false)
             }
+            .buttonStyle(.plain)
+            .onHover { isHovering = $0 }
+            .animation(.easeInOut(duration: 0.12), value: isHovering)
+            .help("Click to rename")
+            .accessibilityLabel(isActive ? "\(profile.name), in use" : profile.name)
+            .accessibilityHint("Renames the profile.")
         }
-        .padding(.horizontal, 6)
-        .padding(.vertical, 3)
-        .background(
-            Color.primary.opacity(isHovering && !isRenaming ? 0.1 : 0),
-            in: RoundedRectangle(cornerRadius: 5)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 5)
-                .strokeBorder(Color.accentColor.opacity(isRenaming ? 0.8 : 0), lineWidth: 2)
-        )
-        // Keeps the text where it sits in the rows around it.
-        .padding(.leading, -6)
-        .contentShape(Rectangle())
-        .onHover { isHovering = $0 }
-        .onTapGesture { if !isRenaming { beginRenaming() } }
-        .animation(.easeInOut(duration: 0.12), value: isHovering)
-        .help(isRenaming ? "Press Return to save or Escape to cancel" : "Click to rename")
-        .accessibilityElement(children: isRenaming ? .contain : .ignore)
-        .accessibilityLabel(isActive ? "\(profile.name), in use" : profile.name)
-        .accessibilityAddTraits(isRenaming ? [] : .isButton)
-        .accessibilityHint(isRenaming ? "" : "Renames the profile.")
-        .accessibilityAction(named: "Rename", beginRenaming)
     }
 
     /// Opens a profile just added for naming.
