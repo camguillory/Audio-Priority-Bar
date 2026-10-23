@@ -43,12 +43,33 @@ struct AutomaticOutputDecision {
     var isDeferred = false
 }
 
+/// Something in the panel the arrow keys can highlight.
+enum PanelItem: Hashable {
+    case automatic, profile, takeoverFix, outputLevel, microphoneLevel
+    case microphoneOrder, showAll, settings
+    case device(String)
+}
+
 @MainActor
 @Observable
 final class AppModel {
     var inputDevices: [AudioDevice] = []
     var speakerDevices: [AudioDevice] = []
     var headphoneDevices: [AudioDevice] = []
+    /// The panel's rows from top to bottom.
+    var listedDevices: [AudioDevice] { speakerDevices + headphoneDevices + inputDevices }
+    /// What the arrow keys walk through, in the panel's order.
+    var panelItems: [PanelItem] {
+        var items: [PanelItem] = [.automatic]
+        if profiles.count > 1 { items.append(.profile) }
+        if takeoverDevice?.isBluetooth == true { items.append(.takeoverFix) }
+        items.append(.outputLevel)
+        if currentInputID != nil { items.append(.microphoneLevel) }
+        items += (speakerDevices + headphoneDevices).map { .device($0.id) }
+        if microphonesFollowOutput { items.append(.microphoneOrder) }
+        items += inputDevices.map { .device($0.id) }
+        return items + [.showAll, .settings]
+    }
     var hiddenSpeakerDevices: [AudioDevice] = []
     var hiddenHeadphoneDevices: [AudioDevice] = []
     var currentInputID: UInt32?
@@ -76,6 +97,11 @@ final class AppModel {
     var activeProfileID: UUID?
     /// A profile just added, whose name Settings opens for editing.
     var renamingProfileID: UUID?
+    /// The panel item the arrow keys have moved to.
+    var keyboardItem: PanelItem?
+    /// A device whose row should open its actions menu, asked for from the
+    /// keyboard. The row clears it.
+    var actionsMenuDeviceID: String?
     var hideNewDisplayOutputs: Bool
     var isActiveOutputMuted = false
     var isActiveInputMuted = false
