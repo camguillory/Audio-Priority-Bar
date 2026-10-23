@@ -33,6 +33,7 @@ struct DeviceRow: View {
     @State private var highlightedPartnerID: String?
     @State private var controlsWidth: CGFloat = 0
     @State private var isHoveringBluetoothPill = false
+    @State private var frameInWindow: CGRect = .zero
     @FocusState private var isOverrideFocused: Bool
     @FocusState private var isActionsFocused: Bool
 
@@ -243,6 +244,14 @@ struct DeviceRow: View {
         // Undo the content inset for layout, so the row's text lines up with
         // the section heading while its highlight and hover area overhang it.
         .padding(.horizontal, -8)
+        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: {
+            frameInWindow = $0
+        }
+        .onChange(of: model.actionsMenuDeviceID) { _, id in
+            guard id == device.id else { return }
+            model.actionsMenuDeviceID = nil
+            openActionsMenu()
+        }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(device.name)
         .accessibilityValue(accessibilityValue)
@@ -254,6 +263,32 @@ struct DeviceRow: View {
         }
         .accessibilityAction(named: "Move Down") {
             if index < count - 1 { move(index + 1) }
+        }
+    }
+
+    /// SwiftUI has no way to open a context menu, so the keyboard asks the
+    /// panel for the one a right-click on the row's name would show. It opens
+    /// a turn later, since a menu opened during a view update never draws.
+    private func openActionsMenu() {
+        guard let window = NSApp.keyWindow, let content = window.contentView else { return }
+        let location = NSPoint(
+            x: frameInWindow.minX + 48,
+            y: content.bounds.height - frameInWindow.midY
+        )
+        guard let click = NSEvent.mouseEvent(
+                  with: .rightMouseDown,
+                  location: location,
+                  modifierFlags: [],
+                  timestamp: ProcessInfo.processInfo.systemUptime,
+                  windowNumber: window.windowNumber,
+                  context: nil,
+                  eventNumber: 0,
+                  clickCount: 1,
+                  pressure: 1
+              ),
+              let menu = content.menu(for: click) else { return }
+        DispatchQueue.main.async {
+            menu.popUp(positioning: nil, at: content.convert(location, from: nil), in: content)
         }
     }
 
@@ -285,15 +320,7 @@ struct DeviceRow: View {
             : "Activate to select this device and turn off automatic switching"
     }
 
-    /// Selects a connected device, or connects a paired Bluetooth one that is
-    /// off and selects it once it is there.
-    private func activate() {
-        if device.isConnected {
-            if !isUnavailable, !isSelected { select() }
-        } else if model.canConnect(device) {
-            model.connect(device, selecting: true)
-        }
-    }
+    private func activate() { model.activate(device) }
 
     /// Orange rather than the accent while the current device is unavailable,
     /// matching its "Current" status.
@@ -315,7 +342,7 @@ struct DeviceRow: View {
     }
 
     private var rowBackground: Color {
-        isHovering || isHighlightedPairedDevice
+        isHovering || isHighlightedPairedDevice || model.keyboardItem == .device(device.id)
             ? Color.primary.opacity(0.06) : .clear
     }
 
@@ -326,23 +353,23 @@ struct DeviceRow: View {
     /// keeps the layout it had before.
     @ViewBuilder
     private var selectionOverride: some View {
-        if let pairedDevice, isPairedDeviceUsable {
-            if model.selectsPairedDevice {
-                if !isSelected {
-                    selectionOverridePill(
-                        partner: pairedDevice,
-                        label: device.role == .input ? "Mic only" : "Output only",
-                        action: { model.selectOnly(device) }
-                    )
-                }
-            } else if canSelectBothDevices {
-                selectionOverridePill(
-                    partner: pairedDevice,
-                    label: "Use both",
-                    action: { model.selectWithPairedDevice(device) }
-                )
-            }
+        if let option = selectionOverrideOption, let pairedDevice {
+            selectionOverridePill(partner: pairedDevice, label: option.pill, action: option.action)
         }
+    }
+
+    /// The override while it would change something, with the pill's label
+    /// and the actions menu's title, so the keyboard reaches it too.
+    private var selectionOverrideOption: (pill: String, title: String, action: () -> Void)? {
+        guard isPairedDeviceUsable else { return nil }
+        if model.selectsPairedDevice {
+            guard !isSelected else { return nil }
+            return device.role == .input
+                ? ("Mic only", "Use Microphone Only", { model.selectOnly(device) })
+                : ("Output only", "Use Output Only", { model.selectOnly(device) })
+        }
+        guard canSelectBothDevices else { return nil }
+        return ("Use both", "Use for Input and Output", { model.selectWithPairedDevice(device) })
     }
 
     /// Drawn over the end of the row and room made for them only while they
@@ -474,6 +501,11 @@ struct DeviceRow: View {
                 )
             }
                 .disabled(isSelected || isUnavailable)
+            if let option = selectionOverrideOption {
+                Button(action: option.action) {
+                    Label(option.title, systemImage: "rectangle.2.swap")
+                }
+            }
             Divider()
         } else if model.canConnect(device) {
             Button { model.connect(device) } label: {

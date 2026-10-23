@@ -32,6 +32,20 @@ func optionClickTogglesMute() {
 }
 
 @Test
+func arrowKeysWalkThePanelRowsAndStopAtTheEnds() {
+    let rows = ["speakers", "headset", "mic"]
+    #expect(PanelKeyboard.step(from: nil, in: rows, down: true) == "speakers")
+    #expect(PanelKeyboard.step(from: nil, in: rows, down: false) == "mic")
+    #expect(PanelKeyboard.step(from: "speakers", in: rows, down: true) == "headset")
+    #expect(PanelKeyboard.step(from: "headset", in: rows, down: false) == "speakers")
+    #expect(PanelKeyboard.step(from: "mic", in: rows, down: true) == "mic")
+    #expect(PanelKeyboard.step(from: "speakers", in: rows, down: false) == "speakers")
+    // A row that disconnected starts the walk over.
+    #expect(PanelKeyboard.step(from: "gone", in: rows, down: true) == "speakers")
+    #expect(PanelKeyboard.step(from: nil, in: [String](), down: true) == nil)
+}
+
+@Test
 func statusItemSuppressionIsConsumeOnceAndExpires() {
     #expect(ClickRouting.shouldSuppressOpen(suppressedAt: 10, now: 10.5))
     #expect(!ClickRouting.shouldSuppressOpen(suppressedAt: 10, now: 12))

@@ -145,6 +145,11 @@ Speakers, Headphones, and Microphones remain visible in both modes.
 - Reorder microphones within Microphones. With **Microphones follow the
   output** on, its heading shows **With speakers** or **With headphones**;
   pick the other to edit that order without switching anything.
+- Move through the panel with Up and Down, as in a menu. Return or Space uses
+  the highlighted device, mutes or unmutes a volume row, flips a switch, or
+  opens Settings. Left and Right change the highlighted volume, profile, or
+  microphone order, Right opens a device's actions menu, and Escape closes
+  the panel.
 - Use each row's actions menu for keyboard-accessible Move Up, Move Down, and
   Move to commands. Right-click a row to open the same menu.
 - Hide a device to remove it from Speakers, Headphones, or Microphones, or
@@ -163,7 +168,7 @@ Speakers, Headphones, and Microphones remain visible in both modes.
   halves, shows an override for the current default: **Mic only** or
   **Output only** while **Select headset input and output together** is on,
   or **Use both** while it's off. It appears only when picking it would
-  change something.
+  change something, and the actions menu offers it too.
 - Set the output volume and microphone level by slider or scroll wheel. Click
   the round icon beside a slider to mute; it turns red while muted.
 - Speakers and headphones are sorted by what each device reports, in any

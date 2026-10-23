@@ -76,6 +76,7 @@ struct DeviceSectionView: View {
             .labelsHidden()
         }
         .fixedSize()
+        .keyboardHighlight(model.keyboardItem == .microphoneOrder)
         .help("Show the microphone order used with speakers or with headphones")
     }
 
@@ -139,6 +140,7 @@ struct DeviceSectionView: View {
                     .offset(offset(index: index, lifted: lifted))
                     .zIndex(lifted ? 1 : 0)
                     .gesture(dragGesture(device: device, index: index))
+                    .id(device.id)
                 }
             }
         }

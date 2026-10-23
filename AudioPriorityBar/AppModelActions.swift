@@ -199,6 +199,63 @@ extension AppModel {
         select(device)
     }
 
+    /// What a click on a row does: selects a connected device, or connects a
+    /// paired Bluetooth one that is off and selects it once it is there.
+    func activate(_ device: AudioDevice) {
+        if device.isConnected {
+            let currentID = device.role == .input ? currentInputID : currentOutputID
+            if linkState(for: device) != .down, currentID != device.platformID {
+                selectManually(device)
+            }
+        } else if canConnect(device) {
+            connect(device, selecting: true)
+        }
+    }
+
+    /// What Return or Space does on a highlighted panel item. Settings and
+    /// the takeover fix open from the panel, which owns the windows.
+    func use(_ item: PanelItem) {
+        switch item {
+        case .automatic: setManualMode(!isManualMode)
+        case .profile: _ = adjust(.profile, up: true)
+        case .microphoneOrder:
+            viewMicrophoneOrder(for: microphoneOrderCategory == .speaker ? .headphone : .speaker)
+        case .outputLevel: if isOutputMutable { setOutputMuted(!isActiveOutputMuted) }
+        case .microphoneLevel: if isMicrophoneMutable { setMicrophoneMuted(!isMicrophoneMuted) }
+        case .showAll:
+            showAll.toggle()
+            refreshDevices()
+        case .device(let id):
+            if let device = listedDevices.first(where: { $0.id == id }) { activate(device) }
+        case .settings, .takeoverFix: break
+        }
+    }
+
+    /// Left and Right move a highlighted level by a sixteenth, as the volume
+    /// keys do, and step through the profiles or microphone orders. Returns
+    /// false when the item has nothing to step.
+    func adjust(_ item: PanelItem, up: Bool) -> Bool {
+        let step: Float = up ? 1 / 16 : -1 / 16
+        switch item {
+        case .profile:
+            guard profiles.count > 1,
+                  let index = profiles.firstIndex(where: { $0.id == activeProfileID }) else {
+                return false
+            }
+            let offset = up ? 1 : profiles.count - 1
+            applyProfile(id: profiles[(index + offset) % profiles.count].id)
+        case .microphoneOrder where microphonesFollowOutput:
+            viewMicrophoneOrder(for: up ? .headphone : .speaker)
+        case .outputLevel where isVolumeControllable:
+            setVolume(min(1, max(0, volume + step)))
+        case .microphoneLevel where isMicrophoneLevelControllable:
+            setMicrophoneLevel(min(1, max(0, microphoneLevel + step)))
+        default:
+            return false
+        }
+        return true
+    }
+
     /// A Shortcuts action's pick, which acts like a click on the device's row.
     func selectManually(uid: String, role: DeviceRole) throws(ShortcutError) {
         let known = role == .input ? inputDevices : speakerDevices + headphoneDevices

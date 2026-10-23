@@ -227,6 +227,60 @@ func automaticDecisionStaysQuietForActiveTopDeviceAndManualMode() {
 
 @Test
 @MainActor
+func activatingARowSelectsItOnlyWhenItIsNotAlreadyCurrent() throws {
+    let audio = FakeAudio()
+    let speakers = output(1, "speakers", "Desk Speakers")
+    let monitor = output(2, "monitor", "Studio Monitor")
+    audio.catalog = [speakers, monitor]
+    let model = testModel(audio: audio, defaults: isolatedDefaults())
+    model.start()
+    let current = try #require(model.currentOutputDevice)
+    let other = current == speakers ? monitor : speakers
+    audio.selections.removeAll()
+
+    model.activate(current)
+
+    #expect(audio.selections.isEmpty)
+    #expect(!model.isManualMode)
+
+    model.activate(other)
+
+    #expect(model.currentOutputID == other.platformID)
+    #expect(model.isManualMode)
+}
+
+@Test
+@MainActor
+func panelKeysToggleAndStepTheHighlightedControls() {
+    let audio = FakeAudio()
+    let speakers = output(1, "speakers", "Desk Speakers")
+    audio.catalog = [speakers]
+    audio.defaults[.output] = speakers.platformID
+    audio.volume = 0.5
+    let model = testModel(audio: audio, defaults: isolatedDefaults())
+    model.start()
+
+    // No microphone, so no microphone level to walk through.
+    #expect(model.panelItems == [.automatic, .outputLevel, .device(speakers.id), .showAll, .settings])
+
+    #expect(model.adjust(.outputLevel, up: true))
+    #expect(model.volume == 0.5625)
+    model.setVolume(0.98)
+    #expect(model.adjust(.outputLevel, up: true))
+    #expect(model.volume == 1)
+    #expect(!model.adjust(.automatic, up: true))
+    #expect(!model.adjust(.microphoneLevel, up: true))
+
+    model.use(.automatic)
+    #expect(model.isManualMode)
+    model.use(.outputLevel)
+    #expect(model.isActiveOutputMuted)
+    model.use(.showAll)
+    #expect(model.showAll)
+}
+
+@Test
+@MainActor
 func automaticSelectionPairsAnAlreadyCurrentOutput() {
     let defaults = isolatedDefaults()
     let store = PriorityStore(defaults: defaults)
@@ -1003,4 +1057,32 @@ func aProfileWithAMissingDeviceFallsBackByPriority() {
 
     #expect(model.currentOutputID == setup.laptopSpeakers.platformID)
     #expect(model.currentInputID == setup.roomMic.platformID)
+}
+
+@Test
+@MainActor
+func panelKeysStepThroughProfilesAndMicrophoneOrders() throws {
+    let setup = TwoProfiles()
+    let model = setup.model()
+    model.start()
+    #expect(model.panelItems.contains(.profile))
+    #expect(!model.panelItems.contains(.microphoneOrder))
+
+    #expect(model.adjust(.profile, up: true))
+    #expect(model.activeProfileID == setup.travelID)
+    // Past the last profile it comes back round to the first.
+    #expect(model.adjust(.profile, up: true))
+    #expect(model.activeProfileID == setup.deskID)
+    #expect(model.adjust(.profile, up: false))
+    #expect(model.activeProfileID == setup.travelID)
+
+    #expect(!model.adjust(.microphoneOrder, up: true))
+    model.setMicrophonesFollowOutput(true)
+    let items = model.panelItems
+    let order = try #require(items.firstIndex(of: .microphoneOrder))
+    #expect(items[order + 1] == .device(model.inputDevices[0].id))
+    #expect(model.adjust(.microphoneOrder, up: true))
+    #expect(model.microphoneOrderCategory == .headphone)
+    model.use(.microphoneOrder)
+    #expect(model.microphoneOrderCategory == .speaker)
 }

@@ -32,6 +32,17 @@ enum ClickRouting {
     }
 }
 
+enum PanelKeyboard {
+    /// The row after or before `current`, stopping at the ends. With nothing
+    /// highlighted, Down starts at the top and Up at the bottom, as in a menu.
+    static func step<Item: Equatable>(from current: Item?, in ids: [Item], down: Bool) -> Item? {
+        guard let index = current.flatMap(ids.firstIndex(of:)) else {
+            return down ? ids.first : ids.last
+        }
+        return ids[down ? min(index + 1, ids.count - 1) : max(index - 1, 0)]
+    }
+}
+
 enum PanelPlacement {
     /// Centers a window under the status item, kept 4 points inside the
     /// visible part of the screen.
@@ -51,11 +62,43 @@ enum PanelPlacement {
 }
 
 private final class PanelWindow: NSPanel {
+    enum ListKey { case up, down, left, right, use }
+
     var onCancel: (() -> Void)?
+    /// Returns whether the panel used the key.
+    var onListKey: ((ListKey) -> Bool)?
+    /// Only real pointer movement, so a row that scrolling to the highlight
+    /// moves under a resting pointer does not take over from the keys.
+    var onPointerMoved: (() -> Void)?
     override var canBecomeKey: Bool { true }
 
     override func cancelOperation(_ sender: Any?) {
         onCancel?()
+    }
+
+    override func sendEvent(_ event: NSEvent) {
+        // Closing a menu sends a move of zero, which is not the pointer.
+        if event.type == .mouseMoved, event.deltaX != 0 || event.deltaY != 0 {
+            onPointerMoved?()
+        }
+        super.sendEvent(event)
+    }
+
+    /// Reached only by keys no control in the panel handled.
+    override func keyDown(with event: NSEvent) {
+        let key: ListKey? = switch event.specialKey {
+        case .upArrow: .up
+        case .downArrow: .down
+        case .leftArrow: .left
+        case .rightArrow: .right
+        case .carriageReturn, .enter: .use
+        default: event.charactersIgnoringModifiers == " " ? .use : nil
+        }
+        if let key, event.modifierFlags.isDisjoint(with: [.command, .option, .control]),
+           onListKey?(key) == true {
+            return
+        }
+        super.keyDown(with: event)
     }
 }
 
@@ -207,6 +250,88 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.delegate = self
         panel.onCancel = { [weak self] in self?.hidePanel() }
+        panel.onListKey = { [weak self] in self?.useListKey($0) ?? false }
+        panel.acceptsMouseMovedEvents = true
+        panel.onPointerMoved = { [weak self] in
+            if self?.model.keyboardItem != nil { self?.model.keyboardItem = nil }
+        }
+    }
+
+    /// Up and Down move a highlight through the panel, and Return or Space
+    /// does what a click on the highlighted item would. Left and Right step
+    /// a level, profile or microphone order, and Right opens a device's
+    /// actions, as it opens a submenu.
+    private func useListKey(_ key: PanelWindow.ListKey) -> Bool {
+        let items = model.panelItems
+        switch key {
+        case .up, .down:
+            guard let item = PanelKeyboard.step(
+                from: model.keyboardItem,
+                in: items,
+                down: key == .down
+            ) else { return false }
+            model.keyboardItem = item
+        case .left, .right:
+            guard let item = model.keyboardItem, items.contains(item) else { return false }
+            if case .device(let id) = item {
+                guard key == .right else { return false }
+                model.actionsMenuDeviceID = id
+                return true
+            }
+            guard model.adjust(item, up: key == .right) else { return false }
+        case .use:
+            guard let item = model.keyboardItem, items.contains(item) else { return false }
+            switch item {
+            case .settings:
+                hidePanel()
+                showSettings()
+                return true
+            case .takeoverFix:
+                hidePanel()
+                NSWorkspace.shared.open(PanelView.headphoneSettingsURL)
+                return true
+            default: break
+            }
+            model.use(item)
+            if case .device = item { return true }
+        }
+        if let item = model.keyboardItem { announce(item) }
+        return true
+    }
+
+    /// VoiceOver has no element to follow the highlight, so it hears each
+    /// item, and each change, read out.
+    private func announce(_ item: PanelItem) {
+        func level(_ name: String, _ value: Float, controllable: Bool, muted: Bool) -> String {
+            [name, controllable ? "\(Int(value * 100)) percent" : nil, muted ? "muted" : nil]
+                .compactMap { $0 }.joined(separator: ", ")
+        }
+        let text = switch item {
+        case .automatic: "Automatic switching, \(model.isManualMode ? "off" : "on")"
+        case .profile: "Profile, \(model.profiles.first { $0.id == model.activeProfileID }?.name ?? "")"
+        case .takeoverFix: "Fix in Settings"
+        case .microphoneOrder:
+            "Microphone order, with \(model.microphoneOrderCategory == .headphone ? "headphones" : "speakers")"
+        case .outputLevel: level(
+            "Output volume", model.volume,
+            controllable: model.isVolumeControllable, muted: model.isActiveOutputMuted
+        )
+        case .microphoneLevel: level(
+            "Microphone volume", model.microphoneLevel,
+            controllable: model.isMicrophoneLevelControllable, muted: model.isMicrophoneMuted
+        )
+        case .showAll: "Show hidden and disconnected devices, \(model.showAll ? "on" : "off")"
+        case .settings: "\(appDisplayName) Settings"
+        case .device(let id): model.listedDevices.first { $0.id == id }?.name ?? ""
+        }
+        NSAccessibility.post(
+            element: NSApp as Any,
+            notification: .announcementRequested,
+            userInfo: [
+                .announcement: text,
+                .priority: NSAccessibilityPriorityLevel.high.rawValue,
+            ]
+        )
     }
 
     private func configureMenu() {
@@ -378,6 +503,7 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         }
         panel.orderOut(nil)
         model.showMicrophoneOrderInUse()
+        model.keyboardItem = nil
         panelAnchorX = nil
         batteryTimer?.invalidate()
         batteryTimer = nil

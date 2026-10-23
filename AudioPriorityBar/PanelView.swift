@@ -11,7 +11,7 @@ struct PanelView: View {
     var fit: (CGSize) -> Void = { _ in }
 
     /// The AirPods page, which holds their Connect to This Mac setting.
-    private static let headphoneSettingsURL = URL(
+    static let headphoneSettingsURL = URL(
         string: "x-apple.systempreferences:com.apple.HeadphoneSettings"
     )!
 
@@ -31,8 +31,7 @@ struct PanelView: View {
     }
 
     private var renderedDeviceIDs: [String] {
-        (model.speakerDevices + model.headphoneDevices + model.inputDevices)
-            .map(\.id)
+        model.listedDevices.map(\.id)
     }
 
     /// Only ever grows for a drag, so a preview that adds a row cannot clip the
@@ -71,6 +70,7 @@ struct PanelView: View {
                     .labelsHidden()
                     .toggleStyle(.switch)
                 }
+                .keyboardHighlight(model.keyboardItem == .automatic)
                 .help("Use device priorities as availability changes")
                 if let takeover = model.takeoverDevice {
                     HStack(spacing: 6) {
@@ -82,6 +82,7 @@ struct PanelView: View {
                                 NSWorkspace.shared.open(Self.headphoneSettingsURL)
                             }
                             .buttonStyle(.link)
+                            .keyboardHighlight(model.keyboardItem == .takeoverFix)
                             .help("Under Connect to This Mac, choose When Last Connected to This Mac")
                         }
                     }
@@ -110,6 +111,7 @@ struct PanelView: View {
                     toggleMute: { model.setOutputMuted(!model.isActiveOutputMuted) },
                     setLevel: model.setVolume
                 )
+                .keyboardHighlight(model.keyboardItem == .outputLevel)
                 if model.currentInputID != nil {
                     LevelControl(
                         name: "Microphone",
@@ -124,6 +126,7 @@ struct PanelView: View {
                         toggleMute: { model.setMicrophoneMuted(!model.isMicrophoneMuted) },
                         setLevel: model.setMicrophoneLevel
                     )
+                    .keyboardHighlight(model.keyboardItem == .microphoneLevel)
                 }
             }
             .padding(.horizontal, 12)
@@ -132,56 +135,61 @@ struct PanelView: View {
 
             Divider().padding(.horizontal, 12)
 
-            ScrollView(
-                .vertical,
-                showsIndicators: listHeight >= maximumListHeight
-            ) {
-                VStack(spacing: PanelLayout.sectionGap) {
-                    DeviceSectionView(
-                        model: model,
-                        section: .speaker,
-                        title: "Speakers",
-                        emptyText: "No speakers shown",
-                        devices: model.speakerDevices,
-                        currentID: model.currentOutputID,
-                        layout: layout,
-                        drag: $drag,
-                        highlightedPairedDeviceID: $highlightedPairedDeviceID
-                    )
-                    .zIndex(drag?.section == .speaker ? 1 : 0)
-                    DeviceSectionView(
-                        model: model,
-                        section: .headphone,
-                        title: "Headphones",
-                        emptyText: "No headphones shown",
-                        showsSeparator: true,
-                        devices: model.headphoneDevices,
-                        currentID: model.currentOutputID,
-                        layout: layout,
-                        drag: $drag,
-                        highlightedPairedDeviceID: $highlightedPairedDeviceID
-                    )
-                    .zIndex(drag?.section == .headphone ? 1 : 0)
-                    DeviceSectionView(
-                        model: model,
-                        section: .input,
-                        title: "Microphones",
-                        emptyText: "No microphones shown",
-                        showsSeparator: true,
-                        devices: model.inputDevices,
-                        currentID: model.currentInputID,
-                        layout: layout,
-                        drag: $drag,
-                        highlightedPairedDeviceID: $highlightedPairedDeviceID
-                    )
-                    .zIndex(drag?.section == .input ? 1 : 0)
+            ScrollViewReader { proxy in
+                ScrollView(
+                    .vertical,
+                    showsIndicators: listHeight >= maximumListHeight
+                ) {
+                    VStack(spacing: PanelLayout.sectionGap) {
+                        DeviceSectionView(
+                            model: model,
+                            section: .speaker,
+                            title: "Speakers",
+                            emptyText: "No speakers shown",
+                            devices: model.speakerDevices,
+                            currentID: model.currentOutputID,
+                            layout: layout,
+                            drag: $drag,
+                            highlightedPairedDeviceID: $highlightedPairedDeviceID
+                        )
+                        .zIndex(drag?.section == .speaker ? 1 : 0)
+                        DeviceSectionView(
+                            model: model,
+                            section: .headphone,
+                            title: "Headphones",
+                            emptyText: "No headphones shown",
+                            showsSeparator: true,
+                            devices: model.headphoneDevices,
+                            currentID: model.currentOutputID,
+                            layout: layout,
+                            drag: $drag,
+                            highlightedPairedDeviceID: $highlightedPairedDeviceID
+                        )
+                        .zIndex(drag?.section == .headphone ? 1 : 0)
+                        DeviceSectionView(
+                            model: model,
+                            section: .input,
+                            title: "Microphones",
+                            emptyText: "No microphones shown",
+                            showsSeparator: true,
+                            devices: model.inputDevices,
+                            currentID: model.currentInputID,
+                            layout: layout,
+                            drag: $drag,
+                            highlightedPairedDeviceID: $highlightedPairedDeviceID
+                        )
+                        .zIndex(drag?.section == .input ? 1 : 0)
+                    }
+                    .padding(.horizontal, PanelLayout.horizontalPadding)
+                    .padding(.top, PanelLayout.topPadding)
+                    .padding(.bottom, PanelLayout.bottomPadding)
+                    .coordinateSpace(name: PanelLayout.space)
                 }
-                .padding(.horizontal, PanelLayout.horizontalPadding)
-                .padding(.top, PanelLayout.topPadding)
-                .padding(.bottom, PanelLayout.bottomPadding)
-                .coordinateSpace(name: PanelLayout.space)
+                .frame(height: listHeight)
+                .onChange(of: model.keyboardItem) { _, item in
+                    if case .device(let id)? = item { proxy.scrollTo(id) }
+                }
             }
-            .frame(height: listHeight)
 
             Divider().padding(.horizontal, 12)
             Footer(model: model, showSettings: showSettings)
@@ -196,6 +204,9 @@ struct PanelView: View {
             if let highlightedPairedDeviceID,
                !ids.contains(highlightedPairedDeviceID) {
                 self.highlightedPairedDeviceID = nil
+            }
+            if case .device(let id)? = model.keyboardItem, !ids.contains(id) {
+                model.keyboardItem = nil
             }
         }
         .onReceive(
@@ -240,6 +251,7 @@ struct PanelView: View {
         }
         .frame(maxWidth: 140, alignment: .trailing)
         .fixedSize(horizontal: false, vertical: true)
+        .keyboardHighlight(model.keyboardItem == .profile)
         .help("Switch to another profile")
     }
 
@@ -427,7 +439,7 @@ private struct Footer: View {
             .frame(maxWidth: .infinity, minHeight: 20, alignment: .leading)
             .padding(.horizontal, 8)
             .background(
-                Color.primary.opacity(isHoveringShowAll ? 0.1 : 0),
+                Color.primary.opacity(isHoveringShowAll || model.keyboardItem == .showAll ? 0.1 : 0),
                 in: RoundedRectangle(cornerRadius: 6)
             )
             // The highlight covers the whole row, so the whole row toggles.
@@ -464,7 +476,7 @@ private struct Footer: View {
                 .frame(maxWidth: .infinity, minHeight: 20, alignment: .leading)
                 .padding(.trailing, 8)
                 .background(
-                    Color.primary.opacity(isHoveringSettings ? 0.1 : 0),
+                    Color.primary.opacity(isHoveringSettings || model.keyboardItem == .settings ? 0.1 : 0),
                     in: RoundedRectangle(cornerRadius: 6)
                 )
                 .contentShape(Rectangle())
@@ -506,6 +518,21 @@ private struct ScrollWheelReceiver: NSViewRepresentable {
         override func scrollWheel(with event: NSEvent) {
             onScroll(event.deltaY)
         }
+    }
+}
+
+extension View {
+    /// The row tint the arrow keys leave on a header or level row, reaching
+    /// past it like a device row's highlight without moving anything.
+    func keyboardHighlight(_ isOn: Bool) -> some View {
+        padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .background(
+                Color.primary.opacity(isOn ? 0.06 : 0),
+                in: RoundedRectangle(cornerRadius: 8)
+            )
+            .padding(.horizontal, -8)
+            .padding(.vertical, -3)
     }
 }
 
