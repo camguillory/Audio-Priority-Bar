@@ -32,6 +32,9 @@ public final class PriorityStore {
         static let menuBarDevices = "menuBarDevices"
         static let showsMenuBarVolume = "showsMenuBarVolume"
         static let pulsesMutedMicrophone = "pulsesMutedMicrophone"
+        static let priorityProfiles = "priorityProfiles"
+        static let activePriorityProfile = "activePriorityProfile"
+        static let profileBeforeFocus = "profileBeforeFocus"
     }
 
     /// Marks a microphone muted through its mute property rather than by
@@ -153,6 +156,7 @@ public final class PriorityStore {
         for key in priorityKeys + hiddenKeys + [neverUseKey(for: role)] {
             remove(uid, from: key)
         }
+        removeFromProfiles(uid, role: role)
 
         if role == .output {
             var categories = defaults.dictionary(forKey: Key.categories) ?? [:]
@@ -508,6 +512,182 @@ public final class PriorityStore {
         var values = defaults.stringArray(forKey: key) ?? []
         values.removeAll { $0 == uid }
         defaults.set(values, forKey: key)
+    }
+}
+
+/// A named set of the priority orders and whether automatic switching is on.
+/// Everything else, like hiding, Never Auto-Select and categories, is shared.
+public struct PriorityProfile: Codable, Equatable, Identifiable, Sendable {
+    public let id: UUID
+    public var name: String
+    public var speakers: [String]
+    public var headphones: [String]
+    public var microphones: [String]
+    /// Nil until microphones following the output has been turned on.
+    public var microphonesWithHeadphones: [String]?
+    public var isManual: Bool
+}
+
+extension PriorityStore {
+    /// Every profile, the active one holding the lists in use right now. The
+    /// setup from before profiles existed becomes the first one, Default.
+    public var profiles: [PriorityProfile] {
+        var stored = storedProfiles
+        if stored.isEmpty {
+            stored = [currentLists(id: UUID(), name: "Default")]
+            saveProfiles(stored, active: stored[0].id)
+        }
+        let active = activeProfileID
+        return stored.map { $0.id == active ? currentLists(id: $0.id, name: $0.name) : $0 }
+    }
+
+    public var activeProfileID: UUID? {
+        if let raw = defaults.string(forKey: Key.activePriorityProfile),
+           let id = UUID(uuidString: raw),
+           storedProfiles.contains(where: { $0.id == id }) {
+            return id
+        }
+        return storedProfiles.first?.id
+    }
+
+    /// The profile active when a Focus applied another, to return to when it
+    /// ends.
+    public var profileBeforeFocus: UUID? {
+        get { defaults.string(forKey: Key.profileBeforeFocus).flatMap(UUID.init) }
+        set { defaults.set(newValue?.uuidString, forKey: Key.profileBeforeFocus) }
+    }
+
+    /// Adds a copy of the lists in use under a name no other profile has.
+    @discardableResult
+    public func addProfile(named name: String) -> PriorityProfile {
+        let all = profiles
+        let added = currentLists(id: UUID(), name: Self.uniqueName(name, among: all))
+        saveProfiles(all + [added], active: activeProfileID)
+        return added
+    }
+
+    public func renameProfile(_ id: UUID, to name: String) {
+        var all = profiles
+        guard let index = all.firstIndex(where: { $0.id == id }) else { return }
+        all[index].name = Self.uniqueName(name, among: all.filter { $0.id != id })
+        saveProfiles(all, active: activeProfileID)
+    }
+
+    /// Makes `id` the active profile, keeping the outgoing one's lists, and
+    /// returns whether anything changed.
+    @discardableResult
+    public func loadProfile(_ id: UUID) -> Bool {
+        let all = profiles
+        guard id != activeProfileID,
+              let target = all.first(where: { $0.id == id }) else { return false }
+        saveProfiles(all, active: id)
+        useLists(of: target)
+        return true
+    }
+
+    /// Removes a profile, never the last one. Deleting the active profile
+    /// moves to the first remaining one without saving into the deleted one.
+    /// Returns whether the lists in use changed.
+    @discardableResult
+    public func deleteProfile(_ id: UUID) -> Bool {
+        let all = profiles
+        guard all.count > 1, all.contains(where: { $0.id == id }) else { return false }
+        let remaining = all.filter { $0.id != id }
+        guard id == activeProfileID else {
+            saveProfiles(remaining, active: activeProfileID)
+            return false
+        }
+        saveProfiles(remaining, active: remaining[0].id)
+        useLists(of: remaining[0])
+        return true
+    }
+
+    /// What a Focus filter should apply when its Focus turns on, with
+    /// `requested` set, or off, with it nil, and which profile to come back
+    /// to afterwards. A second Focus keeps the profile from before the first.
+    public static func focusChange(
+        requested: UUID?,
+        active: UUID?,
+        before: UUID?,
+        existing: [UUID]
+    ) -> (apply: UUID?, before: UUID?) {
+        guard let requested else {
+            let back = before.flatMap { existing.contains($0) ? $0 : nil }
+            return (back == active ? nil : back, nil)
+        }
+        guard existing.contains(requested) else { return (nil, before) }
+        return (requested == active ? nil : requested, before ?? active)
+    }
+
+    private var storedProfiles: [PriorityProfile] {
+        defaults.data(forKey: Key.priorityProfiles).flatMap {
+            try? JSONDecoder().decode([PriorityProfile].self, from: $0)
+        } ?? []
+    }
+
+    private func saveProfiles(_ profiles: [PriorityProfile], active: UUID?) {
+        if let data = try? JSONEncoder().encode(profiles) {
+            defaults.set(data, forKey: Key.priorityProfiles)
+        }
+        defaults.set(active?.uuidString, forKey: Key.activePriorityProfile)
+    }
+
+    private func currentLists(id: UUID, name: String) -> PriorityProfile {
+        PriorityProfile(
+            id: id,
+            name: name,
+            speakers: defaults.stringArray(forKey: Key.speakerPriorities) ?? [],
+            headphones: defaults.stringArray(forKey: Key.headphonePriorities) ?? [],
+            microphones: defaults.stringArray(forKey: Key.inputPriorities) ?? [],
+            microphonesWithHeadphones: defaults.stringArray(
+                forKey: Key.headphoneMicrophonePriorities
+            ),
+            isManual: isManualMode
+        )
+    }
+
+    private func useLists(of profile: PriorityProfile) {
+        defaults.set(profile.speakers, forKey: Key.speakerPriorities)
+        defaults.set(profile.headphones, forKey: Key.headphonePriorities)
+        defaults.set(profile.microphones, forKey: Key.inputPriorities)
+        // A profile made before the headphone order existed starts from its
+        // own microphone order, as turning the setting on does.
+        defaults.set(
+            profile.microphonesWithHeadphones ?? profile.microphones,
+            forKey: Key.headphoneMicrophonePriorities
+        )
+        isManualMode = profile.isManual
+    }
+
+    /// Forgetting a device removes it from every profile, not only the lists in
+    /// use. Profiles never drop a device on their own.
+    private func removeFromProfiles(_ uid: String, role: DeviceRole) {
+        let stored = storedProfiles
+        guard !stored.isEmpty else { return }
+        let stripped = stored.map { profile in
+            var profile = profile
+            if role == .input {
+                profile.microphones.removeAll { $0 == uid }
+                profile.microphonesWithHeadphones?.removeAll { $0 == uid }
+            } else {
+                profile.speakers.removeAll { $0 == uid }
+                profile.headphones.removeAll { $0 == uid }
+            }
+            return profile
+        }
+        saveProfiles(stripped, active: activeProfileID)
+    }
+
+    /// `name` trimmed, or "Profile" when empty, with a number added when
+    /// another profile already uses it.
+    static func uniqueName(_ name: String, among others: [PriorityProfile]) -> String {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let base = trimmed.isEmpty ? "Profile" : trimmed
+        let taken = Set(others.map { $0.name.lowercased() })
+        guard taken.contains(base.lowercased()) else { return base }
+        var number = 2
+        while taken.contains("\(base) \(number)".lowercased()) { number += 1 }
+        return "\(base) \(number)"
     }
 }
 

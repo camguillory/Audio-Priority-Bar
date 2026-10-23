@@ -25,12 +25,14 @@ enum ShortcutError: Error, CustomLocalizedStringResourceConvertible {
     case starting
     case unknownDevice
     case notConnected(String)
+    case unknownProfile
 
     var localizedStringResource: LocalizedStringResource {
         switch self {
         case .starting: "Audio Priority Bar is still starting. Try again in a moment."
         case .unknownDevice: "Audio Priority Bar doesn't know this device. Choose it again in the action."
         case .notConnected(let name): "\(name) isn't connected."
+        case .unknownProfile: "This profile no longer exists. Choose another in the action."
         }
     }
 }
@@ -153,6 +155,74 @@ struct MicrophoneMuteIntent: AppIntent {
         case .off: .unmuteMic
         }
         try IntentTarget.requireModel().perform(command)
+        return .result()
+    }
+}
+
+struct PriorityProfileEntity: AppEntity {
+    static let typeDisplayRepresentation: TypeDisplayRepresentation = "Profile"
+    static let defaultQuery = PriorityProfileQuery()
+
+    let id: UUID
+    let name: String
+
+    var displayRepresentation: DisplayRepresentation { DisplayRepresentation(title: "\(name)") }
+}
+
+struct PriorityProfileQuery: EntityQuery {
+    @MainActor
+    func entities(for identifiers: [UUID]) async throws -> [PriorityProfileEntity] {
+        try await suggestedEntities().filter { identifiers.contains($0.id) }
+    }
+
+    @MainActor
+    func suggestedEntities() async throws -> [PriorityProfileEntity] {
+        (IntentTarget.model?.profiles ?? []).map {
+            PriorityProfileEntity(id: $0.id, name: $0.name)
+        }
+    }
+}
+
+struct ApplyPriorityProfileIntent: AppIntent {
+    static let title: LocalizedStringResource = "Apply Profile"
+    static let description = IntentDescription(
+        "Switches to a profile's device orders and automatic switching, and selects its top devices."
+    )
+
+    @Parameter(title: "Profile")
+    var profile: PriorityProfileEntity
+
+    static var parameterSummary: some ParameterSummary {
+        Summary("Apply \(\.$profile)")
+    }
+
+    @MainActor
+    func perform() async throws -> some IntentResult {
+        guard try IntentTarget.requireModel().applyProfile(id: profile.id, announces: true) else {
+            throw ShortcutError.unknownProfile
+        }
+        return .result()
+    }
+}
+
+/// Set in System Settings › Focus. macOS runs it with the chosen profile when
+/// the Focus turns on, and with no profile when it ends.
+struct ProfileFocusFilter: SetFocusFilterIntent {
+    static let title: LocalizedStringResource = "Audio Profile"
+    static let description: IntentDescription? = IntentDescription(
+        "Applies a profile while this Focus is on, and returns to the previous one when it ends."
+    )
+
+    @Parameter(title: "Profile")
+    var profile: PriorityProfileEntity?
+
+    var displayRepresentation: DisplayRepresentation {
+        DisplayRepresentation(title: "\(profile?.name ?? "No profile")")
+    }
+
+    @MainActor
+    func perform() async throws -> some IntentResult {
+        try IntentTarget.requireModel().applyFocusProfile(profile?.id)
         return .result()
     }
 }

@@ -50,6 +50,24 @@ struct NoticeContent: Equatable {
             }.joined(separator: ", ")
         )
     }
+
+    /// Names the profile a Focus or shortcut applied, then the devices it
+    /// changed, if any.
+    static func applied(
+        profile: String,
+        devices: [AudioDevice],
+        icon: (AudioDevice) -> String
+    ) -> NoticeContent {
+        let profileLine = Line(icon: "rectangle.stack", text: profile)
+        guard !devices.isEmpty else {
+            return NoticeContent(lines: [profileLine], announcement: "Profile: \(profile)")
+        }
+        let switched = switched(to: devices, icon: icon)
+        return NoticeContent(
+            lines: [profileLine] + switched.lines,
+            announcement: "Profile: \(profile), \(switched.announcement)"
+        )
+    }
 }
 
 /// Whether the muted reminder shows. Dismissing it hides it until it stops

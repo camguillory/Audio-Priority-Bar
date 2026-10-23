@@ -742,3 +742,168 @@ func forgettingAMicrophoneRemovesItFromBothOrders() throws {
             == ["room-mic"])
     }
 }
+
+private let deskSpeaker = device("desk-speaker")
+private let laptopSpeaker = device("laptop-speaker")
+
+private func speakerUIDs(_ store: PriorityStore) -> [String] {
+    store.sorted([laptopSpeaker, deskSpeaker], category: .speaker).map(\.uid)
+}
+
+@Test
+func theCurrentSetupBecomesTheDefaultProfile() throws {
+    try withDefaults { defaults in
+        let store = PriorityStore(defaults: defaults)
+        store.savePriorities([deskSpeaker, laptopSpeaker], category: .speaker)
+        store.isManualMode = true
+
+        let profiles = store.profiles
+
+        #expect(profiles.map(\.name) == ["Default"])
+        #expect(profiles[0].speakers == ["desk-speaker", "laptop-speaker"])
+        #expect(profiles[0].isManual)
+        #expect(store.activeProfileID == profiles[0].id)
+        #expect(store.profiles == profiles)
+    }
+}
+
+@Test
+func switchingSwapsEveryOrderAndTheAutomaticState() throws {
+    try withDefaults { defaults in
+        let store = PriorityStore(defaults: defaults)
+        store.savePriorities([deskSpeaker, laptopSpeaker], category: .speaker)
+        store.savePriorities([roomMic, boomMic], role: .input)
+        let desk = try #require(store.profiles.first)
+        let travel = store.addProfile(named: "Travel")
+
+        #expect(store.loadProfile(travel.id))
+        store.savePriorities([laptopSpeaker, deskSpeaker], category: .speaker)
+        store.savePriorities([boomMic, roomMic], role: .input)
+        store.isManualMode = true
+
+        #expect(store.loadProfile(desk.id))
+        #expect(speakerUIDs(store) == ["desk-speaker", "laptop-speaker"])
+        #expect(microphoneUIDs(store, with: .speaker) == ["room-mic", "boom-mic"])
+        #expect(!store.isManualMode)
+
+        #expect(store.loadProfile(travel.id))
+        #expect(speakerUIDs(store) == ["laptop-speaker", "desk-speaker"])
+        #expect(microphoneUIDs(store, with: .speaker) == ["boom-mic", "room-mic"])
+        #expect(store.isManualMode)
+        #expect(!store.loadProfile(travel.id))
+    }
+}
+
+@Test
+func editsStayWithTheActiveProfile() throws {
+    try withDefaults { defaults in
+        let store = PriorityStore(defaults: defaults)
+        store.savePriorities([deskSpeaker, laptopSpeaker], category: .speaker)
+        let desk = try #require(store.profiles.first)
+        let travel = store.addProfile(named: "Travel")
+
+        store.savePriorities([laptopSpeaker, deskSpeaker], category: .speaker)
+        #expect(store.profiles.first { $0.id == desk.id }?.speakers
+            == ["laptop-speaker", "desk-speaker"])
+        #expect(store.profiles.first { $0.id == travel.id }?.speakers
+            == ["desk-speaker", "laptop-speaker"])
+
+        store.loadProfile(travel.id)
+        store.loadProfile(desk.id)
+        #expect(speakerUIDs(store) == ["laptop-speaker", "desk-speaker"])
+    }
+}
+
+@Test
+func deletingTheActiveProfileNeverSavesIntoIt() throws {
+    try withDefaults { defaults in
+        let store = PriorityStore(defaults: defaults)
+        store.savePriorities([deskSpeaker, laptopSpeaker], category: .speaker)
+        let desk = try #require(store.profiles.first)
+        let travel = store.addProfile(named: "Travel")
+        store.loadProfile(travel.id)
+        store.savePriorities([laptopSpeaker, deskSpeaker], category: .speaker)
+
+        #expect(store.deleteProfile(travel.id))
+
+        #expect(store.profiles.map(\.id) == [desk.id])
+        #expect(store.activeProfileID == desk.id)
+        #expect(speakerUIDs(store) == ["desk-speaker", "laptop-speaker"])
+    }
+}
+
+@Test
+func theLastProfileCannotBeDeleted() throws {
+    try withDefaults { defaults in
+        let store = PriorityStore(defaults: defaults)
+        let only = try #require(store.profiles.first)
+        let other = store.addProfile(named: "Other")
+
+        #expect(!store.deleteProfile(other.id))
+        #expect(!store.deleteProfile(only.id))
+        #expect(store.profiles.map(\.id) == [only.id])
+    }
+}
+
+@Test
+func forgettingADeviceRemovesItFromEveryProfile() throws {
+    try withDefaults { defaults in
+        let store = PriorityStore(defaults: defaults)
+        store.remember([deskSpeaker, laptopSpeaker])
+        store.savePriorities([deskSpeaker, laptopSpeaker], category: .speaker)
+        let desk = try #require(store.profiles.first)
+        let travel = store.addProfile(named: "Travel")
+
+        store.forget(uid: "desk-speaker", role: .output)
+
+        for id in [desk.id, travel.id] {
+            #expect(store.profiles.first { $0.id == id }?.speakers == ["laptop-speaker"])
+        }
+    }
+}
+
+@Test
+func profileNamesStayUnique() throws {
+    try withDefaults { defaults in
+        let store = PriorityStore(defaults: defaults)
+        _ = store.profiles
+        let first = store.addProfile(named: " Desk ")
+        let second = store.addProfile(named: "desk")
+        let blank = store.addProfile(named: "  ")
+
+        #expect(first.name == "Desk")
+        #expect(second.name == "desk 2")
+        #expect(blank.name == "Profile")
+
+        store.renameProfile(blank.id, to: "Default")
+        #expect(store.profiles.first { $0.id == blank.id }?.name == "Default 2")
+    }
+}
+
+@Test
+func aFocusRestoresTheProfileFromBeforeIt() {
+    let desk = UUID()
+    let meeting = UUID()
+    let travel = UUID()
+    let all = [desk, meeting, travel]
+
+    let on = PriorityStore.focusChange(requested: meeting, active: desk, before: nil, existing: all)
+    #expect(on.apply == meeting)
+    #expect(on.before == desk)
+
+    // A second Focus on top still returns to the profile from before both.
+    let second = PriorityStore.focusChange(requested: travel, active: meeting, before: desk, existing: all)
+    #expect(second.apply == travel)
+    #expect(second.before == desk)
+
+    let off = PriorityStore.focusChange(requested: nil, active: travel, before: desk, existing: all)
+    #expect(off.apply == desk)
+    #expect(off.before == nil)
+
+    let repeated = PriorityStore.focusChange(requested: meeting, active: meeting, before: desk, existing: all)
+    #expect(repeated.apply == nil)
+
+    let deleted = PriorityStore.focusChange(requested: nil, active: meeting, before: UUID(), existing: all)
+    #expect(deleted.apply == nil)
+    #expect(deleted.before == nil)
+}

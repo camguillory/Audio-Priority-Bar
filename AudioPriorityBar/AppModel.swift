@@ -72,6 +72,8 @@ final class AppModel {
     /// The microphone order the panel shows when the user picks the one not in
     /// use. Nil shows the order for the output playing.
     var viewedMicrophoneCategory: OutputCategory?
+    var profiles: [PriorityProfile] = []
+    var activeProfileID: UUID?
     var hideNewDisplayOutputs: Bool
     var isActiveOutputMuted = false
     var isActiveInputMuted = false
@@ -97,6 +99,9 @@ final class AppModel {
     /// Called with the devices Automatic mode just switched to because the
     /// hardware changed, output first. Never for the user's own choices.
     var onAutomaticSwitch: (([AudioDevice]) -> Void)?
+    /// Called when a Focus or a shortcut applies a profile, with its name and
+    /// the devices that changed.
+    var onProfileApplied: ((String, [AudioDevice]) -> Void)?
 
     let store: PriorityStore
     let audio: AudioOperations
@@ -165,6 +170,8 @@ final class AppModel {
         menuBarDevices = store.menuBarDevices
         showsMenuBarVolume = store.showsMenuBarVolume
         pulsesMutedMicrophone = store.pulsesMutedMicrophone
+        profiles = store.profiles
+        activeProfileID = store.activeProfileID
         battery.onPairedAudioChange = { [weak self] in self?.refreshDevices() }
     }
 
@@ -635,7 +642,7 @@ final class AppModel {
         inputDevices.first { $0.isConnected && $0.platformID == currentInputID }
     }
 
-    private var currentUIDs: [DeviceRole: String] {
+    var currentUIDs: [DeviceRole: String] {
         var uids: [DeviceRole: String] = [:]
         uids[.input] = currentInputID.flatMap { connectedUIDsByID[.input]?[$0] }
         uids[.output] = currentOutputID.flatMap { connectedUIDsByID[.output]?[$0] }

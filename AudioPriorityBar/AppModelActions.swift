@@ -403,4 +403,81 @@ extension AppModel {
             applyHighestPriorityOutput()
         }
     }
+
+    /// Switches to a profile, or applies the active one again, and selects its
+    /// top devices. Returns false for a profile that no longer exists.
+    @discardableResult
+    func applyProfile(id: UUID, announces: Bool = false) -> Bool {
+        guard store.profiles.contains(where: { $0.id == id }) else { return false }
+        store.loadProfile(id)
+        useLoadedProfile(announces: announces)
+        return true
+    }
+
+    /// Adds a copy of the profile in use and switches to it, so the panel
+    /// edits the new one.
+    func addProfile(named name: String = "Untitled") {
+        applyProfile(id: store.addProfile(named: name).id)
+    }
+
+    func renameProfile(_ id: UUID, to name: String) {
+        store.renameProfile(id, to: name)
+        refreshProfiles()
+    }
+
+    func deleteProfile(_ id: UUID) {
+        if store.deleteProfile(id) {
+            useLoadedProfile(announces: false)
+        } else {
+            refreshProfiles()
+        }
+    }
+
+    /// A Focus filter turning on, with the profile it names, or off, with nil.
+    func applyFocusProfile(_ requested: UUID?) {
+        let change = PriorityStore.focusChange(
+            requested: requested,
+            active: store.activeProfileID,
+            before: store.profileBeforeFocus,
+            existing: store.profiles.map(\.id)
+        )
+        store.profileBeforeFocus = change.before
+        if let id = change.apply { applyProfile(id: id, announces: true) }
+    }
+
+    func refreshProfiles() {
+        profiles = store.profiles
+        activeProfileID = store.activeProfileID
+    }
+
+    /// Takes up the lists the store just loaded. Picks made under the old
+    /// profile no longer apply, and the top devices are selected once even
+    /// when the profile keeps automatic switching off.
+    private func useLoadedProfile(announces: Bool) {
+        let before = currentUIDs
+        keptPicks = [:]
+        switchedBackAt = [:]
+        takeoverUIDs = [:]
+        viewedMicrophoneCategory = nil
+        refreshProfiles()
+        refreshDevices()
+        // Automatic mode alone picks from the lists, so it chooses this once
+        // before the profile's own setting takes over.
+        isManualMode = false
+        applyHighestPriorityDevices()
+        isManualMode = store.isManualMode
+        guard announces,
+              let name = profiles.first(where: { $0.id == activeProfileID })?.name else {
+            return
+        }
+        let after = currentUIDs
+        var changed: [AudioDevice] = []
+        if after[.output] != before[.output], let output = currentOutputDevice {
+            changed.append(output)
+        }
+        if after[.input] != before[.input], let input = currentInputDevice {
+            changed.append(input)
+        }
+        onProfileApplied?(name, changed)
+    }
 }

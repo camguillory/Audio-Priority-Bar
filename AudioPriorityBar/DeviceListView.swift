@@ -1,6 +1,36 @@
 import AudioPriorityCore
 import SwiftUI
 
+/// A menu drawn as secondary text and a chevron, so it reads as part of the
+/// heading it sits in.
+struct HeadingMenu<Items: View>: View {
+    let label: String
+    let accessibilityLabel: String
+    @ViewBuilder let items: () -> Items
+
+    var body: some View {
+        Menu(content: items) {
+            // The borderless menu style ignores the secondary color, and its
+            // primary label would outshine the heading.
+            HStack(spacing: 3) {
+                Text(label)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 9, weight: .semibold))
+            }
+            .font(.system(size: 12))
+            .foregroundStyle(.secondary)
+            .contentShape(Rectangle())
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .menuIndicator(.hidden)
+        .accessibilityLabel(accessibilityLabel)
+        .accessibilityValue(label)
+    }
+}
+
 enum DeviceRowMetrics {
     static let height: CGFloat = 30
     static let spacing: CGFloat = 3
@@ -31,8 +61,10 @@ struct DeviceSectionView: View {
     /// Which output's microphone order the list shows and a drag edits.
     private var microphoneOrderMenu: some View {
         let shown = model.microphoneOrderCategory
-        let label = shown == .headphone ? "With headphones" : "With speakers"
-        return Menu {
+        return HeadingMenu(
+            label: shown == .headphone ? "With headphones" : "With speakers",
+            accessibilityLabel: "Microphone order"
+        ) {
             Picker("Microphone order", selection: Binding(
                 get: { shown },
                 set: { model.viewMicrophoneOrder(for: $0) }
@@ -42,25 +74,9 @@ struct DeviceSectionView: View {
             }
             .pickerStyle(.inline)
             .labelsHidden()
-        } label: {
-            // The borderless menu style ignores the secondary color, and its
-            // primary label would outshine the section title.
-            HStack(spacing: 3) {
-                Text(label)
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 9, weight: .semibold))
-            }
-            .font(.system(size: 12))
-            .foregroundStyle(.secondary)
-            .contentShape(Rectangle())
         }
-        .menuStyle(.button)
-        .buttonStyle(.plain)
-        .menuIndicator(.hidden)
         .fixedSize()
         .help("Show the microphone order used with speakers or with headphones")
-        .accessibilityLabel("Microphone order")
-        .accessibilityValue(label)
     }
 
     var body: some View {

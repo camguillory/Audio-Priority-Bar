@@ -6,12 +6,13 @@ import SwiftUI
 
 /// The tabs of the Settings window, in toolbar order.
 enum SettingsPane: CaseIterable {
-    case menuBar, devices, shortcuts, app
+    case menuBar, devices, profiles, shortcuts, app
 
     var label: String {
         switch self {
         case .menuBar: "Menu Bar"
         case .devices: "Devices"
+        case .profiles: "Profiles"
         case .shortcuts: "Shortcuts"
         case .app: "App"
         }
@@ -21,6 +22,7 @@ enum SettingsPane: CaseIterable {
         switch self {
         case .menuBar: "menubar.rectangle"
         case .devices: "hifispeaker.2"
+        case .profiles: "rectangle.stack"
         case .shortcuts: "command"
         case .app: "gearshape"
         }
@@ -62,6 +64,7 @@ struct SettingsView: View {
             switch pane {
             case .menuBar: menuBar
             case .devices: devices
+            case .profiles: profiles
             case .shortcuts: shortcuts
             case .app: app
             }
@@ -158,6 +161,38 @@ struct SettingsView: View {
         .frame(maxWidth: .infinity)
         .padding(.vertical, 4)
         .accessibilityHidden(true)
+    }
+
+    private static let focusSettingsURL = URL(
+        string: "x-apple.systempreferences:com.apple.Focus-Settings.extension"
+    )!
+
+    @ViewBuilder private var profiles: some View {
+        Section {
+            ForEach(model.profiles) { profile in
+                ProfileRow(
+                    model: model,
+                    profile: profile,
+                    isActive: profile.id == model.activeProfileID,
+                    canDelete: model.profiles.count > 1
+                )
+            }
+            Button("Add Profile") { model.addProfile() }
+        } footer: {
+            Text("Each profile keeps its own device and microphone orders and whether automatic switching is on. Rearranging the panel changes the profile in use.")
+                .foregroundStyle(.secondary)
+        }
+
+        Section {
+            LabeledContent {
+                Button("Open Focus Settings") {
+                    NSWorkspace.shared.open(Self.focusSettingsURL)
+                }
+            } label: {
+                Text("Apply one with a Focus")
+                Text("Add Audio Priority Bar under Focus filters. The profile from before returns when the Focus ends. Shortcuts also has an Apply Profile action.")
+            }
+        }
     }
 
     @ViewBuilder private var shortcuts: some View {
@@ -296,6 +331,56 @@ enum SettingsPlacement {
             x: visibleFrame.midX - frame.width / 2,
             y: visibleFrame.midY - frame.height / 2
         )
+    }
+}
+
+/// One profile: its name, edited in place, and the buttons to use or delete it.
+private struct ProfileRow: View {
+    @Bindable var model: AppModel
+    let profile: PriorityProfile
+    let isActive: Bool
+    let canDelete: Bool
+    @State private var name = ""
+    @State private var isConfirmingDelete = false
+    @FocusState private var isEditing: Bool
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "checkmark")
+                .opacity(isActive ? 1 : 0)
+                .accessibilityHidden(true)
+            // A grouped form would show a label and push the name to the right.
+            TextField("Profile name", text: $name)
+                .labelsHidden()
+                .textFieldStyle(.plain)
+                .multilineTextAlignment(.leading)
+                .focused($isEditing)
+                .onSubmit(commit)
+                .onChange(of: isEditing) { _, editing in if !editing { commit() } }
+                .accessibilityLabel(isActive ? "\(profile.name), in use" : profile.name)
+            Spacer()
+            Button("Use") { model.applyProfile(id: profile.id) }
+                .disabled(isActive)
+            Button("Delete", role: .destructive) { isConfirmingDelete = true }
+                .disabled(!canDelete)
+                .accessibilityLabel("Delete \(profile.name)")
+        }
+        .confirmationDialog(
+            "Delete \(profile.name)?",
+            isPresented: $isConfirmingDelete
+        ) {
+            Button("Delete", role: .destructive) { model.deleteProfile(profile.id) }
+        } message: {
+            Text("Its device and microphone orders are removed. Devices stay as they are in the other profiles.")
+        }
+        .onAppear { name = profile.name }
+        .onChange(of: profile.name) { _, new in name = new }
+    }
+
+    private func commit() {
+        guard name != profile.name else { return }
+        model.renameProfile(profile.id, to: name)
+        name = model.profiles.first { $0.id == profile.id }?.name ?? name
     }
 }
 
