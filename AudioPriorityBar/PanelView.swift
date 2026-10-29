@@ -285,7 +285,7 @@ struct PanelView: View {
         }
         if model.keptPicks[.output] == current.uid
             || model.currentInputDevice.map({ model.keptPicks[.input] == $0.uid }) == true {
-            return "Your choice stays until a device connects or disconnects"
+            return "Your choice stays until a device your list would pick connects"
         }
         guard let skipped = model.automaticOutputDecision.skipped,
               skipped.device.id != current.id else {

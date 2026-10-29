@@ -93,8 +93,9 @@ bundle identifier may require re-approving Input Monitoring or Open at Login.
 ## Use
 
 Click the icon in the menu bar to open the panel. Drag devices to rank them;
-the active one is highlighted. A device you pick by hand stays until a device
-connects or disconnects. Turn automatic switching off to keep it.
+the active one is highlighted. A device you pick by hand stays until it
+disconnects or a device your list would pick connects. Turn automatic
+switching off to keep it.
 
 <p align="center">
   <picture>
@@ -108,11 +109,13 @@ connects or disconnects. Turn automatic switching off to keep it.
 
 - Automatic switching uses the first available headphone, then the first speaker.
 - A device you pick in the panel, Control Center or Sound Settings stays
-  until a device next connects or disconnects, and automatic switching stays
-  on. With automatic switching off, it stays until you turn it back on.
+  until it disconnects or a device your list would pick connects, and
+  automatic switching stays on. Other devices coming and going leave it
+  alone. With automatic switching off, it stays until you turn it back on.
 - When macOS or another app changes the device on its own, as AirPods do when
   you put them in, Audio Priority Bar switches back to the device you picked,
-  or to your list. A device you connect still takes over.
+  or to your list. A device you connect still takes over if your list would
+  pick it.
 - If macOS takes the device again right after a switch back, as AirPods in
   your ears can, Audio Priority Bar leaves it and names it in the panel.
   **Fix in Settings** opens the AirPods settings, where choosing **When Last
@@ -123,8 +126,8 @@ connects or disconnects. Turn automatic switching off to keep it.
 - With **Microphones follow the output** enabled, speakers and headphones
   each keep their own microphone order, so moving from headphones to
   speakers can also move to the desk microphone. A microphone you pick in
-  Control Center or Sound Settings still stays until a device connects or
-  disconnects.
+  Control Center or Sound Settings still stays until it disconnects or a
+  microphone your list would pick connects.
 - With **Mute speakers when headphones disconnect** enabled, the speakers
   start muted when the headphones playing disconnect, are turned off or run
   out of battery.
