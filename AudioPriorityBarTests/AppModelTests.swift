@@ -307,8 +307,24 @@ func aBluetoothSpeakerClickedWhileOffIsSelectedOnceItConnects() async throws {
     model.handleDevicesChanged()
 
     #expect(model.currentOutputID == echo.platformID)
-    #expect(model.isManualMode)
+    #expect(!model.isManualMode)
     #expect(model.selectingBluetoothAddress == nil)
+}
+
+@Test
+@MainActor
+func aClickedBluetoothSpeakerStaysWhenItsMicrophoneArrivesLater() async throws {
+    let audio = FakeAudio()
+    audio.catalog = [output(1, "speaker")]
+    let model = try await modelWithPairedEcho(audio, list: "device_not_connected")
+    model.selectingBluetoothAddress = "AC-41-6A-C5-C3-F1"
+    audio.catalog.append(echo)
+    model.handleDevicesChanged()
+
+    audio.catalog.append(input(3, "AC-41-6A-C5-C3-F1:input", "Echo Dot-65W"))
+    model.handleDevicesChanged()
+
+    #expect(model.currentOutputID == echo.platformID)
 }
 
 @Test
@@ -626,6 +642,27 @@ func airPodsTakingTheOutputBackInManualModeIsSwitchedBack() {
 
 @Test
 @MainActor
+func airPodsTakingTheOutputAfterAPickAreSwitchedBackWithAutomaticOn() {
+    let speaker = output(1, "speaker", "MacBook Air Speakers")
+    let airPods = output(2, "airpods-out", "AirPods Pro")
+    let audio = FakeAudio()
+    audio.catalog = [speaker, airPods]
+    let model = testModel(audio: audio, defaults: isolatedDefaults())
+    model.start()
+    model.selectManually(speaker)
+    model.handleDefaultChanged(.output)
+    audio.selections.removeAll()
+
+    audio.defaults[.output] = airPods.platformID
+    model.handleDefaultChanged(.output)
+
+    #expect(!model.isManualMode)
+    #expect(model.currentOutputID == speaker.platformID)
+    #expect(audio.selections.map(\.1) == [speaker.platformID])
+}
+
+@Test
+@MainActor
 func airPodsTakingBothDevicesAtOnceInManualModeAreBothSwitchedBack() {
     let defaults = isolatedDefaults()
     let store = PriorityStore(defaults: defaults)
@@ -838,28 +875,28 @@ func manualModeNeverChangesDevicesAutomatically() {
 
 @Test
 @MainActor
-func explicitChoiceTurnsAutomaticOffUntilReenabled() {
-    let defaults = isolatedDefaults()
+func aPickInThePanelStaysUntilADeviceConnects() {
     let audio = FakeAudio()
     let speaker = output(1, "speaker")
-    let headphones = output(2, "headphones", "AirPods Pro")
-    audio.catalog = [speaker, headphones]
-    let model = testModel(audio: audio, defaults: defaults)
+    let monitor = output(2, "monitor", "Studio Monitor")
+    audio.catalog = [speaker, monitor]
+    let model = testModel(audio: audio, defaults: isolatedDefaults())
     model.start()
+    let other = model.currentOutputID == speaker.platformID ? monitor : speaker
 
-    model.selectManually(speaker)
+    model.selectManually(other)
+    model.handleDefaultChanged(.output)
     audio.selections.removeAll()
     model.handleDevicesChanged()
 
-    #expect(model.isManualMode)
-    #expect(model.currentOutputID == speaker.platformID)
+    #expect(!model.isManualMode)
+    #expect(model.currentOutputID == other.platformID)
     #expect(audio.selections.isEmpty)
 
-    model.setManualMode(false)
+    audio.catalog.append(output(3, "headphones", "AirPods Pro"))
+    model.handleDevicesChanged()
 
-    #expect(!model.isManualMode)
-    #expect(model.currentOutputID == headphones.platformID)
-    #expect(audio.selections.last?.1 == headphones.platformID)
+    #expect(model.currentOutputID == 3)
 }
 
 @Test
@@ -1416,6 +1453,6 @@ func aShortcutPicksAConnectedDeviceAndRefusesOneThatIsNot() throws {
     #expect(audio.selections.isEmpty)
 
     try model.selectManually(uid: "headset", role: .input)
-    #expect(model.isManualMode)
+    #expect(model.keptPicks[.input] == headset.uid)
     #expect(model.currentInputID == headset.platformID)
 }

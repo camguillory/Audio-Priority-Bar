@@ -199,9 +199,17 @@ extension AppModel {
         refreshMute()
     }
 
+    /// With automatic switching on, a pick stays as one in Control Center
+    /// does, until a device connects or disconnects. Every role the pick
+    /// moved is kept, or automatic switching would move a paired half back.
     func selectManually(_ device: AudioDevice) {
-        setManualMode(true)
-        select(device)
+        switchedBackAt = [:]
+        takeoverUIDs = [:]
+        let before = currentUIDs
+        guard select(device), !isManualMode else { return }
+        for (role, uid) in currentUIDs where role == device.role || before[role] != uid {
+            keptPicks[role] = uid
+        }
     }
 
     /// What a click on a row does: selects a connected device, or connects a
