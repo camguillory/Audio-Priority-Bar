@@ -826,8 +826,9 @@ struct StatusLabel: View {
         .accessibilityHidden(true)
     }
 
-    /// Room inside the outline or the red background.
-    private var isFramed: Bool { model.outlinesMenuBarIcon || model.showsRedIconBackground }
+    /// Room inside the outline or the red background, kept while switching is
+    /// on too so turning it off never changes the icon's width.
+    private var isFramed: Bool { model.outlinesMenuBarIcon || model.redIconWhenManual }
 
     private var isLabeled: Bool { model.menuBarDevices == .bothLabeled }
 
@@ -850,7 +851,7 @@ struct StatusLabel: View {
         // The glyphs layer must not read the pulse, or its renderer would
         // redraw the item a second time on every tick.
         Image(systemName: "mic.slash.fill")
-            .foregroundStyle(.red)
+            .foregroundStyle(model.showsRedIconBackground ? Color.white : Color.red)
             .opacity(mode == .glyphs ? 0 : reduceMotion || model.micFlashState ? 1 : 0.45)
     }
 

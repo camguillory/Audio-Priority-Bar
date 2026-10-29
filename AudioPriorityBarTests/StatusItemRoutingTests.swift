@@ -1,6 +1,7 @@
 import AppKit
 import AudioPriorityCore
 import KeyboardShortcuts
+import SwiftUI
 import Testing
 @testable import AudioPriorityBar
 
@@ -225,4 +226,22 @@ func theRedBackgroundDrawsTheGlyphsWhite() throws {
     let background = try #require(rep.colorAt(x: 1, y: 0))
     #expect(glyph.brightnessComponent > 0.5 && glyph.greenComponent > 0.5)
     #expect(background.redComponent > 0.8 && background.greenComponent < 0.4)
+}
+
+@Test
+@MainActor
+func theRedReminderKeepsTheIconWidthWhenSwitchingTurnsOff() throws {
+    let audio = FakeAudio()
+    audio.catalog = [output(1, "speaker")]
+    let model = testModel(audio: audio, defaults: isolatedDefaults())
+    model.start()
+    model.setRedIconWhenManual(true)
+
+    func width() throws -> CGFloat {
+        try #require(ImageRenderer(content: StatusLabel(model: model)).nsImage).size.width
+    }
+    let automatic = try width()
+    model.setManualMode(true)
+
+    #expect(try width() == automatic)
 }

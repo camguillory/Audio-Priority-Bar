@@ -111,8 +111,8 @@ struct SettingsView: View {
                 get: { model.redIconWhenManual },
                 set: { model.setRedIconWhenManual($0) }
             )) {
-                Text("Red when automatic switching is off")
-                Text("A reminder that devices won't switch on their own.")
+                Text("Red while automatic switching is off")
+                Text("A reminder to turn it back on.")
             }
         }
 
