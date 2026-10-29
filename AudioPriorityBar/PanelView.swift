@@ -283,6 +283,10 @@ struct PanelView: View {
         if model.isManualMode {
             return "Your choice stays until you turn this on"
         }
+        if model.keptPicks[.output] == current.uid
+            || model.currentInputDevice.map({ model.keptPicks[.input] == $0.uid }) == true {
+            return "Your choice stays until a device connects or disconnects"
+        }
         guard let skipped = model.automaticOutputDecision.skipped,
               skipped.device.id != current.id else {
             return nil

@@ -93,8 +93,8 @@ bundle identifier may require re-approving Input Monitoring or Open at Login.
 ## Use
 
 Click the icon in the menu bar to open the panel. Drag devices to rank them;
-the active one is highlighted. Picking a device by hand turns automatic
-switching off until you turn it back on.
+the active one is highlighted. A device you pick by hand stays until a device
+connects or disconnects. Turn automatic switching off to keep it.
 
 <p align="center">
   <picture>
@@ -107,15 +107,12 @@ switching off until you turn it back on.
 <summary>How switching works</summary>
 
 - Automatic switching uses the first available headphone, then the first speaker.
-- Selecting a device in the panel turns automatic switching off so that
-  choice stays active. Turn automatic switching back on to resume
-  priority-based selection.
-- A device you pick in Control Center or Sound Settings stays until a device
-  next connects or disconnects, and automatic switching stays on.
+- A device you pick in the panel, Control Center or Sound Settings stays
+  until a device next connects or disconnects, and automatic switching stays
+  on. With automatic switching off, it stays until you turn it back on.
 - When macOS or another app changes the device on its own, as AirPods do when
-  you put them in, Audio Priority Bar switches back: to your list with
-  automatic switching on, or to the device you picked with it off. A device
-  you connect still takes over.
+  you put them in, Audio Priority Bar switches back to the device you picked,
+  or to your list. A device you connect still takes over.
 - If macOS takes the device again right after a switch back, as AirPods in
   your ears can, Audio Priority Bar leaves it and names it in the panel.
   **Fix in Settings** opens the AirPods settings, where choosing **When Last
@@ -159,9 +156,8 @@ Speakers, Headphones, and Microphones remain visible in both modes.
   disconnected remembered devices.
 - Forget a disconnected device to remove its saved settings.
 - Paired Bluetooth speakers and headphones stay listed at their rank while
-  they are off, dimmed. Click one to connect it, and automatic switching
-  treats it like any device that just connected. Hide one you never use to
-  take it off the list.
+  they are off, dimmed. Click one to connect and use it. Hide one you never
+  use to take it off the list.
 - A Bluetooth device that is connected but not in use shows **Connected**.
   Hover it and click **Disconnect** to release it.
 - A device with a paired counterpart, like a USB headset's input and output
@@ -243,8 +239,8 @@ Hiding, Never Auto-Select, and the other settings are shared by all of them.
 
 The Shortcuts app lists five actions: **Set Output**, **Set Microphone**,
 **Set Microphone Mute**, **Set Automatic Switching**, and **Apply Profile**.
-Picking a device turns automatic switching off, as a click in the panel does,
-and a device that isn't connected stops the shortcut with its name.
+Picking a device works like a click in the panel, and a device that isn't
+connected stops the shortcut with its name.
 
 URLs control the microphone mute and automatic switching from Shortcuts,
 Raycast, a Stream Deck, or Terminal:

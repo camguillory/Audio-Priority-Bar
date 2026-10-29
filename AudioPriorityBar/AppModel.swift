@@ -425,7 +425,18 @@ final class AppModel {
         }
         let inputUIDs = Set(connected.lazy.filter { $0.role == .input }.map(\.uid))
         let outputUIDs = Set(connected.lazy.filter { $0.role == .output }.map(\.uid))
-        if inputUIDs != connectedInputUIDs || outputUIDs != connectedOutputUIDs {
+        // A kept device's other half arriving, as a Bluetooth headset's
+        // microphone a moment after its output, is not a new device.
+        let kept = connected.filter { keptPicks[$0.role] == $0.uid }
+        let onlyKeptHalvesArrived = connectedInputUIDs.isSubset(of: inputUIDs)
+            && connectedOutputUIDs.isSubset(of: outputUIDs)
+            && connected.allSatisfy { device in
+                (device.role == .input ? connectedInputUIDs : connectedOutputUIDs)
+                    .contains(device.uid)
+                    || kept.contains { $0.isSameDevice(as: device) }
+            }
+        if inputUIDs != connectedInputUIDs || outputUIDs != connectedOutputUIDs,
+           !onlyKeptHalvesArrived {
             keptPicks = [:]
             switchedBackAt = [:]
             takeoverUIDs = [:]
