@@ -206,10 +206,15 @@ extension AppModel {
         switchedBackAt = [:]
         takeoverUIDs = [:]
         let before = currentUIDs
-        guard select(device), !isManualMode else { return }
-        for (role, uid) in currentUIDs where role == device.role || before[role] != uid {
-            keptPicks[role] = uid
-        }
+        guard select(device) else { return }
+        keepPicks(DeviceRole.allCases.filter { $0 == device.role || before[$0] != currentUIDs[$0] })
+    }
+
+    /// Keeps `roles` on their current devices while automatic switching is
+    /// on, as a pick in Control Center is kept.
+    private func keepPicks(_ roles: [DeviceRole]) {
+        guard !isManualMode else { return }
+        for role in roles { keptPicks[role] = currentUIDs[role] }
     }
 
     /// What a click on a row does: selects a connected device, or connects a
@@ -286,18 +291,25 @@ extension AppModel {
         guard let pair = pairedDevice(for: device) else { return }
         let output = device.role == .output ? device : pair
         let input = device.role == .input ? device : pair
-        setManualMode(true)
+        switchedBackAt = [:]
+        takeoverUIDs = [:]
         guard select(output) else { return }
         select(input)
+        keepPicks([.output, .input])
     }
 
-    /// Selects one device only, regardless of `selectsPairedDevice`.
+    /// Selects one device only, regardless of `selectsPairedDevice`. An
+    /// output keeps the microphone too, or automatic switching would pair
+    /// the output's own one back.
     func selectOnly(_ device: AudioDevice) {
-        setManualMode(true)
+        switchedBackAt = [:]
+        takeoverUIDs = [:]
         selectedOnlyOutputUID = device.role == .output ? device.uid : nil
-        if !select(device, includesPairedDevice: false) {
+        guard select(device, includesPairedDevice: false) else {
             selectedOnlyOutputUID = nil
+            return
         }
+        keepPicks(device.role == .output ? [.output, .input] : [.input])
     }
 
     func setVolume(_ value: Float) {
