@@ -423,9 +423,10 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         microphone: NSImage?
     ) -> NSImage {
         NSImage(size: glyphs.size, flipped: false) { rect in
-            if let background {
-                background.setFill()
-                NSBezierPath(roundedRect: rect, xRadius: 4, yRadius: 4).fill()
+            if let background, let context = NSGraphicsContext.current?.cgContext {
+                context.addPath(ManualBackgroundShape().path(in: rect).cgPath)
+                context.setFillColor(background.cgColor)
+                context.fillPath()
             }
             let color: NSColor = background == nil ? .labelColor : .white
             recolored(glyphs, color).draw(in: rect)
@@ -724,6 +725,16 @@ final class StatusItemController: NSObject, NSWindowDelegate {
             values.append("volume \(Int(model.volume * 100)) percent")
         }
         return values.joined(separator: ", ")
+    }
+}
+
+/// The red reminder's shape: the outline's own shape, half a point inside
+/// it, so the outline's stroke covers the red edge and no red shows beyond
+/// it. Fills the whole label, including the padding outside the outline.
+struct ManualBackgroundShape: Shape {
+    nonisolated func path(in rect: CGRect) -> Path {
+        RoundedRectangle(cornerRadius: 3.5, style: .continuous)
+            .path(in: rect.insetBy(dx: 1.5, dy: 0.5))
     }
 }
 

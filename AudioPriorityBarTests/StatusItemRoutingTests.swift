@@ -203,16 +203,16 @@ func theMutedIconFollowsTheMenuBarAppearanceAndKeepsTheMicrophoneRed() throws {
 }
 
 @Test
-func theRedBackgroundDrawsTheGlyphsWhite() throws {
-    let size = NSSize(width: 2, height: 1)
+func theRedBackgroundDrawsTheGlyphsWhiteAndStaysInsideTheOutline() throws {
+    let size = NSSize(width: 20, height: 10)
     let glyphs = NSImage(size: size, flipped: false) { _ in
         NSColor.black.set()
-        NSRect(x: 0, y: 0, width: 1, height: 1).fill()
+        NSRect(x: 9, y: 4, width: 2, height: 2).fill()
         return true
     }
     let icon = StatusItemController.colored(glyphs, background: .systemRed, microphone: nil)
     let rep = try #require(NSBitmapImageRep(
-        bitmapDataPlanes: nil, pixelsWide: 2, pixelsHigh: 1,
+        bitmapDataPlanes: nil, pixelsWide: 20, pixelsHigh: 10,
         bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
         colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0
     ))
@@ -222,10 +222,14 @@ func theRedBackgroundDrawsTheGlyphsWhite() throws {
         icon.draw(in: NSRect(origin: .zero, size: size))
     }
     NSGraphicsContext.restoreGraphicsState()
-    let glyph = try #require(rep.colorAt(x: 0, y: 0))
-    let background = try #require(rep.colorAt(x: 1, y: 0))
+    let glyph = try #require(rep.colorAt(x: 10, y: 5))
+    let background = try #require(rep.colorAt(x: 5, y: 5))
+    // The outline is drawn a point in from each side, so the column
+    // outside it stays clear.
+    let outside = try #require(rep.colorAt(x: 0, y: 5))
     #expect(glyph.brightnessComponent > 0.5 && glyph.greenComponent > 0.5)
     #expect(background.redComponent > 0.8 && background.greenComponent < 0.4)
+    #expect(outside.alphaComponent < 0.1)
 }
 
 @Test

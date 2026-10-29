@@ -161,7 +161,7 @@ struct SettingsView: View {
                 .foregroundStyle(model.showsRedIconBackground ? Color.white : Color.primary)
                 .background {
                     if model.showsRedIconBackground {
-                        RoundedRectangle(cornerRadius: 4, style: .continuous).fill(Color(nsColor: StatusItemController.manualBackground))
+                        ManualBackgroundShape().fill(Color(nsColor: StatusItemController.manualBackground))
                     }
                 }
             Text(Date.now, format: .dateTime.weekday().hour().minute())
