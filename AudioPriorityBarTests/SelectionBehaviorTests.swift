@@ -626,6 +626,135 @@ func selectWithPairedDeviceStopsAtAFailedOutputSelection() {
     #expect(audio.selections.isEmpty)
 }
 
+/// A USB headset beside the speakers and the Mac's microphone, left out of
+/// automatic switching so using it takes a pick.
+@MainActor
+private struct HeadsetDesk {
+    let audio = FakeAudio()
+    let defaults = isolatedDefaults()
+    let headset = dualRole()
+    let speaker = output(2, "speaker")
+    let macMic = input(102, "mac-mic")
+
+    func model(
+        selectsPairedDevice: Bool = true,
+        headsetMicFirst: Bool = false,
+        isUserPicking: @escaping () -> Bool = { false }
+    ) -> AppModel {
+        let store = PriorityStore(defaults: defaults)
+        store.selectsPairedDevice = selectsPairedDevice
+        store.setNeverUse(headset.output, true)
+        store.savePriorities(
+            headsetMicFirst ? [headset.input, macMic] : [macMic, headset.input],
+            role: .input
+        )
+        audio.catalog = [headset.output, headset.input, speaker, macMic]
+        let model = testModel(audio: audio, defaults: defaults, isUserPicking: isUserPicking)
+        model.start()
+        audio.selections.removeAll()
+        return model
+    }
+}
+
+@Test
+@MainActor
+func outputOnlyKeepsTheMicrophoneWithAutomaticOn() {
+    let desk = HeadsetDesk()
+    let model = desk.model()
+    #expect(model.currentInputID == desk.macMic.platformID)
+
+    model.selectOnly(desk.headset.output)
+    model.handleDefaultChanged(.output)
+    model.handleDefaultChanged(.input)
+
+    #expect(!model.isManualMode)
+    #expect(model.currentOutputID == desk.headset.output.platformID)
+    #expect(model.currentInputID == desk.macMic.platformID)
+    #expect(desk.audio.selections.map(\.1) == [desk.headset.output.platformID])
+}
+
+@Test
+@MainActor
+func outputOnlyHoldsThroughASwitchBack() {
+    let desk = HeadsetDesk()
+    let model = desk.model()
+    model.selectOnly(desk.headset.output)
+    model.handleDefaultChanged(.output)
+    desk.audio.selections.removeAll()
+
+    desk.audio.defaults[.output] = desk.speaker.platformID
+    model.handleDefaultChanged(.output)
+    model.handleDefaultChanged(.input)
+
+    #expect(model.currentOutputID == desk.headset.output.platformID)
+    #expect(model.currentInputID == desk.macMic.platformID)
+    #expect(desk.audio.selections.map(\.1) == [desk.headset.output.platformID])
+}
+
+@Test
+@MainActor
+func aDeviceConnectingEndsAnOutputOnlyPick() {
+    let desk = HeadsetDesk()
+    let model = desk.model()
+    model.selectOnly(desk.headset.output)
+    model.handleDefaultChanged(.output)
+    // The headset becomes the list's only choice.
+    model.store.setNeverUse(desk.headset.output, false)
+    model.store.setNeverUse(desk.speaker, true)
+
+    desk.audio.catalog.append(input(103, "usb-mic", "USB Mic"))
+    model.handleDevicesChanged()
+
+    #expect(model.currentOutputID == desk.headset.output.platformID)
+    #expect(model.currentInputID == desk.headset.input.platformID)
+}
+
+@Test
+@MainActor
+func micOnlyKeepsTheOutputWithAutomaticOn() {
+    let desk = HeadsetDesk()
+    let model = desk.model()
+    #expect(model.currentOutputID == desk.speaker.platformID)
+
+    model.selectOnly(desk.headset.input)
+    model.handleDefaultChanged(.input)
+
+    #expect(!model.isManualMode)
+    #expect(model.currentInputID == desk.headset.input.platformID)
+    #expect(model.currentOutputID == desk.speaker.platformID)
+    #expect(desk.audio.selections.map(\.1) == [desk.headset.input.platformID])
+}
+
+@Test
+@MainActor
+func useBothKeepsBothHalvesWithAutomaticOn() {
+    let desk = HeadsetDesk()
+    let model = desk.model(selectsPairedDevice: false)
+
+    model.selectWithPairedDevice(desk.headset.input)
+    model.handleDefaultChanged(.output)
+    model.handleDefaultChanged(.input)
+
+    #expect(!model.isManualMode)
+    #expect(model.currentOutputID == desk.headset.output.platformID)
+    #expect(model.currentInputID == desk.headset.input.platformID)
+}
+
+@Test
+@MainActor
+func aHeadsetOutputPickedInControlCenterStillBringsItsMicrophone() {
+    let desk = HeadsetDesk()
+    let model = desk.model(headsetMicFirst: true, isUserPicking: { true })
+    desk.audio.defaults[.input] = desk.macMic.platformID
+    model.handleDefaultChanged(.input)
+
+    desk.audio.defaults[.output] = desk.headset.output.platformID
+    model.handleDefaultChanged(.output)
+    model.handleDefaultChanged(.input)
+
+    #expect(model.currentInputID == desk.headset.input.platformID)
+}
+
 @Test
 @MainActor
 func pairingSkipsMissingHiddenVirtualAndDisabledPartners() {
