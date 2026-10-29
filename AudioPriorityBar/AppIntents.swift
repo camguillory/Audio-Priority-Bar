@@ -88,7 +88,7 @@ struct MicrophoneQuery: EntityQuery {
 struct SetOutputIntent: AppIntent {
     static let title: LocalizedStringResource = "Set Output"
     static let description = IntentDescription(
-        "Switches the sound to an output and turns automatic switching off, like picking it in the panel."
+        "Switches the sound to an output, like picking it in the panel."
     )
 
     @Parameter(title: "Output")
@@ -108,7 +108,7 @@ struct SetOutputIntent: AppIntent {
 struct SetMicrophoneIntent: AppIntent {
     static let title: LocalizedStringResource = "Set Microphone"
     static let description = IntentDescription(
-        "Switches to a microphone and turns automatic switching off, like picking it in the panel."
+        "Switches to a microphone, like picking it in the panel."
     )
 
     @Parameter(title: "Microphone")

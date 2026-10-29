@@ -246,7 +246,7 @@ func activatingARowSelectsItOnlyWhenItIsNotAlreadyCurrent() throws {
     model.activate(other)
 
     #expect(model.currentOutputID == other.platformID)
-    #expect(model.isManualMode)
+    #expect(!model.isManualMode)
 }
 
 @Test
@@ -430,6 +430,29 @@ func selectingAMicrophoneAlsoSelectsItsOutputWhenEnabled() {
     // Exactly the mic then its output: a returning cycle would fail this
     // count instead of only hanging.
     #expect(audio.selections.map(\.0) == [.input, .output])
+}
+
+@Test
+@MainActor
+func pickingAHeadsetMicrophoneKeepsItsOutputWithAutomaticOn() {
+    let defaults = isolatedDefaults()
+    let store = PriorityStore(defaults: defaults)
+    let paired = dualRole()
+    let speaker = output(2, "speaker")
+    store.setNeverUse(paired.output, true)
+    let audio = FakeAudio()
+    audio.catalog = [paired.output, paired.input, speaker]
+    let model = testModel(audio: audio, defaults: defaults)
+    model.start()
+    #expect(model.currentOutputID == speaker.platformID)
+
+    model.selectManually(paired.input)
+    model.handleDefaultChanged(.input)
+    model.handleDefaultChanged(.output)
+
+    #expect(!model.isManualMode)
+    #expect(model.currentInputID == paired.input.platformID)
+    #expect(model.currentOutputID == paired.output.platformID)
 }
 
 @Test
