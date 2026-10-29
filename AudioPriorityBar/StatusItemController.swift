@@ -363,6 +363,7 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         withObservationTracking {
             _ = statusDescription
             _ = model.outlinesMenuBarIcon
+            _ = model.redIconWhenManual
             _ = model.menuBarDevices
             _ = model.showsMenuBarVolume
             // Only the microphone layer reads the pulse, and it has no
@@ -385,8 +386,13 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         // previous pulse frame, which left the microphone dim.
         let microphoneRenderer = ImageRenderer(content: StatusLabel(model: model, mode: .micRed))
         microphoneRenderer.scale = scale
-        if model.isActiveInputMuted, let image, let microphone = microphoneRenderer.nsImage {
-            statusItem.button?.image = Self.muted(image, microphone: microphone)
+        let microphone = model.isActiveInputMuted ? microphoneRenderer.nsImage : nil
+        if let image, model.showsRedIconBackground || microphone != nil {
+            statusItem.button?.image = Self.colored(
+                image,
+                background: model.showsRedIconBackground ? Self.manualBackground : nil,
+                microphone: microphone
+            )
         } else {
             image?.isTemplate = true
             statusItem.button?.image = image
@@ -400,17 +406,42 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         }
     }
 
-    /// The glyphs in the menu bar's text color with the red microphone on
-    /// top. A template image would tint the microphone too, so this one is
-    /// drawn on demand and follows a light or dark menu bar at draw time.
+    /// Solid, like the system's own recording indicator, so it reads the
+    /// same over any wallpaper.
+    static let manualBackground = NSColor.systemRed
+
+    /// The glyphs over `background` when automatic switching is off and
+    /// flagged, white so they stand out from it, or else in the menu bar's
+    /// text color with any red microphone on top. A template image would
+    /// tint these too, so this one is drawn on demand and follows a light or
+    /// dark menu bar at draw time.
     // ponytail: not a template, so the system no longer dims the icon on an
-    // inactive display while muted; draw the dimming here if that matters.
-    nonisolated static func muted(_ glyphs: NSImage, microphone: NSImage) -> NSImage {
+    // inactive display while colored; draw the dimming here if that matters.
+    nonisolated static func colored(
+        _ glyphs: NSImage,
+        background: NSColor?,
+        microphone: NSImage?
+    ) -> NSImage {
         NSImage(size: glyphs.size, flipped: false) { rect in
-            glyphs.draw(in: rect)
-            NSColor.labelColor.set()
+            if let background, let context = NSGraphicsContext.current?.cgContext {
+                context.addPath(ManualBackgroundShape().path(in: rect).cgPath)
+                context.setFillColor(background.cgColor)
+                context.fillPath()
+            }
+            let color: NSColor = background == nil ? .labelColor : .white
+            recolored(glyphs, color).draw(in: rect)
+            // A red microphone would vanish into the red background.
+            microphone.map { background == nil ? $0 : recolored($0, color) }?.draw(in: rect)
+            return true
+        }
+    }
+
+    /// Recolors only the image's own pixels, leaving whatever is under it.
+    nonisolated private static func recolored(_ image: NSImage, _ color: NSColor) -> NSImage {
+        NSImage(size: image.size, flipped: false) { rect in
+            image.draw(in: rect)
+            color.set()
             rect.fill(using: .sourceAtop)
-            microphone.draw(in: rect)
             return true
         }
     }
@@ -697,6 +728,17 @@ final class StatusItemController: NSObject, NSWindowDelegate {
     }
 }
 
+/// The red reminder's shape: the outline's own shape, half a point inside
+/// it, so the outline's stroke covers the red edge and no red shows beyond
+/// it. The insets follow the label's 1-point outer padding and the outline's
+/// 1-point stroke, so change them together.
+struct ManualBackgroundShape: Shape {
+    nonisolated func path(in rect: CGRect) -> Path {
+        RoundedRectangle(cornerRadius: 3.5, style: .continuous)
+            .path(in: rect.insetBy(dx: 1.5, dy: 0.5))
+    }
+}
+
 struct StatusLabel: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Bindable var model: AppModel
@@ -782,8 +824,8 @@ struct StatusLabel: View {
         // The 13-point menu bar font draws glyphs smaller than the system's
         // own menu extras, such as Sound and Wi-Fi.
         .font(.system(size: 14))
-        .padding(.horizontal, model.outlinesMenuBarIcon ? 4 : 0)
-        .padding(.vertical, model.outlinesMenuBarIcon ? 2 : 0)
+        .padding(.horizontal, isFramed ? 4 : 0)
+        .padding(.vertical, isFramed ? 2 : 0)
         .overlay {
             // Whole points only: a fractional width lands on half pixels and
             // draws some edges softer than others.
@@ -795,6 +837,10 @@ struct StatusLabel: View {
         .padding(.horizontal, 1)
         .accessibilityHidden(true)
     }
+
+    /// Room inside the outline or the red background, kept while switching is
+    /// on too so turning it off never changes the icon's width.
+    private var isFramed: Bool { model.outlinesMenuBarIcon || model.redIconWhenManual }
 
     private var isLabeled: Bool { model.menuBarDevices == .bothLabeled }
 
@@ -817,7 +863,7 @@ struct StatusLabel: View {
         // The glyphs layer must not read the pulse, or its renderer would
         // redraw the item a second time on every tick.
         Image(systemName: "mic.slash.fill")
-            .foregroundStyle(.red)
+            .foregroundStyle(model.showsRedIconBackground ? Color.white : Color.red)
             .opacity(mode == .glyphs ? 0 : reduceMotion || model.micFlashState ? 1 : 0.45)
     }
 

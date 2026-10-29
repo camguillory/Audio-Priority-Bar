@@ -1,6 +1,7 @@
 import AppKit
 import AudioPriorityCore
 import KeyboardShortcuts
+import SwiftUI
 import Testing
 @testable import AudioPriorityBar
 
@@ -177,7 +178,7 @@ func theMutedIconFollowsTheMenuBarAppearanceAndKeepsTheMicrophoneRed() throws {
         NSRect(x: 1, y: 0, width: 1, height: 1).fill()
         return true
     }
-    let muted = StatusItemController.muted(glyphs, microphone: microphone)
+    let muted = StatusItemController.colored(glyphs, background: nil, microphone: microphone)
 
     func pixels(in appearance: NSAppearance.Name) throws -> (NSColor, NSColor) {
         let rep = try #require(NSBitmapImageRep(
@@ -199,4 +200,52 @@ func theMutedIconFollowsTheMenuBarAppearanceAndKeepsTheMicrophoneRed() throws {
     #expect(darkMicrophone.redComponent > 0.9 && darkMicrophone.greenComponent < 0.3)
     let (lightGlyph, _) = try pixels(in: .aqua)
     #expect(lightGlyph.brightnessComponent < 0.5)
+}
+
+@Test
+func theRedBackgroundDrawsTheGlyphsWhiteAndStaysInsideTheOutline() throws {
+    let size = NSSize(width: 20, height: 10)
+    let glyphs = NSImage(size: size, flipped: false) { _ in
+        NSColor.black.set()
+        NSRect(x: 9, y: 4, width: 2, height: 2).fill()
+        return true
+    }
+    let icon = StatusItemController.colored(glyphs, background: .systemRed, microphone: nil)
+    let rep = try #require(NSBitmapImageRep(
+        bitmapDataPlanes: nil, pixelsWide: 20, pixelsHigh: 10,
+        bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+        colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0
+    ))
+    NSGraphicsContext.saveGraphicsState()
+    NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
+    NSAppearance(named: .aqua)?.performAsCurrentDrawingAppearance {
+        icon.draw(in: NSRect(origin: .zero, size: size))
+    }
+    NSGraphicsContext.restoreGraphicsState()
+    let glyph = try #require(rep.colorAt(x: 10, y: 5))
+    let background = try #require(rep.colorAt(x: 5, y: 5))
+    // The outline is drawn a point in from each side, so the column
+    // outside it stays clear.
+    let outside = try #require(rep.colorAt(x: 0, y: 5))
+    #expect(glyph.brightnessComponent > 0.5 && glyph.greenComponent > 0.5)
+    #expect(background.redComponent > 0.8 && background.greenComponent < 0.4)
+    #expect(outside.alphaComponent < 0.1)
+}
+
+@Test
+@MainActor
+func theRedReminderKeepsTheIconWidthWhenSwitchingTurnsOff() throws {
+    let audio = FakeAudio()
+    audio.catalog = [output(1, "speaker")]
+    let model = testModel(audio: audio, defaults: isolatedDefaults())
+    model.start()
+    model.setRedIconWhenManual(true)
+
+    func width() throws -> CGFloat {
+        try #require(ImageRenderer(content: StatusLabel(model: model)).nsImage).size.width
+    }
+    let automatic = try width()
+    model.setManualMode(true)
+
+    #expect(try width() == automatic)
 }

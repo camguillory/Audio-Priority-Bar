@@ -421,6 +421,15 @@ func mutedMicrophonePulsesUntilTurnedOff() throws {
 }
 
 @Test
+func redIconWhenManualIsOffUntilTurnedOn() throws {
+    try withDefaults { defaults in
+        #expect(!PriorityStore(defaults: defaults).redIconWhenManual)
+        PriorityStore(defaults: defaults).redIconWhenManual = true
+        #expect(PriorityStore(defaults: defaults).redIconWhenManual)
+    }
+}
+
+@Test
 func menuBarShowsOnlyTheOutputUntilChanged() throws {
     try withDefaults { defaults in
         #expect(PriorityStore(defaults: defaults).menuBarDevices == .outputOnly)

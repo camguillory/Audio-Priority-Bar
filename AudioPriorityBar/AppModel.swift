@@ -118,6 +118,9 @@ final class AppModel {
     var menuBarDevices: MenuBarDevices
     var showsMenuBarVolume: Bool
     var pulsesMutedMicrophone: Bool
+    var redIconWhenManual: Bool
+    /// The menu bar icon's reminder that automatic switching is off.
+    var showsRedIconBackground: Bool { redIconWhenManual && isManualMode }
     /// Bluetooth addresses with a connection attempt in flight, each tagged so
     /// a finished attempt cannot end a newer one.
     var connectingBluetoothAttempts: [String: UUID] = [:]
@@ -198,6 +201,7 @@ final class AppModel {
         menuBarDevices = store.menuBarDevices
         showsMenuBarVolume = store.showsMenuBarVolume
         pulsesMutedMicrophone = store.pulsesMutedMicrophone
+        redIconWhenManual = store.redIconWhenManual
         profiles = store.profiles
         activeProfileID = store.activeProfileID
         battery.onPairedAudioChange = { [weak self] in self?.refreshDevices() }

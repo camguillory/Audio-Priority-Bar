@@ -87,6 +87,11 @@ extension AppModel {
         refreshMute()
     }
 
+    func setRedIconWhenManual(_ enabled: Bool) {
+        redIconWhenManual = enabled
+        store.redIconWhenManual = enabled
+    }
+
     func canConnect(_ device: AudioDevice) -> Bool {
         !device.isConnected && battery.report.bluetoothDevice(for: device) != nil
     }

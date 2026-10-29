@@ -187,6 +187,8 @@ The active device always stays listed, even when hidden.
   you change it.
 - A muted microphone shows in red and pulses, unless you turn the pulse off in
   Settings.
+- The icon can turn red while automatic switching is off, as a reminder to
+  turn it back on.
 - Hovering the icon shows the current output and microphone.
 - Option-click the icon to mute the microphone. Right-click it to mute the
   microphone, or for Settings, Check for Updates, and Quit.

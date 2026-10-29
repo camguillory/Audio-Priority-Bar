@@ -106,6 +106,14 @@ struct SettingsView: View {
                 get: { model.pulsesMutedMicrophone },
                 set: { model.setPulsesMutedMicrophone($0) }
             ))
+
+            Toggle(isOn: Binding(
+                get: { model.redIconWhenManual },
+                set: { model.setRedIconWhenManual($0) }
+            )) {
+                Text("Red while automatic switching is off")
+                Text("A reminder to turn it back on.")
+            }
         }
 
         Section("Notices") {
@@ -150,7 +158,12 @@ struct SettingsView: View {
             Image(systemName: "wifi")
             Image(systemName: "speaker.wave.2.fill")
             StatusLabel(model: model)
-                .foregroundStyle(.primary)
+                .foregroundStyle(model.showsRedIconBackground ? Color.white : Color.primary)
+                .background {
+                    if model.showsRedIconBackground {
+                        ManualBackgroundShape().fill(Color(nsColor: StatusItemController.manualBackground))
+                    }
+                }
             Text(Date.now, format: .dateTime.weekday().hour().minute())
         }
         .font(.system(size: 14))
