@@ -730,7 +730,8 @@ final class StatusItemController: NSObject, NSWindowDelegate {
 
 /// The red reminder's shape: the outline's own shape, half a point inside
 /// it, so the outline's stroke covers the red edge and no red shows beyond
-/// it. Fills the whole label, including the padding outside the outline.
+/// it. The insets follow the label's 1-point outer padding and the outline's
+/// 1-point stroke, so change them together.
 struct ManualBackgroundShape: Shape {
     nonisolated func path(in rect: CGRect) -> Path {
         RoundedRectangle(cornerRadius: 3.5, style: .continuous)
