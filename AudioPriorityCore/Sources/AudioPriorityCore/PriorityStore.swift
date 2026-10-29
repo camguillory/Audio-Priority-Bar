@@ -32,6 +32,7 @@ public final class PriorityStore {
         static let menuBarDevices = "menuBarDevices"
         static let showsMenuBarVolume = "showsMenuBarVolume"
         static let pulsesMutedMicrophone = "pulsesMutedMicrophone"
+        static let redIconWhenManual = "redIconWhenManual"
         static let priorityProfiles = "priorityProfiles"
         static let activePriorityProfile = "activePriorityProfile"
         static let profileBeforeFocus = "profileBeforeFocus"
@@ -242,6 +243,12 @@ public final class PriorityStore {
     public var pulsesMutedMicrophone: Bool {
         get { defaults.object(forKey: Key.pulsesMutedMicrophone) as? Bool ?? true }
         set { defaults.set(newValue, forKey: Key.pulsesMutedMicrophone) }
+    }
+
+    /// Whether the menu bar icon turns red while automatic switching is off.
+    public var redIconWhenManual: Bool {
+        get { defaults.bool(forKey: Key.redIconWhenManual) }
+        set { defaults.set(newValue, forKey: Key.redIconWhenManual) }
     }
 
     /// Microphones this app muted and has not restored yet, by UID: the input
