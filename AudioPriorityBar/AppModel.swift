@@ -888,6 +888,9 @@ final class AppModel {
     /// output's own decision. The already-current guard below is what stops
     /// an output-to-mic-to-output cycle.
     func selectPairedDevice(of device: AudioDevice, automatically: Bool = false) {
+        // Output only holds while automatic switching keeps or switches back
+        // to that output.
+        if automatically, device.uid == selectedOnlyOutputUID { return }
         selectedOnlyOutputUID = nil
         guard selectsPairedDevice, let partner = pairedDevice(for: device) else { return }
         guard device.role == .output || !automatically else { return }
