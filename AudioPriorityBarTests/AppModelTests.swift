@@ -558,7 +558,7 @@ func speakersStayUnmutedUnlessThePlayingHeadphonesLeaveWithTheOptionOn() {
 
 @Test
 @MainActor
-func aPickInControlCenterStaysUntilADeviceConnectsOrDisconnects() {
+func aPickInControlCenterStaysUntilADeviceTheListWouldUseConnects() {
     let defaults = isolatedDefaults()
     let audio = FakeAudio()
     let speaker = output(1, "speaker")
@@ -577,10 +577,56 @@ func aPickInControlCenterStaysUntilADeviceConnectsOrDisconnects() {
     #expect(audio.selections.isEmpty)
     #expect(model.currentOutputID == speaker.platformID)
 
+    // Neither a microphone nor the headphones leaving changes what the
+    // output list would use next.
     audio.catalog.append(input(3, "usb-mic", "USB Mic"))
+    model.handleDevicesChanged()
+    audio.catalog.removeAll { $0.uid == headphones.uid }
+    model.handleDevicesChanged()
+
+    #expect(model.currentOutputID == speaker.platformID)
+
+    audio.catalog.append(headphones)
     model.handleDevicesChanged()
 
     #expect(model.currentOutputID == headphones.platformID)
+}
+
+@Test
+@MainActor
+func aJabraHeadsetEndsAPickOnlyOnceItsCheckSaysItIsOn() {
+    let audio = FakeAudio()
+    let speaker = output(1, "speaker")
+    let monitor = output(2, "monitor", "Studio Monitor")
+    let jabra = output(3, "jabra", "Jabra Link 380")
+    audio.catalog = [speaker, monitor]
+    var linkState: LinkState = .checking
+    let model = testModel(
+        audio: audio,
+        defaults: isolatedDefaults(),
+        usable: { device in
+            device.uid == jabra.uid
+                ? JabraLink.allowsSelection(isSupported: true, state: linkState)
+                : true
+        },
+        state: { $0.uid == jabra.uid ? linkState : nil }
+    )
+    model.start()
+    let other = model.currentOutputID == speaker.platformID ? monitor : speaker
+    model.selectManually(other)
+    model.handleDefaultChanged(.output)
+
+    audio.catalog.append(jabra)
+    model.handleDevicesChanged()
+    #expect(model.currentOutputID == other.platformID)
+
+    linkState = .down
+    model.handleLinkChanged()
+    #expect(model.currentOutputID == other.platformID)
+
+    linkState = .up
+    model.handleLinkChanged()
+    #expect(model.currentOutputID == jabra.platformID)
 }
 
 @Test

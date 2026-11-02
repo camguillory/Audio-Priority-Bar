@@ -157,10 +157,13 @@ final class AppModel {
     /// Keeps "Output only" intact when CoreAudio echoes our own default change.
     /// Held by UID because platform IDs are recycled across devices.
     var selectedOnlyOutputUID: String?
-    /// Devices picked in Control Center or Sound Settings, or that macOS keeps
-    /// switching to, by role and UID. Automatic mode keeps them until a device
-    /// connects or disconnects.
+    /// Devices picked in the panel, Control Center or Sound Settings, or that
+    /// macOS keeps switching to, by role and UID. Automatic mode keeps them
+    /// until they leave or the list would use a device that connects later.
     var keptPicks: [DeviceRole: String] = [:]
+    /// The UIDs connected when each role's pick was kept that are still
+    /// connected, so a device outside them connected after the pick.
+    private var connectedAtPick: [DeviceRole: Set<String>] = [:]
     /// When the app last switched each role back after macOS or another app
     /// moved it.
     var switchedBackAt: [DeviceRole: TimeInterval] = [:]
@@ -366,7 +369,7 @@ final class AppModel {
                 announceAutomaticSwitches(since: moved)
                 return
             }
-            keptPicks[role] = currentUID
+            keepPick(currentUID, for: role)
         }
         if role == .output, let output = currentOutputDevice {
             selectPairedDevice(of: output, automatically: !isManualMode)
@@ -429,19 +432,7 @@ final class AppModel {
         }
         let inputUIDs = Set(connected.lazy.filter { $0.role == .input }.map(\.uid))
         let outputUIDs = Set(connected.lazy.filter { $0.role == .output }.map(\.uid))
-        // A kept device's other half arriving, as a Bluetooth headset's
-        // microphone a moment after its output, is not a new device.
-        let kept = connected.filter { keptPicks[$0.role] == $0.uid }
-        let onlyKeptHalvesArrived = connectedInputUIDs.isSubset(of: inputUIDs)
-            && connectedOutputUIDs.isSubset(of: outputUIDs)
-            && connected.allSatisfy { device in
-                (device.role == .input ? connectedInputUIDs : connectedOutputUIDs)
-                    .contains(device.uid)
-                    || kept.contains { $0.isSameDevice(as: device) }
-            }
-        if inputUIDs != connectedInputUIDs || outputUIDs != connectedOutputUIDs,
-           !onlyKeptHalvesArrived {
-            keptPicks = [:]
+        if inputUIDs != connectedInputUIDs || outputUIDs != connectedOutputUIDs {
             switchedBackAt = [:]
             takeoverUIDs = [:]
         }
@@ -508,6 +499,31 @@ final class AppModel {
             },
             microphonesFor: microphoneOrderCategory
         )
+        endOvertakenPicks()
+    }
+
+    /// Keeps `uid` for `role` until it leaves or the list would use a device
+    /// that connects after it.
+    func keepPick(_ uid: String, for role: DeviceRole) {
+        keptPicks[role] = uid
+        connectedAtPick[role] = role == .input ? connectedInputUIDs : connectedOutputUIDs
+    }
+
+    /// Drops a pick whose device left, and ends every pick once the list
+    /// would use a device that connected after it, as a headset plugged in
+    /// mid-call. Other devices coming or going leave picks alone.
+    private func endOvertakenPicks() {
+        guard !keptPicks.isEmpty else { return }
+        for role in DeviceRole.allCases {
+            let connected = role == .input ? connectedInputUIDs : connectedOutputUIDs
+            if let uid = keptPicks[role], !connected.contains(uid) { keptPicks[role] = nil }
+            connectedAtPick[role]?.formIntersection(connected)
+        }
+        let overtaken = keptPicks.keys.contains { role in
+            automaticTarget(for: role, honoringPicks: false)
+                .map { connectedAtPick[role]?.contains($0.uid) == false } ?? false
+        }
+        if overtaken { keptPicks = [:] }
     }
 
     /// The category whose microphone order the panel shows and edits.
@@ -752,10 +768,14 @@ final class AppModel {
     }
 
     var automaticOutputDecision: AutomaticOutputDecision {
+        outputDecision(honoringPicks: true)
+    }
+
+    private func outputDecision(honoringPicks: Bool) -> AutomaticOutputDecision {
         guard !isManualMode else {
             return AutomaticOutputDecision(target: nil, skipped: nil)
         }
-        if let uid = keptPicks[.output],
+        if honoringPicks, let uid = keptPicks[.output],
            let kept = allOutputs.first(where: { $0.uid == uid && $0.isConnected }) {
             return AutomaticOutputDecision(target: kept, skipped: nil)
         }
@@ -834,9 +854,12 @@ final class AppModel {
         if !isManualMode { applyHighestPriority(.input) }
     }
 
-    private func automaticTarget(for role: DeviceRole) -> AudioDevice? {
+    private func automaticTarget(
+        for role: DeviceRole,
+        honoringPicks: Bool = true
+    ) -> AudioDevice? {
         if role == .input {
-            if let uid = keptPicks[.input],
+            if honoringPicks, let uid = keptPicks[.input],
                let kept = inputDevices.first(where: { $0.uid == uid && $0.isConnected }) {
                 return kept
             }
@@ -854,7 +877,7 @@ final class AppModel {
                 isUsable: link.isUsable
             )
         }
-        return automaticOutputDecision.target
+        return outputDecision(honoringPicks: honoringPicks).target
     }
 
     @discardableResult

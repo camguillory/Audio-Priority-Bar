@@ -693,20 +693,24 @@ func outputOnlyHoldsThroughASwitchBack() {
 
 @Test
 @MainActor
-func aDeviceConnectingEndsAnOutputOnlyPick() {
+func onlyADeviceTheListWouldUseEndsAnOutputOnlyPick() {
     let desk = HeadsetDesk()
     let model = desk.model()
     model.selectOnly(desk.headset.output)
     model.handleDefaultChanged(.output)
-    // The headset becomes the list's only choice.
-    model.store.setNeverUse(desk.headset.output, false)
-    model.store.setNeverUse(desk.speaker, true)
 
     desk.audio.catalog.append(input(103, "usb-mic", "USB Mic"))
     model.handleDevicesChanged()
 
     #expect(model.currentOutputID == desk.headset.output.platformID)
-    #expect(model.currentInputID == desk.headset.input.platformID)
+    #expect(model.currentInputID == desk.macMic.platformID)
+
+    let airPods = output(4, "airpods", "AirPods Pro")
+    desk.audio.catalog.append(airPods)
+    model.handleDevicesChanged()
+
+    #expect(model.currentOutputID == airPods.platformID)
+    #expect(model.keptPicks.isEmpty)
 }
 
 @Test
