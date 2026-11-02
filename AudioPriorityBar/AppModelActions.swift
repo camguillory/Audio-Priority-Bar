@@ -66,6 +66,12 @@ extension AppModel {
         store.mutesSpeakersWhenHeadphonesDisconnect = enabled
     }
 
+    func setLightsBusylightWhileRecording(_ enabled: Bool) {
+        lightsBusylightWhileRecording = enabled
+        store.lightsBusylightWhileRecording = enabled
+        updateAutomaticBusylights()
+    }
+
     func setOutlinesMenuBarIcon(_ enabled: Bool) {
         outlinesMenuBarIcon = enabled
         store.outlinesMenuBarIcon = enabled

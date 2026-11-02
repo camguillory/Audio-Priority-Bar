@@ -24,6 +24,20 @@ final class JabraHIDMonitor {
         var legacyElement: IOHIDElement?
         var management: JabraGNP.Layout?
         var managementOutput: IOHIDElement?
+        var offHook: IOHIDElement?
+        var muteLight: IOHIDElement?
+        var phoneMute: IOHIDElement?
+        var hookSwitch: IOHIDElement?
+        /// Jabra's own copy of the telephony controls, which Jabra Direct's
+        /// call app plugins such as Zoom's use instead of the standard ones.
+        var jabraHookSwitch: IOHIDElement?
+        var hasHookSwitch: Bool { hookSwitch != nil || jabraHookSwitch != nil }
+        /// The microphone line, on each page.
+        var line: IOHIDElement?
+        var jabraLine: IOHIDElement?
+        var watchesTelephony: Bool {
+            phoneMute != nil || hasHookSwitch || line != nil || jabraLine != nil
+        }
         var reassembler = JabraGNP.Reassembler()
         var buffer: UnsafeMutablePointer<UInt8>?
         var bufferSize = 0
@@ -89,11 +103,13 @@ final class JabraHIDMonitor {
         /// The headset's battery percentage, nil until it answers.
         var battery: Int?
         var lastBatteryQueryAt: TimeInterval = -.greatestFiniteMagnitude
+        var session: HeadsetSession
 
-        init(key: String, serial: String?, attachedAt: TimeInterval) {
+        init(key: String, serial: String?, attachedAt: TimeInterval, remembersMute: Bool) {
             self.key = key
             self.serial = serial
             self.attachedAt = attachedAt
+            session = HeadsetSession(remembersMute: remembersMute)
         }
 
         var managementInterface: Interface? {
@@ -111,7 +127,8 @@ final class JabraHIDMonitor {
     }
 
     var onLinkChange: (() -> Void)?
-    var onBatteryChange: (() -> Void)?
+    /// The headset's battery or one of its controls changed.
+    var onHeadsetChange: (() -> Void)?
 
     private var manager: IOHIDManager?
     private var pollTimer: Timer?
@@ -139,6 +156,12 @@ final class JabraHIDMonitor {
     /// The headset also reports a changed level on its own, so asking is only
     /// the backstop.
     private static let batteryRefreshInterval: TimeInterval = 60
+    /// The headset reports its mute only when it changes, so the last report
+    /// is kept for a relaunch during the same call.
+    private static let mutedKey = "headsetMicMutedDongle"
+    /// Jabra's vendor copy of the telephony page.
+    private static let jabraTelephonyPage = 0xff30
+    private let defaults = UserDefaults.standard
 
     // MARK: - Lifecycle
 
@@ -195,6 +218,7 @@ final class JabraHIDMonitor {
             dongle.pendingDown = nil
             dongle.query?.timeout?.cancel()
             dongle.query = nil
+            run(dongle, .stop)
             for interface in dongle.interfaces.values { tearDown(interface) }
         }
         dongles.removeAll()
@@ -244,6 +268,147 @@ final class JabraHIDMonitor {
         return dongle.battery
     }
 
+    func headsetControls(for device: AudioDevice) -> JabraGNP.HeadsetControls? {
+        guard case let .one(dongle) = binding(for: device),
+              Self.state(of: dongle) == .up else { return nil }
+        return dongle.session.shownControls
+    }
+
+    func setNoiseMode(_ mode: JabraGNP.NoiseMode, for device: AudioDevice) {
+        guard case let .one(dongle) = binding(for: device) else { return }
+        run(dongle, .setNoiseMode(mode))
+    }
+
+    func setSidetone(_ isOn: Bool, for device: AudioDevice) {
+        guard case let .one(dongle) = binding(for: device) else { return }
+        run(dongle, .setSidetone(isOn))
+    }
+
+    /// Lights or clears the busylight, as its button on the headset does.
+    func setBusy(_ isBusy: Bool, for device: AudioDevice) {
+        guard case let .one(dongle) = binding(for: device) else { return }
+        run(dongle, .setBusy(isBusy))
+    }
+
+    /// Ends a call the headset's call button started.
+    func endHeadsetCall(for device: AudioDevice) {
+        guard case let .one(dongle) = binding(for: device) else { return }
+        run(dongle, .endCall)
+    }
+
+    // MARK: - Headset session
+
+    /// Feeds the session one input and carries out what it asks for.
+    private func run(_ dongle: Dongle, _ input: HeadsetSession.Input) {
+        let effects = dongle.session.handle(input, at: ProcessInfo.processInfo.systemUptime)
+        var changed = false
+        for effect in effects {
+            if effect == .changed { changed = true } else { perform(effect, for: dongle) }
+        }
+        if changed, isRunning { onHeadsetChange?() }
+    }
+
+    private func perform(_ effect: HeadsetSession.Effect, for dongle: Dongle) {
+        switch effect {
+        case let .send(kind, group, op, arguments):
+            if !sendToHeadset(dongle, kind: kind, group: group, op: op, arguments: arguments) {
+                run(dongle, .failed(effect))
+            }
+        case let .setLight(light, isOn):
+            if !setLight(dongle, light == .offHook ? \.offHook : \.muteLight, isOn) {
+                run(dongle, .failed(effect))
+            }
+        case .readMuteLight:
+            run(dongle, .muteLight(muteLight(dongle)))
+        case .readSignals:
+            run(dongle, .signals(readCallSignals(dongle)))
+        case let .wake(.endCall, delay):
+            // Not tied to the dongle's generation: the lights must go off
+            // even if an interface comes or goes meanwhile.
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                MainActor.assumeIsolated { self?.run(dongle, .wake(.endCall)) }
+            }
+        case let .wake(wake, delay):
+            // Queued writes drain even if another of the dongle's interfaces
+            // attaches meanwhile, or later clicks would wait behind them.
+            afterDelay(dongle, delay, sameGeneration: wake != .writesDue) { $0.run($1, .wake(wake)) }
+        case let .rememberMute(isMuted):
+            if isMuted {
+                defaults.set(dongle.key, forKey: Self.mutedKey)
+            } else if defaults.string(forKey: Self.mutedKey) == dongle.key {
+                defaults.removeObject(forKey: Self.mutedKey)
+            }
+        case .changed:
+            break
+        }
+    }
+
+    @discardableResult
+    private func setLight(
+        _ dongle: Dongle,
+        _ light: KeyPath<Interface, IOHIDElement?>,
+        _ isOn: Bool
+    ) -> Bool {
+        guard let interface = dongle.interfaces.values.first(where: { $0[keyPath: light] != nil }),
+              let element = interface[keyPath: light] else { return false }
+        let value = IOHIDValueCreateWithIntegerValue(kCFAllocatorDefault, element, 0, isOn ? 1 : 0)
+        return IOHIDDeviceSetValue(interface.device, element, value) == kIOReturnSuccess
+    }
+
+    private func readCallSignals(_ dongle: Dongle) -> HeadsetSession.Signals {
+        func read(_ element: KeyPath<Interface, IOHIDElement?>) -> Bool? {
+            for interface in dongle.interfaces.values {
+                if let element = interface[keyPath: element],
+                   let value = Self.integerValue(interface.device, element) {
+                    return value != 0
+                }
+            }
+            return nil
+        }
+        return HeadsetSession.Signals(
+            standardHook: read(\.hookSwitch),
+            jabraHook: read(\.jabraHookSwitch),
+            standardLine: read(\.line),
+            jabraLine: read(\.jabraLine)
+        )
+    }
+
+    private func muteLight(_ dongle: Dongle) -> Bool? {
+        guard let interface = dongle.interfaces.values.first(where: { $0.muteLight != nil }),
+              let light = interface.muteLight else { return nil }
+        return Self.integerValue(interface.device, light).map { $0 != 0 }
+    }
+
+    /// Runs `body` later unless the dongle has gone or, with `sameGeneration`,
+    /// changed meanwhile.
+    private func afterDelay(
+        _ dongle: Dongle,
+        _ delay: TimeInterval,
+        sameGeneration: Bool = true,
+        _ body: @escaping @MainActor (JabraHIDMonitor, Dongle) -> Void
+    ) {
+        let key = dongle.key
+        let generation = dongle.generation
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+            MainActor.assumeIsolated {
+                guard let self,
+                      self.isRunning,
+                      let current = self.dongles[key],
+                      !sameGeneration || current.generation == generation else { return }
+                body(self, current)
+            }
+        }
+    }
+
+    /// Events keep the controls current once subscribed. Opening the panel
+    /// reads them again in case another app reset the subscription, and
+    /// reads the Mute light, which another call app changes silently.
+    func refreshHeadsetControls() {
+        for dongle in dongles.values where Self.state(of: dongle) == .up {
+            run(dongle, .refresh)
+        }
+    }
+
     /// Binds an audio device to at most one physical dongle. The USB serial in
     /// the CoreAudio UID is preferred because it is exact; the product name is
     /// only consulted when the serial cannot identify anything, and then only
@@ -285,13 +450,21 @@ final class JabraHIDMonitor {
         let interface = Interface(device: device, profile: profile)
         interface.management = management?.layout
         interface.managementOutput = management?.output
+        interface.offHook = Self.telephonyElement(device, kHIDPage_LEDs, kHIDUsage_LED_OffHook, output: true)
+        interface.muteLight = Self.telephonyElement(device, kHIDPage_LEDs, kHIDUsage_LED_Mute, output: true)
+        interface.phoneMute = Self.telephonyElement(device, kHIDPage_Telephony, kHIDUsage_Tfon_PhoneMute, output: false)
+        interface.hookSwitch = Self.telephonyElement(device, kHIDPage_Telephony, kHIDUsage_Tfon_HookSwitch, output: false)
+        interface.jabraHookSwitch = Self.telephonyElement(device, Self.jabraTelephonyPage, kHIDUsage_Tfon_HookSwitch, output: false)
+        interface.line = Self.telephonyElement(device, kHIDPage_Telephony, kHIDUsage_Tfon_Line, output: false)
+        interface.jabraLine = Self.telephonyElement(device, Self.jabraTelephonyPage, kHIDUsage_Tfon_Line, output: false)
 
         let identity = Self.identity(of: device)
         let uptime = ProcessInfo.processInfo.systemUptime
         let dongle = dongles[identity.key] ?? Dongle(
             key: identity.key,
             serial: identity.serial,
-            attachedAt: uptime
+            attachedAt: uptime,
+            remembersMute: defaults.string(forKey: Self.mutedKey) == identity.key
         )
         if dongles[identity.key] == nil {
             dongles[identity.key] = dongle
@@ -316,11 +489,6 @@ final class JabraHIDMonitor {
                 ) as? [IOHIDElement]
             )?.first {
                 interface.legacyElement = element
-                IOHIDDeviceRegisterInputValueCallback(
-                    device,
-                    Self.valueCallback,
-                    context
-                )
                 if let linked = Self.readLinked(
                     device: device,
                     element: element,
@@ -329,6 +497,12 @@ final class JabraHIDMonitor {
                     _ = dongle.legacy.seed(linked)
                 }
             }
+        }
+
+        // One callback per device carries the link element and the
+        // telephony controls.
+        if interface.legacyElement != nil || interface.watchesTelephony {
+            IOHIDDeviceRegisterInputValueCallback(device, Self.valueCallback, context)
         }
 
         if case let .report(reportID, byteIndex, bitMask)? = profile?.signal {
@@ -406,7 +580,7 @@ final class JabraHIDMonitor {
     }
 
     private func tearDown(_ interface: Interface) {
-        if interface.legacyElement != nil {
+        if interface.legacyElement != nil || interface.watchesTelephony {
             IOHIDDeviceRegisterInputValueCallback(interface.device, nil, nil)
         }
         if let buffer = interface.buffer {
@@ -630,9 +804,11 @@ final class JabraHIDMonitor {
         refresh(dongle)
         if evidence == .connected {
             requestBattery(dongle)
+            if dongle.session.shownControls == nil { run(dongle, .refresh) }
         } else if evidence == .disconnected {
             // The next headset to connect may not be this one.
             dongle.lastBatteryQueryAt = -.greatestFiniteMagnitude
+            run(dongle, .disconnected)
             updateBattery(dongle, nil)
         }
         if dongle.requeryWhenIdle {
@@ -648,15 +824,37 @@ final class JabraHIDMonitor {
         let now = ProcessInfo.processInfo.systemUptime
         guard dongle.battery == nil
                 || now - dongle.lastBatteryQueryAt >= Self.batteryRefreshInterval,
-              let interface = dongle.managementInterface,
+              sendToHeadset(dongle, group: JabraGNP.statusGroup, op: JabraGNP.batteryOp)
+        else { return }
+        dongle.lastBatteryQueryAt = now
+    }
+
+    private func updateBattery(_ dongle: Dongle, _ level: Int?) {
+        guard dongle.battery != level else { return }
+        dongle.battery = level
+        if isRunning { onHeadsetChange?() }
+    }
+
+    /// Sends one message to the headset without waiting: the dongle answers
+    /// back-to-back messages in order.
+    @discardableResult
+    private func sendToHeadset(
+        _ dongle: Dongle,
+        kind: UInt8 = JabraGNP.queryKind,
+        group: UInt8,
+        op: UInt8,
+        arguments: [UInt8] = []
+    ) -> Bool {
+        guard let interface = dongle.managementInterface,
               let layout = interface.management,
               let output = interface.managementOutput,
               let body = JabraGNP.encodeQuery(
                   destination: JabraGNP.headsetAddress,
                   sequence: nextSequence(),
-                  group: JabraGNP.statusGroup,
-                  op: JabraGNP.batteryOp,
-                  arguments: [],
+                  kind: kind,
+                  group: group,
+                  op: op,
+                  arguments: arguments,
                   frameLength: layout.outputFrameLength
               ),
               let value = IOHIDValueCreateWithBytes(
@@ -665,15 +863,8 @@ final class JabraHIDMonitor {
                   0,
                   body,
                   body.count
-              ) else { return }
-        dongle.lastBatteryQueryAt = now
-        _ = IOHIDDeviceSetValue(interface.device, output, value)
-    }
-
-    private func updateBattery(_ dongle: Dongle, _ level: Int?) {
-        guard dongle.battery != level else { return }
-        dongle.battery = level
-        if isRunning { onBatteryChange?() }
+              ) else { return false }
+        return IOHIDDeviceSetValue(interface.device, output, value) == kIOReturnSuccess
     }
 
     /// The dongle announced that a remembered device connected or
@@ -706,6 +897,10 @@ final class JabraHIDMonitor {
             }
             if let level = JabraGNP.batteryLevel(message) {
                 updateBattery(dongle, level)
+                return
+            }
+            if message.source == JabraGNP.headsetAddress {
+                run(dongle, .message(message))
                 return
             }
             guard let query = dongle.query,
@@ -805,6 +1000,22 @@ final class JabraHIDMonitor {
         return ("product:\(productID)/location:\(location)", nil)
     }
 
+    /// A telephony control. The Mute light confirms a mute the headset
+    /// asked for with its Phone Mute button.
+    private static func telephonyElement(
+        _ device: IOHIDDevice,
+        _ page: Int,
+        _ usage: Int,
+        output: Bool
+    ) -> IOHIDElement? {
+        let match: [String: Any] = [
+            kIOHIDElementUsagePageKey: page,
+            kIOHIDElementUsageKey: usage,
+        ]
+        return (IOHIDDeviceCopyMatchingElements(device, match as CFDictionary, 0) as? [IOHIDElement])?
+            .first { (IOHIDElementGetType($0) == kIOHIDElementTypeOutput) == output }
+    }
+
     private static func managementLayout(
         _ device: IOHIDDevice
     ) -> (layout: JabraGNP.Layout, output: IOHIDElement)? {
@@ -845,6 +1056,17 @@ final class JabraHIDMonitor {
                       && $0.bytes == layout.outputFrameLength
               }) else { return nil }
         return (layout, output.element)
+    }
+
+    private static func integerValue(_ device: IOHIDDevice, _ element: IOHIDElement) -> Int? {
+        var value: Unmanaged<IOHIDValue>?
+        let status = withUnsafeMutablePointer(to: &value) {
+            $0.withMemoryRebound(to: Unmanaged<IOHIDValue>.self, capacity: 1) {
+                IOHIDDeviceGetValue(device, element, $0)
+            }
+        }
+        guard status == kIOReturnSuccess, let value = value?.takeUnretainedValue() else { return nil }
+        return IOHIDValueGetIntegerValue(value)
     }
 
     private static func readLinked(
@@ -959,8 +1181,22 @@ final class JabraHIDMonitor {
         let integer = IOHIDValueGetIntegerValue(value)
         onMain(context: context, deviceAddress: deviceAddress) {
             monitor, device in
-            guard let (dongle, interface) = monitor.current(device),
-                  let expected = interface.legacyElement,
+            guard let (dongle, interface) = monitor.current(device) else { return }
+            if let phoneMute = interface.phoneMute, IOHIDElementGetCookie(phoneMute) == cookie {
+                if integer == 1 { monitor.run(dongle, .muteRequest) }
+                return
+            }
+            let signals: [(KeyPath<Interface, IOHIDElement?>, HeadsetSession.Signal)] = [
+                (\.hookSwitch, .standardHook), (\.jabraHookSwitch, .jabraHook),
+                (\.line, .standardLine), (\.jabraLine, .jabraLine),
+            ]
+            for (element, signal) in signals {
+                if let element = interface[keyPath: element], IOHIDElementGetCookie(element) == cookie {
+                    monitor.run(dongle, .signal(signal, integer != 0))
+                    return
+                }
+            }
+            guard let expected = interface.legacyElement,
                   IOHIDElementGetCookie(expected) == cookie,
                   case let .element(_, _, linkedValue)? = interface.profile?.signal
             else { return }

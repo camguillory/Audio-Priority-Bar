@@ -24,6 +24,12 @@ struct LinkOperations {
     let isUsable: (AudioDevice) -> Bool
     let state: (AudioDevice) -> LinkState?
     var battery: (AudioDevice) -> Int? = { _ in nil }
+    var headsetControls: (AudioDevice) -> JabraGNP.HeadsetControls? = { _ in nil }
+    var setNoiseMode: (JabraGNP.NoiseMode, AudioDevice) -> Void = { _, _ in }
+    var setSidetone: (Bool, AudioDevice) -> Void = { _, _ in }
+    var setBusy: (Bool, AudioDevice) -> Void = { _, _ in }
+    var endHeadsetCall: (AudioDevice) -> Void = { _ in }
+    var refreshHeadsetControls: () -> Void = {}
 }
 
 enum OutputSkipReason: Equatable {
@@ -114,6 +120,7 @@ final class AppModel {
     var showsSwitchNotice: Bool
     var remindsWhenMuted: Bool
     var mutesSpeakersWhenHeadphonesDisconnect: Bool
+    var lightsBusylightWhileRecording: Bool
     var outlinesMenuBarIcon: Bool
     var menuBarDevices: MenuBarDevices
     var showsMenuBarVolume: Bool
@@ -176,6 +183,17 @@ final class AppModel {
     /// without this a row only redraws its badge when something else
     /// (like hover) forces its body to re-run.
     private var linkRevision = 0
+    /// Headset busylights the app lit for a recording, by output UID, true
+    /// once the headset shows it lit.
+    private var litBusylights: [String: Bool] = [:]
+    /// Lit for a recording and cleared by the wearer, so left off until the
+    /// recording stops.
+    private var declinedBusylights: Set<String> = []
+    private var busylightTask: Task<Void, Never>?
+    /// Headset rows with the microphone line open, by output UID, and those
+    /// whose line opened with no app recording, so by the call button.
+    private var openLineUIDs: Set<String> = []
+    private var headsetCallUIDs: Set<String> = []
 
     init(
         store: PriorityStore = PriorityStore(),
@@ -200,6 +218,7 @@ final class AppModel {
         showsSwitchNotice = store.showsSwitchNotice
         remindsWhenMuted = store.remindsWhenMuted
         mutesSpeakersWhenHeadphonesDisconnect = store.mutesSpeakersWhenHeadphonesDisconnect
+        lightsBusylightWhileRecording = store.lightsBusylightWhileRecording
         outlinesMenuBarIcon = store.outlinesMenuBarIcon
         menuBarDevices = store.menuBarDevices
         showsMenuBarVolume = store.showsMenuBarVolume
@@ -226,6 +245,8 @@ final class AppModel {
     func stop() {
         muteVolumeRefreshTask?.cancel()
         muteVolumeRefreshTask = nil
+        busylightTask?.cancel()
+        busylightTask = nil
         micFlashTimer?.invalidate()
         micFlashTimer = nil
         micFlashState = false
@@ -599,6 +620,7 @@ final class AppModel {
         } ?? false
         isInputRecording = currentInputID.map(audio.isRunning) ?? false
         updateMicFlash()
+        scheduleAutomaticBusylights()
     }
 
     /// Headphones that run out of battery or drop out leave the sound on the
@@ -736,9 +758,112 @@ final class AppModel {
         return link.battery(device).map { BatteryLevels(headset: $0) }
     }
 
-    /// A Jabra headset reported a new battery level.
-    func handleBatteryChanged() {
+    /// A Jabra headset reported a new battery level or control value.
+    func handleHeadsetChanged() {
         linkRevision &+= 1
+        classifyOpenLines()
+        scheduleAutomaticBusylights()
+    }
+
+    /// Decides once, as the line opens, whether the headset or an app opened
+    /// it. A line an app opened can stay open a few seconds after it stops
+    /// recording, which must not turn it into a call.
+    func classifyOpenLines() {
+        for output in speakerDevices + headphoneDevices {
+            let uid = output.uid
+            guard link.headsetControls(output)?.isLineOpen == true else {
+                openLineUIDs.remove(uid)
+                headsetCallUIDs.remove(uid)
+                continue
+            }
+            guard openLineUIDs.insert(uid).inserted else { continue }
+            let isRecording = pairedDevice(for: output).map { audio.isRunning($0.platformID) } == true
+            if !isRecording { headsetCallUIDs.insert(uid) }
+        }
+    }
+
+    /// An app starting or stopping a recording can close and reopen the
+    /// microphone for a moment, 0.4s seen with Voice Memos, so the busylight
+    /// follows it only once it has held for a second.
+    private func scheduleAutomaticBusylights() {
+        busylightTask?.cancel()
+        busylightTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(1))
+            guard let self, !Task.isCancelled else { return }
+            updateAutomaticBusylights()
+        }
+    }
+
+    /// Lights a Jabra headset's busylight while an app records from its
+    /// microphone, for calls in apps that never signal one, and clears it
+    /// when the recording stops unless something else had lit it.
+    /// ponytail: any app recording counts, dictation too; asking which
+    /// processes record (macOS 14.2+) would keep it to calling apps.
+    func updateAutomaticBusylights() {
+        for output in speakerDevices + headphoneDevices {
+            guard let isBusy = link.headsetControls(output)?.isBusy else { continue }
+            let uid = output.uid
+            let isRecording = lightsBusylightWhileRecording
+                && pairedDevice(for: output).map { audio.isRunning($0.platformID) } == true
+            switch (isRecording, litBusylights[uid]) {
+            case (false, let lit):
+                litBusylights[uid] = nil
+                declinedBusylights.remove(uid)
+                if lit != nil, isBusy { link.setBusy(false, output) }
+            case (true, nil):
+                guard !isBusy, !declinedBusylights.contains(uid) else { continue }
+                litBusylights[uid] = false
+                link.setBusy(true, output)
+            case (true, false?):
+                if isBusy { litBusylights[uid] = true }
+            case (true, true?):
+                guard !isBusy else { continue }
+                litBusylights[uid] = nil
+                declinedBusylights.insert(uid)
+            }
+        }
+    }
+
+    /// Clears the busylights the app lit, while the headset can still hear.
+    func releaseAutomaticBusylights() {
+        busylightTask?.cancel()
+        for output in speakerDevices + headphoneDevices where litBusylights[output.uid] != nil {
+            link.setBusy(false, output)
+        }
+        litBusylights.removeAll()
+    }
+
+    /// A Jabra headset's noise mode and sidetone, shown once on its Link
+    /// dongle's output row rather than on the microphone row too.
+    func headsetControls(for device: AudioDevice) -> JabraGNP.HeadsetControls? {
+        _ = linkRevision
+        guard device.role == .output, device.isConnected else { return nil }
+        var controls = link.headsetControls(device)
+        controls?.isHeadsetCall = headsetCallUIDs.contains(device.uid)
+        return controls
+    }
+
+    func setNoiseMode(_ mode: JabraGNP.NoiseMode, for device: AudioDevice) {
+        link.setNoiseMode(mode, device)
+    }
+
+    func setSidetone(_ isOn: Bool, for device: AudioDevice) {
+        link.setSidetone(isOn, device)
+    }
+
+    func setBusy(_ isBusy: Bool, for device: AudioDevice) {
+        link.setBusy(isBusy, device)
+    }
+
+    /// Only a call the headset's call button started: another app's call
+    /// is that app's to end.
+    func endHeadsetCall(for device: AudioDevice) {
+        guard headsetControls(for: device)?.isHeadsetCall == true else { return }
+        link.endHeadsetCall(device)
+    }
+
+    func refreshHeadsetControls() {
+        link.refreshHeadsetControls()
     }
 
     func linkState(for device: AudioDevice) -> LinkState? {

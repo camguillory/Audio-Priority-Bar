@@ -36,6 +36,9 @@ public enum JabraGNP {
     public static let kindMask: UInt8 = 0xc0
     public static let lengthMask: UInt8 = 0x3f
     public static let queryKind: UInt8 = 0x40
+    /// Changes a setting. The headset acknowledges it separately, and a query
+    /// sent right after already reads the new value.
+    public static let writeKind: UInt8 = 0x80
     public static let replyKind: UInt8 = 0xc0
     /// Unsolicited notifications carry a zero kind and are never replies.
     public static let eventKind: UInt8 = 0x00
@@ -158,7 +161,7 @@ public enum JabraGNP {
 
     // MARK: - Encoding
 
-    /// Builds the body of one query, zero padded to a single frame.
+    /// Builds the body of one query or write, zero padded to a single frame.
     ///
     /// Returns nil when the arguments would not fit. Every command this app
     /// sends is a few bytes, so overflow is a programming error rather than a
@@ -167,6 +170,7 @@ public enum JabraGNP {
     public static func encodeQuery(
         destination: UInt8 = dongleAddress,
         sequence: UInt8,
+        kind: UInt8 = queryKind,
         group: UInt8,
         op: UInt8,
         arguments: [UInt8],
@@ -180,7 +184,7 @@ public enum JabraGNP {
             destination,
             hostAddress,
             sequence,
-            queryKind | UInt8(declared),
+            kind | UInt8(declared),
             group,
             op,
         ]
@@ -315,6 +319,318 @@ public enum JabraGNP {
               message.arguments.count >= 2,
               message.arguments[1] <= 100 else { return nil }
         return Int(message.arguments[1])
+    }
+
+    // MARK: - Headset settings
+
+    /// Settings the headset keeps itself. Every client on the dongle receives
+    /// every reply, so another app's reads keep these current too. Each op
+    /// means the same on every headset that has the setting, and one that
+    /// lacks it refuses the read, so answering is what makes it supported.
+    public static let settingsGroup: UInt8 = 0x13
+    public static let noiseModeOp: UInt8 = 0x87
+    public static let sidetoneOp: UInt8 = 0x7c
+    /// On-ear detection, 01 on. While on, the headset darkens its busylight
+    /// whenever it is off the head, keeping the busy state as it was.
+    public static let headDetectionOp: UInt8 = 0x92
+
+    /// Noise control on headsets that keep it here rather than at 0x87:
+    /// asked with `[01]`, answered with one byte, 01 off, 02 HearThrough and
+    /// 04 noise cancellation, written as `[01, value]`, and announced as
+    /// `[09, 01, value]` once bit 9 of the event mask is set. Not measured:
+    /// no such headset was at hand, and an Evolve2 85 refuses both the op
+    /// and the bit.
+    public static let ambienceModeOp: UInt8 = 0xbe
+    private static let ambienceSelector: UInt8 = 0x01
+    public static let ambienceChangesBit: UInt8 = 9
+
+    /// The arguments a read of `op` needs.
+    public static func readArguments(for op: UInt8) -> [UInt8] {
+        op == ambienceModeOp ? [ambienceSelector] : []
+    }
+
+    public static func ambienceArguments(_ mode: NoiseMode) -> [UInt8] {
+        [ambienceSelector, mode.ambienceByte]
+    }
+    /// In the status group: 01 while the headset is busy, in a call or with
+    /// its busylight turned on by hand, 00 otherwise.
+    public static let busyOp: UInt8 = 0x08
+
+    /// Lights or clears the busylight as the wearer's own choice, the one
+    /// its button makes, so either undoes the other. A second byte of 01
+    /// marks a presence status instead, which the headset ignores once the
+    /// wearer has chosen.
+    public static func busyArguments(_ isBusy: Bool) -> [UInt8] {
+        [isBusy ? 0x01 : 0x00, 0x00]
+    }
+
+    /// Four bytes, big-endian, naming the kinds of event the headset sends.
+    /// It sends none until a host writes the mask, even unchanged, and then
+    /// starts with the current state of each kind.
+    public static let eventMaskOp: UInt8 = 0x4c
+    public static let settingChangesBit: UInt8 = 4
+    private static let settingChangesEvent: UInt8 = 0x04
+    private static let statusChangeEvent: UInt8 = 0x08
+    private static let boomEvent: UInt8 = 0x06
+    private static let earcupEvent: UInt8 = 0x02
+    private static let ambienceEvent: UInt8 = 0x09
+
+    /// Microphone telemetry. Op 0x00 switches it on; op 0x01 then reports
+    /// `[00, muted]` whenever the microphone mutes or unmutes, whoever
+    /// asked: the headset's button or boom, or a call app.
+    public static let telemetryGroup: UInt8 = 0x23
+    public static let telemetrySwitchOp: UInt8 = 0x00
+    private static let telemetryEventOp: UInt8 = 0x01
+    private static let micMuteTelemetry: UInt8 = 0x00
+
+    /// Adds setting changes, and noise changes for a headset that keeps its
+    /// noise control at `ambienceModeOp`. A headset without that op refuses
+    /// the whole mask when its bit is set.
+    public static func subscribedMask(_ mask: [UInt8], ambience: Bool = false) -> [UInt8] {
+        var mask = mask
+        mask[3] |= 1 << settingChangesBit
+        if ambience { mask[2] |= 1 << (ambienceChangesBit - 8) }
+        return mask
+    }
+
+    public enum NoiseMode: UInt8, CaseIterable, Sendable {
+        case off = 0x00
+        case cancelling = 0x01
+        /// HearThrough mixed with what is playing, the kind the headset's
+        /// own button picks.
+        case hearThrough = 0x03
+
+        /// 02 is HearThrough on its own, shown as HearThrough too.
+        /// ponytail: choosing HearThrough writes 03; a headset with only
+        /// the plain kind refuses it, and the read-back keeps its mode.
+        public init?(byte: UInt8) {
+            self.init(rawValue: byte == 0x02 ? 0x03 : byte)
+        }
+
+        /// The same modes as kept at `ambienceModeOp`.
+        public init?(ambienceByte: UInt8) {
+            switch ambienceByte {
+            case 0x01: self = .off
+            case 0x02: self = .hearThrough
+            case 0x04: self = .cancelling
+            default: return nil
+            }
+        }
+
+        public var ambienceByte: UInt8 {
+            switch self {
+            case .off: 0x01
+            case .hearThrough: 0x02
+            case .cancelling: 0x04
+            }
+        }
+    }
+
+    public struct Sidetone: Equatable, Sendable {
+        public var isOn: Bool
+        /// Kept as read, so switching sidetone never changes its level.
+        public let level: UInt8
+
+        public init(isOn: Bool, level: UInt8) {
+            self.isOn = isOn
+            self.level = level
+        }
+
+        /// The switch byte is inverted: 00 is on and 01 is off.
+        public var arguments: [UInt8] { [isOn ? 0x00 : 0x01, level] }
+    }
+
+    public struct HeadsetControls: Equatable, Sendable {
+        public var noiseMode: NoiseMode?
+        public var sidetone: Sidetone?
+        /// From the telephony hook switch, which a call sets and the
+        /// busylight button does not.
+        public private(set) var isInCall: Bool?
+        public var isBusy: Bool?
+        /// The microphone line, open in a call and also whenever an app
+        /// records or the headset's call button opens it without a call.
+        public var isLineOpen: Bool?
+        /// The call button opened the line with no app recording, a call of
+        /// the headset's own until the button is pressed again.
+        public var isHeadsetCall = false
+        /// The headset puts this mode back the moment a call ends, dropping
+        /// any change made during the call. Nil when the call began unseen.
+        public private(set) var modeBeforeCall: NoiseMode?
+        /// Raised, the boom mutes the microphone in a call, silencing sidetone.
+        public var isBoomUp: Bool?
+        /// The mute the headset reported itself, or failing that the one a
+        /// call app confirmed on the dongle's Mute light. Nil leaves the
+        /// boom to tell.
+        public var answeredMute: Bool?
+        public var detectsHead: Bool?
+        /// From the sensor in each earcup, nil until the headset reports it.
+        public var isLeftCupOn: Bool?
+        public var isRightCupOn: Bool?
+
+        public init(
+            noiseMode: NoiseMode? = nil,
+            sidetone: Sidetone? = nil,
+            isInCall: Bool? = nil,
+            isBoomUp: Bool? = nil
+        ) {
+            self.noiseMode = noiseMode
+            self.sidetone = sidetone
+            self.isInCall = isInCall
+            self.isBoomUp = isBoomUp
+        }
+
+        public var hasControls: Bool { noiseMode != nil || sidetone != nil }
+
+        public mutating func setInCall(_ inCall: Bool) {
+            if inCall, isInCall == false { modeBeforeCall = noiseMode }
+            if !inCall { modeBeforeCall = nil }
+            isInCall = inCall
+        }
+
+        /// The headset plays audio as in a call while its microphone line is
+        /// open, with or without one.
+        public var playsCallAudio: Bool { isInCall == true || isLineOpen == true }
+
+        /// A call from an app, or one the headset started itself.
+        public var isCalling: Bool { isInCall == true || isHeadsetCall }
+
+        /// The noise control heard now. Call audio pauses HearThrough, and
+        /// sidetone turns noise cancellation off while it plays.
+        public var audibleNoiseMode: NoiseMode? {
+            guard let noiseMode else { return nil }
+            guard playsCallAudio else { return noiseMode }
+            return noiseMode == .hearThrough || sidetone?.isOn == true ? .off : noiseMode
+        }
+
+        /// Whether choosing `mode` changes what is heard now.
+        public func isAvailable(_ mode: NoiseMode) -> Bool {
+            guard playsCallAudio else { return true }
+            switch mode {
+            case .off: return true
+            case .cancelling: return sidetone?.isOn != true
+            case .hearThrough: return false
+            }
+        }
+
+        /// Muted at the headset while its microphone line is open or its
+        /// busylight marks the user busy, the times its mute means something.
+        public var isMicMuted: Bool {
+            guard playsCallAudio || isBusy == true else { return false }
+            return answeredMute ?? (isBoomUp == true)
+        }
+
+        public var isSidetoneSilenced: Bool { sidetone?.isOn == true && isMicMuted }
+
+        /// Busy, but dark because on-ear detection sees the headset off the
+        /// head. Without detection the light shows wherever the headset is.
+        public var isBusylightDark: Bool {
+            isBusy == true && detectsHead == true
+                && isLeftCupOn == false && isRightCupOn == false
+        }
+    }
+
+    public enum HeadsetSetting: Equatable, Sendable {
+        case noiseMode(NoiseMode)
+        /// The noise mode, from a headset that keeps it at `ambienceModeOp`.
+        case ambienceMode(NoiseMode)
+        case sidetone(Sidetone)
+        case busy(Bool)
+        case inCall(Bool)
+        case lineOpen(Bool)
+        case boomUp(Bool)
+        case headDetection(Bool)
+        case earcup(isLeft: Bool, isOn: Bool)
+        case telemetryOn(Bool)
+        case eventMask([UInt8])
+    }
+
+    /// A value from the headset's answer to anyone's query, or one it sends
+    /// unasked: some headsets announce a changed setting with its value.
+    public static func headsetSetting(_ message: Message) -> HeadsetSetting? {
+        let isReply = message.kind == replyKind
+        guard message.destination == hostAddress,
+              message.source == headsetAddress,
+              isReply || message.kind == eventKind else { return nil }
+        let arguments = message.arguments
+        switch (message.group, message.op) {
+        case (settingsGroup, noiseModeOp):
+            guard arguments.count == 1,
+                  let mode = NoiseMode(byte: arguments[0]) else { return nil }
+            return .noiseMode(mode)
+        case (settingsGroup, sidetoneOp):
+            guard arguments.count == 2, arguments[0] <= 0x01 else { return nil }
+            return .sidetone(Sidetone(isOn: arguments[0] == 0x00, level: arguments[1]))
+        case (settingsGroup, headDetectionOp):
+            guard arguments.count == 1, arguments[0] <= 0x01 else { return nil }
+            return .headDetection(arguments[0] == 0x01)
+        case (settingsGroup, ambienceModeOp):
+            guard arguments.count == 1,
+                  let mode = NoiseMode(ambienceByte: arguments[0]) else { return nil }
+            return .ambienceMode(mode)
+        case (statusGroup, busyOp):
+            guard arguments.count == 1, arguments[0] <= 0x01 else { return nil }
+            return .busy(arguments[0] == 0x01)
+        case (pairingGroup, eventMaskOp):
+            // Events on this op are the subscribed ones, never the mask.
+            guard isReply, arguments.count == 4 else { return nil }
+            return .eventMask(arguments)
+        case (telemetryGroup, telemetrySwitchOp):
+            guard arguments.count == 1, arguments[0] <= 0x01 else { return nil }
+            return .telemetryOn(arguments[0] == 0x01)
+        default:
+            return nil
+        }
+    }
+
+    public enum HeadsetEvent: Equatable, Sendable {
+        /// The ops whose value changed, in the settings group.
+        case settingsChanged([UInt8])
+        case busy(Bool)
+        case boomUp(Bool)
+        case earcup(isLeft: Bool, isOn: Bool)
+        case ambienceMode(NoiseMode)
+        case micMuted(Bool)
+    }
+
+    /// An event the headset sends once subscribed: `[04, ops...]` when
+    /// settings change, `[08, status op, value]` when a status changes,
+    /// `[06, position]` for the boom: 00 raised to mute, 01 down, 02 parked
+    /// all the way up, and `[02, earcup]` when an earcup goes on or off the
+    /// head: 00 and 01 for the left one on and off, 02 and 03 for the right.
+    public static func headsetEvent(_ message: Message) -> HeadsetEvent? {
+        guard message.destination == hostAddress,
+              message.source == headsetAddress,
+              message.kind == eventKind,
+              let kind = message.arguments.first else { return nil }
+        let arguments = message.arguments
+        if message.group == telemetryGroup, message.op == telemetryEventOp {
+            // Other telemetry shares the op, speech detection among it.
+            guard kind == micMuteTelemetry, arguments.count == 2,
+                  arguments[1] <= 0x01 else { return nil }
+            return .micMuted(arguments[1] == 0x01)
+        }
+        guard message.group == pairingGroup, message.op == eventMaskOp else { return nil }
+        switch kind {
+        case settingChangesEvent:
+            return .settingsChanged(Array(arguments.dropFirst()))
+        case statusChangeEvent:
+            guard arguments.count == 3,
+                  arguments[1] == busyOp,
+                  arguments[2] <= 0x01 else { return nil }
+            return .busy(arguments[2] == 0x01)
+        case boomEvent:
+            guard arguments.count == 2, arguments[1] <= 0x02 else { return nil }
+            return .boomUp(arguments[1] != 0x01)
+        case earcupEvent:
+            guard arguments.count == 2, arguments[1] <= 0x03 else { return nil }
+            return .earcup(isLeft: arguments[1] < 0x02, isOn: arguments[1].isMultiple(of: 2))
+        case ambienceEvent:
+            guard arguments.count == 3, arguments[1] == ambienceSelector,
+                  let mode = NoiseMode(ambienceByte: arguments[2]) else { return nil }
+            return .ambienceMode(mode)
+        default:
+            return nil
+        }
     }
 
     // MARK: - Link evidence

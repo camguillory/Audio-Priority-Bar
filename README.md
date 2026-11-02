@@ -40,6 +40,7 @@
 - **Profiles.** Keep a set of device orders for each setup and switch from the panel, a shortcut, or a Focus.
 - **Bluetooth in one click.** Connect and disconnect paired speakers and headphones from the panel.
 - **Battery at a glance.** AirPods buds and case, and Jabra headsets on a Link dongle.
+- **Jabra headset settings.** Switch noise cancellation, HearThrough, sidetone and the busylight on a Jabra headset on a Link dongle, from its row, or light the busylight while an app uses its microphone. Tested on an Evolve2 85.
 - **Native.** Laid out like the macOS Sound menu, with Liquid Glass on macOS 26, VoiceOver support, and automatic updates.
 
 ## Install
@@ -213,6 +214,16 @@ Link 380 is hardware-verified. Link 390 uses the same detection but is
 unverified on hardware
 ([details](https://github.com/tobi/AudioPriorityBar/pull/32)). An
 unrecognised dongle fails open rather than being treated as off.
+
+Once the headset answers, its row also offers the settings it keeps itself:
+noise control (Off, Noise Cancellation or HearThrough), sidetone to hear your
+own voice in calls, and the busylight. While a call or an app uses the
+microphone, HearThrough isn't available, and sidetone replaces noise control
+when it's on. A call keeps the busylight on until it ends. A call started with
+the headset's call button ends from the red button on the row. **Light a Jabra
+headset's busylight while an app uses its microphone** in Settings, off by
+default, covers calls in apps that don't signal one, such as Meet or Teams in a
+browser. Tested on an Evolve2 85 behind a Link 380.
 
 </details>
 
