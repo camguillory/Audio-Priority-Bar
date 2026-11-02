@@ -330,6 +330,14 @@ struct SettingsView: View {
                 Text("Mute speakers when headphones disconnect")
                 Text("Including when they're turned off or run out of battery.")
             }
+
+            Toggle(isOn: Binding(
+                get: { model.lightsBusylightWhileRecording },
+                set: { model.setLightsBusylightWhileRecording($0) }
+            )) {
+                Text("Light a Jabra headset's busylight while an app uses its microphone")
+                Text("For calls in apps that don't signal one, such as Meet or Teams in a browser.")
+            }
         }
     }
 }

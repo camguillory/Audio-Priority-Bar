@@ -81,7 +81,13 @@ final class AppRuntime {
             link: LinkOperations(
                 isUsable: { $0.isConnected && jabra.isUsable($0) },
                 state: { jabra.monitoredState(for: $0) },
-                battery: { jabra.batteryLevel(for: $0) }
+                battery: { jabra.batteryLevel(for: $0) },
+                headsetControls: { jabra.headsetControls(for: $0) },
+                setNoiseMode: { jabra.setNoiseMode($0, for: $1) },
+                setSidetone: { jabra.setSidetone($0, for: $1) },
+                setBusy: { jabra.setBusy($0, for: $1) },
+                endHeadsetCall: { jabra.endHeadsetCall(for: $0) },
+                refreshHeadsetControls: { jabra.refreshHeadsetControls() }
             ),
             battery: BluetoothBatteryMonitor(),
             isUserPicking: SystemSoundPicker.isInUse
@@ -102,8 +108,8 @@ final class AppRuntime {
         jabra.onLinkChange = { [weak model] in
             model?.handleLinkChanged()
         }
-        jabra.onBatteryChange = { [weak model] in
-            model?.handleBatteryChanged()
+        jabra.onHeadsetChange = { [weak model] in
+            model?.handleHeadsetChanged()
         }
     }
 
@@ -120,6 +126,7 @@ final class AppRuntime {
     }
 
     func stop() {
+        model.releaseAutomaticBusylights()
         // Producers first: once they are down, no callback, timeout or debounce
         // can reach the model and restart work it just tore down.
         jabra.stop()

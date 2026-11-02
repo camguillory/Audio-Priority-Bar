@@ -1132,6 +1132,157 @@ func turningOffThePulseKeepsTheMutedMicrophoneSteady() {
     #expect(!model.micFlashState)
 }
 
+@Test
+@MainActor
+func headsetControlsShowOnceAndReachTheHeadset() {
+    let audio = FakeAudio()
+    let headphones = output(1, "link", "Jabra Link 380")
+    let microphone = input(2, "link", "Jabra Link 380")
+    audio.catalog = [headphones, microphone]
+    let controls = JabraGNP.HeadsetControls(
+        noiseMode: .hearThrough,
+        sidetone: .init(isOn: true, level: 6),
+        isInCall: true
+    )
+    var modes: [JabraGNP.NoiseMode] = []
+    var sidetones: [Bool] = []
+    var busy: [Bool] = []
+    let model = AppModel(
+        store: PriorityStore(defaults: isolatedDefaults()),
+        audio: audio.operations,
+        link: LinkOperations(
+            isUsable: { _ in true },
+            state: { _ in .up },
+            headsetControls: { _ in controls },
+            setNoiseMode: { mode, _ in modes.append(mode) },
+            setSidetone: { isOn, _ in sidetones.append(isOn) },
+            setBusy: { isBusy, _ in busy.append(isBusy) }
+        )
+    )
+
+    // In a call with sidetone on, nothing of the HearThrough still chosen
+    // is heard.
+    #expect(model.headsetControls(for: headphones)?.audibleNoiseMode == .off)
+    #expect(model.headsetControls(for: microphone) == nil)
+    model.setNoiseMode(.cancelling, for: headphones)
+    model.setSidetone(true, for: headphones)
+    model.setBusy(false, for: headphones)
+    #expect(modes == [.cancelling])
+    #expect(sidetones == [true])
+    #expect(busy == [false])
+}
+
+@Test
+@MainActor
+func theBusylightFollowsAnAppRecordingFromTheHeadsetWhenAsked() {
+    let audio = FakeAudio()
+    let uid = "AppleUSBAudioEngine:Unknown Manufacturer:Jabra Link 380:50C2754454"
+    let headphones = output(1, uid + ":1", "Jabra Link 380")
+    let microphone = input(2, uid + ":2", "Jabra Link 380")
+    audio.catalog = [headphones, microphone]
+    var controls = JabraGNP.HeadsetControls(noiseMode: .cancelling, isInCall: false)
+    controls.isBusy = false
+    var writes: [Bool] = []
+    let model = AppModel(
+        store: PriorityStore(defaults: isolatedDefaults()),
+        audio: audio.operations,
+        link: LinkOperations(
+            isUsable: { _ in true },
+            state: { _ in .up },
+            headsetControls: { $0.role == .output ? controls : nil },
+            setBusy: { isBusy, _ in writes.append(isBusy) }
+        )
+    )
+    model.start()
+    // Each step below is what the model sees once the microphone settles.
+    audio.running = [2]
+    model.updateAutomaticBusylights()
+    #expect(writes.isEmpty)
+
+    // Lit once, then left alone while the headset catches up.
+    model.setLightsBusylightWhileRecording(true)
+    model.updateAutomaticBusylights()
+    #expect(writes == [true])
+    controls.isBusy = true
+    model.updateAutomaticBusylights()
+    audio.running = []
+    model.updateAutomaticBusylights()
+    #expect(writes == [true, false])
+    controls.isBusy = false
+
+    // A light the wearer turned on stays on after the recording.
+    controls.isBusy = true
+    audio.running = [2]
+    model.updateAutomaticBusylights()
+    audio.running = []
+    model.updateAutomaticBusylights()
+    #expect(writes == [true, false])
+
+    // One the wearer clears during the recording stays off until the next.
+    controls.isBusy = false
+    audio.running = [2]
+    model.updateAutomaticBusylights()
+    controls.isBusy = true
+    model.updateAutomaticBusylights()
+    controls.isBusy = false
+    model.updateAutomaticBusylights()
+    model.updateAutomaticBusylights()
+    #expect(writes == [true, false, true])
+    audio.running = []
+    model.updateAutomaticBusylights()
+    audio.running = [2]
+    model.updateAutomaticBusylights()
+    #expect(writes == [true, false, true, true])
+}
+
+@Test
+@MainActor
+func aLineOpenedWithNoAppRecordingIsACallFromTheHeadset() {
+    let audio = FakeAudio()
+    let uid = "AppleUSBAudioEngine:Unknown Manufacturer:Jabra Link 380:50C2754454"
+    let headphones = output(1, uid + ":1", "Jabra Link 380")
+    let microphone = input(2, uid + ":2", "Jabra Link 380")
+    audio.catalog = [headphones, microphone]
+    var controls = JabraGNP.HeadsetControls(noiseMode: .hearThrough, isInCall: false)
+    controls.isLineOpen = false
+    var ended = 0
+    let model = AppModel(
+        store: PriorityStore(defaults: isolatedDefaults()),
+        audio: audio.operations,
+        link: LinkOperations(
+            isUsable: { _ in true },
+            state: { _ in .up },
+            headsetControls: { $0.role == .output ? controls : nil },
+            endHeadsetCall: { _ in ended += 1 }
+        )
+    )
+    model.start()
+
+    // The call button opens the line while nothing records, and the app
+    // may end that call.
+    controls.isLineOpen = true
+    model.classifyOpenLines()
+    #expect(model.headsetControls(for: headphones)?.isCalling == true)
+    model.endHeadsetCall(for: headphones)
+    #expect(ended == 1)
+    controls.isLineOpen = false
+    model.classifyOpenLines()
+    #expect(model.headsetControls(for: headphones)?.isCalling == false)
+
+    // An app recording opens it too, and the line can outlast the
+    // recording without becoming a call.
+    audio.running = [2]
+    controls.isLineOpen = true
+    model.classifyOpenLines()
+    audio.running = []
+    model.classifyOpenLines()
+    #expect(model.headsetControls(for: headphones)?.isCalling == false)
+    #expect(model.headsetControls(for: headphones)?.playsCallAudio == true)
+    // A recording is no call to end.
+    model.endHeadsetCall(for: headphones)
+    #expect(ended == 1)
+}
+
 // Jabra Link 380 and the MacBook Pro microphone both expose a settable input
 // mute on the main element (macOS 26, probed 2026-09-26), which FakeAudio
 // models by default. ZoomAudioDevice has none and rests at zero volume.

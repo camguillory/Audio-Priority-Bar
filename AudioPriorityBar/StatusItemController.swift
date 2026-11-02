@@ -493,6 +493,7 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         }
         positionPanel(relativeTo: button)
         model.battery.refresh()
+        model.refreshHeadsetControls()
         batteryTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.model.battery.refresh() }
         }

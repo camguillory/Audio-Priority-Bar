@@ -10,6 +10,9 @@ struct DeviceRow: View {
         /// Read aloud and shown on hover instead of `text` when the glyph
         /// carries meaning the text alone does not.
         var spokenText: String?
+        /// Drawn as the glyph alone where room is short; the text stays in
+        /// the tooltip and the spoken value.
+        var isIconOnly = false
         var description: String { spokenText ?? text }
     }
 
@@ -34,6 +37,7 @@ struct DeviceRow: View {
     @State private var controlsWidth: CGFloat = 0
     @State private var isHoveringBluetoothPill = false
     @State private var frameInWindow: CGRect = .zero
+    @State private var isExplainingCall = false
     @FocusState private var isOverrideFocused: Bool
     @FocusState private var isActionsFocused: Bool
 
@@ -138,6 +142,22 @@ struct DeviceRow: View {
                 tint: .red
             ))
         }
+        // Glyphs alone, since the headset's buttons share this one line.
+        if let controls = model.headsetControls(for: device) {
+            if controls.isMicMuted {
+                result.append(Status(
+                    icon: "mic.slash",
+                    text: "Muted",
+                    tint: .red,
+                    spokenText: controls.isCalling
+                        ? "In call, microphone muted on the headset"
+                        : controls.isLineOpen == true
+                            ? "Microphone in use, muted on the headset"
+                            : "Busy, microphone muted on the headset",
+                    isIconOnly: true
+                ))
+            }
+        }
         result.append(contentsOf: batteryStatuses)
         return result
     }
@@ -192,13 +212,22 @@ struct DeviceRow: View {
                 if !statuses.isEmpty {
                     HStack(spacing: 8) {
                         ForEach(statuses, id: \.description) { status in
-                            Label(status.text, systemImage: status.icon)
-                                .font(.caption)
-                                .foregroundStyle(status.tint)
+                            Group {
+                                if status.isIconOnly {
+                                    Image(systemName: status.icon)
+                                } else {
+                                    Label(status.text, systemImage: status.icon)
+                                }
+                            }
+                            .font(.caption)
+                            .foregroundStyle(status.tint)
                         }
                     }
                     .lineLimit(1)
                     .truncationMode(.tail)
+                    // A headset row's statuses are glyphs and a percentage,
+                    // short enough to outrank a long name.
+                    .layoutPriority(model.headsetControls(for: device) == nil ? 0 : 2)
                     .help(statuses.map(\.description).joined(separator: " · "))
                     .accessibilityHidden(true)
                 }
@@ -375,20 +404,31 @@ struct DeviceRow: View {
     /// Drawn over the end of the row and room made for them only while they
     /// show, so statuses keep the full width until the row is hovered. The
     /// name has layout priority, so it holds still as the pointer crosses rows.
+    /// A headset row always shows its buttons and always keeps room for the
+    /// actions menu at the far right, so hovering moves and covers nothing;
+    /// its selection override waits in the actions menu instead.
     private var rowControls: some View {
-        HStack(spacing: 6) {
-            connectControl
-            selectionOverride
+        let headset = model.headsetControls(for: device)
+        return HStack(spacing: 6) {
+            if headset == nil {
+                Group {
+                    connectControl
+                    selectionOverride
+                }
+                .opacity(showsRowControls ? 1 : 0)
+                .allowsHitTesting(showsRowControls)
+            }
+            if let headset { headsetButtons(headset) }
             actions
+                .opacity(showsRowControls ? 1 : 0)
+                .allowsHitTesting(showsRowControls)
         }
-        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { controlsWidth = $0 }
-        .opacity(showsRowControls ? 1 : 0)
-        .allowsHitTesting(showsRowControls)
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.12), value: showsRowControls)
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { controlsWidth = $0 }
     }
 
     private var controlsRoom: CGFloat {
-        showsRowControls ? controlsWidth + 6 : 0
+        showsRowControls || model.headsetControls(for: device) != nil ? controlsWidth + 6 : 0
     }
 
     @ViewBuilder
@@ -475,6 +515,128 @@ struct DeviceRow: View {
                 highlightedPairedDeviceID = nil
             }
         }
+    }
+
+    /// Settings the headset keeps itself: noise control, sidetone and the
+    /// busylight, each a round button of its own.
+    private func headsetButtons(_ controls: JabraGNP.HeadsetControls) -> some View {
+        HStack(spacing: 4) {
+            if controls.noiseMode != nil {
+                noiseControlMenu(controls)
+            }
+            if let sidetone = controls.sidetone {
+                Button { model.setSidetone(!sidetone.isOn, for: device) } label: {
+                    HeadsetGlyph(
+                        symbol: "person.wave.2",
+                        isOn: sidetone.isOn,
+                        tint: .accentColor,
+                        isDimmed: controls.isSidetoneSilenced
+                    )
+                }
+                .buttonStyle(.plain)
+                .help(controls.isSidetoneSilenced
+                    ? "Sidetone, silent while the microphone is muted"
+                    : "Sidetone: hear your own voice during calls")
+                .accessibilityLabel("Sidetone")
+                .accessibilityValue(sidetone.isOn ? "On" : "Off")
+                .accessibilityAddTraits(.isToggle)
+            }
+            if controls.isHeadsetCall {
+                // A call the call button started ends from here, light and
+                // all. Clearing only the light would see the button's next
+                // press switch it on again.
+                Button { model.endHeadsetCall(for: device) } label: {
+                    HeadsetGlyph(symbol: "phone.down.fill", isOn: true, tint: .red)
+                }
+                .buttonStyle(.plain)
+                .help("End the call started with the headset's call button")
+                .accessibilityLabel("End call")
+            } else if controls.isInCall == true {
+                // An app's call holds the busylight until it ends, and only
+                // that app can end it.
+                Button { isExplainingCall.toggle() } label: {
+                    HeadsetGlyph(symbol: "phone.fill", isOn: true, tint: .red)
+                }
+                .buttonStyle(.plain)
+                .help("In a call")
+                .popover(isPresented: $isExplainingCall, arrowEdge: .bottom) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("In a call").font(.headline)
+                        Text("The headset keeps the busylight on until the call ends, so it can't be turned off from here.")
+                            .foregroundStyle(.secondary)
+                    }
+                    .font(.callout)
+                    .frame(width: 220, alignment: .leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(12)
+                }
+                .onDisappear { isExplainingCall = false }
+                .accessibilityLabel("In call")
+                .accessibilityValue("Busylight on until the call ends")
+            } else if let isBusy = controls.isBusy {
+                let isDark = controls.isBusylightDark
+                Button { model.setBusy(!isBusy, for: device) } label: {
+                    HeadsetGlyph(symbol: "light.beacon.max", isOn: isBusy, tint: .red, isDimmed: isDark)
+                }
+                .buttonStyle(.plain)
+                .help(isDark
+                    ? "Busylight on. On-ear detection keeps it dark until you put the headset on."
+                    : "Busylight: show you're busy")
+                .accessibilityLabel("Busylight")
+                .accessibilityValue(isDark ? "On, dark until you put the headset on" : isBusy ? "On" : "Off")
+                .accessibilityAddTraits(.isToggle)
+            }
+        }
+    }
+
+    /// The menu shows and changes what is heard now: the check follows the
+    /// noise control playing, and a mode the call stops is greyed out, so a
+    /// greyed-out mode is never the checked one.
+    private func noiseControlMenu(_ controls: JabraGNP.HeadsetControls) -> some View {
+        Menu {
+            if controls.playsCallAudio {
+                let reason = controls.isCalling ? "during calls" : "while an app uses the microphone"
+                Text(controls.sidetone?.isOn == true
+                    ? "Sidetone replaces noise control \(reason)"
+                    : "HearThrough isn't available \(reason)")
+                if controls.isHeadsetCall {
+                    Text("End this call with the red button or the headset's call button")
+                }
+                if controls.isSidetoneSilenced {
+                    Text("Sidetone is silent while the microphone is muted")
+                }
+                if let before = controls.modeBeforeCall, before != controls.audibleNoiseMode {
+                    Text("\(before.title) returns after the call")
+                }
+            }
+            if let audible = controls.audibleNoiseMode {
+                Section("Noise control") {
+                    ForEach(JabraGNP.NoiseMode.allCases, id: \.self) { mode in
+                        Toggle(isOn: Binding(
+                            get: { mode == audible },
+                            set: { if $0 { model.setNoiseMode(mode, for: device) } }
+                        )) {
+                            Label(mode.title, systemImage: mode.symbol)
+                        }
+                        .disabled(!controls.isAvailable(mode))
+                    }
+                }
+            }
+        } label: {
+            HeadsetGlyph(symbol: (controls.audibleNoiseMode ?? .off).symbol)
+        }
+        // A borderless menu draws its label its own way, ignoring the glyph's
+        // round background.
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help(controls.audibleNoiseMode.map {
+            let reason = controls.isCalling ? " during the call" : " while an app uses the microphone"
+            return "Noise control: \($0.title)" + ($0 != controls.noiseMode ? reason : "")
+        } ?? "Noise control")
+        .accessibilityLabel("Noise control")
+        .accessibilityValue(controls.audibleNoiseMode?.title ?? "")
     }
 
     private var actions: some View {
@@ -605,5 +767,50 @@ struct DeviceRow: View {
         // Shown only as strikethrough, so it needs saying here.
         if isNeverUse { values.append("Never auto-select") }
         return values.joined(separator: ", ")
+    }
+}
+
+/// A round headset control, sized like the device badge beside the name.
+/// Off, it is the neutral badge; on, an opaque fill under a white glyph that
+/// darkens a little under the pointer, so its contrast never depends on what
+/// the glass shows behind the panel.
+private struct HeadsetGlyph: View {
+    let symbol: String
+    var isOn = false
+    var tint: Color = .accentColor
+    var isDimmed = false
+    @State private var isHovering = false
+
+    var body: some View {
+        Image(systemName: symbol)
+            .font(.system(size: 11, weight: .medium))
+            .foregroundStyle(isOn ? Color.white : Color.secondary)
+            .frame(width: 24, height: 24)
+            .background(
+                Circle()
+                    .fill(isOn ? tint : Color.primary.opacity(isHovering ? 0.16 : 0.1))
+                    .brightness(isOn && isHovering ? -0.12 : 0)
+            )
+            .opacity(isDimmed ? 0.5 : 1)
+            .contentShape(Circle())
+            .onHover { isHovering = $0 }
+    }
+}
+
+private extension JabraGNP.NoiseMode {
+    var title: String {
+        switch self {
+        case .off: "Off"
+        case .cancelling: "Noise Cancellation"
+        case .hearThrough: "HearThrough"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .off: "headphones"
+        case .cancelling: "person.and.background.dotted"
+        case .hearThrough: "ear.and.waveform"
+        }
     }
 }
