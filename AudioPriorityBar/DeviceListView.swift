@@ -201,11 +201,14 @@ struct DeviceSectionView: View {
         }
         .onEnded { _ in
             if let session = drag, let target = session.target {
+                DebugLog.shared.write("dropped \(session.device.logName) at position \(target.index + 1) in \(target.section)")
                 _ = model.dropDevice(
                     session.device.id,
                     into: target.section.category,
                     at: target.index
                 )
+            } else if let session = drag {
+                DebugLog.shared.write("dragged \(session.device.logName) with no drop\(session.isForbidden ? ", over a list it cannot join" : "")")
             }
             drag = nil
         }

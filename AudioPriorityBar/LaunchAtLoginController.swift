@@ -1,3 +1,4 @@
+import AudioPriorityCore
 import Observation
 import ServiceManagement
 
@@ -11,6 +12,7 @@ final class LaunchAtLoginController {
     private let status: () -> SMAppService.Status
     private let register: () throws -> Void
     private let unregister: () throws -> Void
+    @ObservationIgnored private var loggedStatus: SMAppService.Status?
 
     init(
         status: @escaping () -> SMAppService.Status = {
@@ -31,6 +33,10 @@ final class LaunchAtLoginController {
 
     func refresh() {
         let current = status()
+        if current != loggedStatus {
+            loggedStatus = current
+            DebugLog.shared.write("Open at Login: \(Self.describe(current))")
+        }
         isEnabled = current == .enabled || current == .requiresApproval
         requiresApproval = current == .requiresApproval
         errorMessage = nil
@@ -42,6 +48,7 @@ final class LaunchAtLoginController {
         } catch {
             refresh()
             errorMessage = error.localizedDescription
+            DebugLog.shared.write("Open at Login could not \(enabled ? "register" : "unregister"): \(error.localizedDescription)")
             return
         }
         if enabled {
@@ -50,6 +57,16 @@ final class LaunchAtLoginController {
             isEnabled = false
             requiresApproval = false
             errorMessage = nil
+        }
+    }
+
+    private static func describe(_ status: SMAppService.Status) -> String {
+        switch status {
+        case .notRegistered: "off"
+        case .enabled: "on"
+        case .requiresApproval: "waiting for approval in Login Items"
+        case .notFound: "not found"
+        @unknown default: "status \(status.rawValue)"
         }
     }
 }

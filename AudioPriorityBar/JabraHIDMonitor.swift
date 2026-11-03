@@ -301,6 +301,17 @@ final class JabraHIDMonitor {
     /// Feeds the session one input and carries out what it asks for.
     private func run(_ dongle: Dongle, _ input: HeadsetSession.Input) {
         let effects = dongle.session.handle(input, at: ProcessInfo.processInfo.systemUptime)
+        // Every walk that finds no headset says so again, and a worn headset
+        // streams telemetry several times a second, both with nothing to do.
+        let isRepeat = switch input {
+        case .disconnected: true
+        case let .message(message): message.group == JabraGNP.telemetryGroup
+        default: false
+        }
+        if !isRepeat || !effects.isEmpty {
+            DebugLog.shared.write("Jabra \(dongle.key) headset: \(input) gives \(effects)"
+                .replacing(/AudioPriorityCore\.(HeadsetSession\.(Effect\.)?|JabraGNP\.)?/, with: ""))
+        }
         var changed = false
         for effect in effects {
             if effect == .changed { changed = true } else { perform(effect, for: dongle) }
@@ -459,6 +470,7 @@ final class JabraHIDMonitor {
         interface.jabraLine = Self.telephonyElement(device, Self.jabraTelephonyPage, kHIDUsage_Tfon_Line, output: false)
 
         let identity = Self.identity(of: device)
+        DebugLog.shared.write("Jabra \(identity.key) attached: \(name), serial \(identity.serial ?? "none"), management \(management != nil), profile \(profile.map { "\($0.id)" } ?? "none")")
         let uptime = ProcessInfo.processInfo.systemUptime
         let dongle = dongles[identity.key] ?? Dongle(
             key: identity.key,
@@ -561,6 +573,7 @@ final class JabraHIDMonitor {
               let interface = dongle.interfaces.removeValue(forKey: device) else {
             return
         }
+        DebugLog.shared.write("Jabra \(key) detached an interface, \(dongle.interfaces.count) left")
         // Invalidate anything still referring to this dongle's membership.
         dongle.generation += 1
         dongle.query?.timeout?.cancel()
@@ -619,6 +632,7 @@ final class JabraHIDMonitor {
         )
         let state = Self.state(of: dongle)
         guard state != dongle.reported else { return }
+        DebugLog.shared.write("Jabra \(dongle.key) link \(state), from pairing \(dongle.vendor.map { "\($0)" } ?? "unknown") and legacy \(dongle.legacy.effective.map { "\($0)" } ?? "unknown")")
         dongle.reported = state
         notifyLinkChange()
     }
@@ -800,7 +814,11 @@ final class JabraHIDMonitor {
         dongle.awaitingFirstAnswer = false
         // Incomplete evidence must not linger as authoritative, otherwise a
         // single failed cycle would freeze a stale verdict in place.
-        dongle.vendor = evidence == .inconclusive ? nil : evidence
+        let vendor: JabraGNP.Evidence? = evidence == .inconclusive ? nil : evidence
+        if vendor != dongle.vendor {
+            DebugLog.shared.write("Jabra \(dongle.key) pairing list: \(evidence)")
+        }
+        dongle.vendor = vendor
         refresh(dongle)
         if evidence == .connected {
             requestBattery(dongle)
@@ -831,6 +849,7 @@ final class JabraHIDMonitor {
 
     private func updateBattery(_ dongle: Dongle, _ level: Int?) {
         guard dongle.battery != level else { return }
+        DebugLog.shared.write("Jabra \(dongle.key) battery \(level.map { "\($0)%" } ?? "unknown")")
         dongle.battery = level
         if isRunning { onHeadsetChange?() }
     }

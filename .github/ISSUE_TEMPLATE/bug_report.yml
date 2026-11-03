@@ -75,4 +75,7 @@ body:
     id: additional-context
     attributes:
       label: Anything else?
-      description: Add screenshots or crash reports from ~/Library/Logs/DiagnosticReports/ if available.
+      description: |
+        Add screenshots or crash reports from ~/Library/Logs/DiagnosticReports/ if available.
+
+        For a switching problem, turn on **Keep a debug log** in Settings > App, make the problem happen again, then click **Show in Finder** and attach the file for the day it happened, such as `debug-2026-11-03.log`. It includes your audio device names.

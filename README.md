@@ -291,6 +291,9 @@ Issues and pull requests are welcome. Open an issue first for anything
 substantial, then branch from `develop` and open the pull request against
 `develop`. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
+To report a switching problem, turn on **Keep a debug log** in **Settings >
+App**, make it happen again, and attach the file **Show in Finder** selects.
+
 ### Build from source
 
 ```bash
