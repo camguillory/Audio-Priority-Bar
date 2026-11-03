@@ -20,7 +20,7 @@
 </p>
 
 <p align="center">
-  <img src="demo.gif" width="800" alt="A tour of Audio Priority Bar in the menu bar. A Jabra headset and then AirPods connect and the Mac switches to each with a notice. The panel shows the AirPods buds and case battery and the Jabra battery, dragging the Jabra above the AirPods switches the sound at once, the app switches back when macOS takes over, and unplugging the Jabra hands the sound to the AirPods. Option-Shift-M mutes the microphone and turns the icon red, a reminder appears when an app records while muted, a URL unmutes it, and hovering the icon shows the current output and microphone">
+  <img src="demo.gif" width="800" alt="A tour of Audio Priority Bar in the menu bar. A Jabra headset and then AirPods connect and the Mac switches to each with a notice. The panel shows the AirPods buds and case battery and the Jabra battery, the Jabra's busylight and sidetone turn on from its row, dragging the Jabra above the AirPods switches the sound at once, and the app switches back when macOS takes over. Picking Studio Display Speakers keeps automatic switching on, the Meeting profile puts the Jabra first, and turning automatic switching off turns the icon red. Option-Shift-M mutes the microphone, a reminder appears when an app records while muted, and a URL unmutes it">
 </p>
 
 ## Why
@@ -101,7 +101,7 @@ switching off to keep it.
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="screenshot-dark.png">
-    <img src="screenshot-light.png" width="380" alt="Audio Priority Bar panel showing output and microphone levels and the Speakers, Headphones and Microphones priority lists, with AirPods connected and showing their battery, and paired Bluetooth devices dimmed while they are off">
+    <img src="screenshot-light.png" width="380" alt="Audio Priority Bar panel showing automatic switching on with the Desk profile, output and microphone levels, and the Speakers, Headphones and Microphones priority lists, with AirPods and a Jabra headset showing their battery, the Jabra's noise control, sidetone and busylight buttons, and paired Bluetooth devices dimmed while they are off">
   </picture>
 </p>
 
