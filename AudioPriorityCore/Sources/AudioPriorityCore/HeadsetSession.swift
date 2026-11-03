@@ -185,6 +185,9 @@ public struct HeadsetSession: Sendable {
             usesAmbience = false
             pendingWrites.removeAll()
             setReportedMute(nil, &effects)
+            hooks = (false, false)
+            lines = (false, false)
+            jabraHookRoseAt = -TimeInterval.greatestFiniteMagnitude
         case let .message(message):
             receive(message, at: now, &effects)
         case let .signal(signal, isOn):
