@@ -123,15 +123,17 @@ switching off to keep it.
   Connected to This Mac** under **Connect to This Mac** stops them switching
   on their own.
 - With **Select headset input and output together** enabled, choosing
-  either half of a physical USB headset selects the other too.
+  either half of a physical USB headset selects the other too. For a dock or
+  an audio interface whose microphone you'd rather rank yourself, uncheck
+  **Use Its Microphone Too** in its row's actions menu.
 - With **Microphones follow the output** enabled, speakers and headphones
   each keep their own microphone order, so moving from headphones to
   speakers can also move to the desk microphone. A microphone you pick in
   Control Center or Sound Settings still stays until it disconnects or a
   microphone your list would pick connects.
-- With **Mute speakers when headphones disconnect** enabled, the speakers
-  start muted when the headphones playing disconnect, are turned off or run
-  out of battery.
+- With **Mute speakers when headphones disconnect**, on by default, the
+  speakers start muted when the headphones playing disconnect, are turned off
+  or run out of battery.
 - The microphone mute follows automatic switching to the next microphone,
   and quitting the app restores it.
 
