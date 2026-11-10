@@ -191,7 +191,7 @@ final class StatusItemController: NSObject, NSWindowDelegate {
                 [model.currentOutputDevice, model.currentInputDevice].compactMap { $0 }
             )
             try? await Task.sleep(for: .seconds(2.5))
-            notice.showsMutedReminder = true
+            notice.mutedReminder = .mutedWhileRecording
             try? await Task.sleep(for: .seconds(3))
             refreshMutedReminder()
         }
@@ -664,15 +664,16 @@ final class StatusItemController: NSObject, NSWindowDelegate {
     }
 
     private func refreshMutedReminder() {
-        let shows = mutedReminder.update(
-            applies: model.remindsWhenMuted
-                && model.isMicrophoneMuted
-                && model.isInputRecording
-        )
-        if shows != notice.showsMutedReminder {
-            DebugLog.shared.write("muted reminder \(shows ? "shown" : "hidden")")
+        // A microphone left live outside the mute matters more than talking
+        // into a muted one.
+        let content = model.uncoveredRecording.map(NoticeContent.unmuted)
+            ?? (model.isMicrophoneMuted && model.isInputRecording ? .mutedWhileRecording : nil)
+        let shown = mutedReminder.update(applies: model.remindsWhenMuted && content != nil)
+            ? content : nil
+        if shown != notice.mutedReminder {
+            DebugLog.shared.write("muted reminder \(shown.map { "shown: \($0.announcement)" } ?? "hidden")")
         }
-        notice.showsMutedReminder = shows
+        notice.mutedReminder = shown
     }
 
     private func showSwitchNotice(_ devices: [AudioDevice]) {

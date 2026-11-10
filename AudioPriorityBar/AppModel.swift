@@ -17,6 +17,8 @@ struct AudioOperations {
     let inputVolume: (UInt32) -> Float?
     let setInputVolume: (UInt32, Float) -> Bool
     let isRunning: (UInt32) -> Bool
+    /// The name of an app recording from the microphone, when macOS says.
+    var appRecording: (UInt32) -> String? = { _ in nil }
 }
 
 @MainActor
@@ -40,6 +42,12 @@ enum OutputSkipReason: Equatable {
 struct SkippedOutput: Equatable {
     let device: AudioDevice
     let reason: OutputSkipReason
+}
+
+struct UncoveredRecording: Equatable {
+    /// Nil when macOS cannot say which app, as before macOS 14.2.
+    let app: String?
+    let microphone: String
 }
 
 struct SwitchRecord: Equatable {
@@ -123,11 +131,14 @@ final class AppModel {
     var isActiveOutputMuted = false
     var isActiveInputMuted = false
     var micFlashState = false
-    /// The microphone mute the user asked for, carried to whichever microphone
-    /// is current.
+    /// The microphone mute the user asked for, on every physical microphone
+    /// the app can mute.
     var isMicrophoneMuted = false
     /// Some app is recording from the current microphone.
     var isInputRecording = false
+    /// While muted, an app recording from a microphone the mute could not
+    /// cover, such as a Bluetooth headset that is not the current input.
+    var uncoveredRecording: UncoveredRecording?
     var showsSwitchNotice: Bool
     var remindsWhenMuted: Bool
     var mutesSpeakersWhenHeadphonesDisconnect: Bool
@@ -165,8 +176,8 @@ final class AppModel {
     let battery: BluetoothBatteryMonitor
     private let reduceMotion: () -> Bool
     private var mutedRoles: Set<String> = []
-    /// The microphone currently carrying `isMicrophoneMuted`, by UID.
-    private var mutedInputUID: String?
+    /// The microphones carrying `isMicrophoneMuted`, by UID.
+    private var mutedInputUIDs: Set<String> = []
     /// The headphones last seen as the current output, by UID.
     private var playingHeadphonesUID: String?
     private var connectedInputUIDs: Set<String> = []
@@ -276,7 +287,7 @@ final class AppModel {
         for uid in store.appliedMicrophoneMutes.keys {
             restoreMicrophone(uid)
         }
-        mutedInputUID = nil
+        mutedInputUIDs = []
         isMicrophoneMuted = false
         hasStarted = false
     }
@@ -709,6 +720,11 @@ final class AppModel {
             DebugLog.shared.write("an app \(isRecording ? "started" : "stopped") recording from \(currentInputDevice?.logName ?? "the microphone")")
         }
         isInputRecording = isRecording
+        let uncovered = findUncoveredRecording()
+        if uncovered != uncoveredRecording, let uncovered {
+            DebugLog.shared.write("\(uncovered.app ?? "an app") records from \(uncovered.microphone), which the mute does not cover")
+        }
+        uncoveredRecording = uncovered
         updateMicFlash()
         scheduleAutomaticBusylights()
     }
@@ -731,38 +747,82 @@ final class AppModel {
         playingHeadphonesUID = category == .headphone ? output.uid : nil
     }
 
-    /// Keeps the microphone mute on whichever microphone is current, and
-    /// follows mutes and unmutes made outside the app, like System Settings
-    /// or a headset's mute button.
+    /// Keeps the microphone mute on every microphone it covers, so an app
+    /// recording from one that is not the current input hears silence too,
+    /// and follows mutes and unmutes of the current one made outside the
+    /// app, like System Settings or a headset's mute button. A microphone
+    /// muted before the mute started is left alone, and stays muted after it.
     private func reconcileMicrophoneMute() {
         let current = currentInputDevice
         if let current {
             let muted = isHardwareMuted(current)
-            if current.uid == mutedInputUID, !muted {
+            if mutedInputUIDs.contains(current.uid), !muted {
                 DebugLog.shared.write("\(current.logName) was unmuted outside the app")
                 isMicrophoneMuted = false
-                mutedInputUID = nil
+                mutedInputUIDs.remove(current.uid)
                 store.appliedMicrophoneMutes[current.uid] = nil
-            } else if mutedInputUID == nil, muted, !isMicrophoneMuted,
+            } else if mutedInputUIDs.isEmpty, muted, !isMicrophoneMuted,
                       store.appliedMicrophoneMutes[current.uid] == nil {
                 DebugLog.shared.write("\(current.logName) was muted outside the app")
                 isMicrophoneMuted = true
-                mutedInputUID = current.uid
+                mutedInputUIDs.insert(current.uid)
             }
         }
-        if isMicrophoneMuted, let current, current.uid != mutedInputUID {
-            if let previous = mutedInputUID { restoreMicrophone(previous) }
-            mutedInputUID = applyMicrophoneMute(current) ? current.uid : nil
-            isMicrophoneMuted = mutedInputUID != nil
-        } else if !isMicrophoneMuted, let previous = mutedInputUID {
-            restoreMicrophone(previous)
-            mutedInputUID = nil
+        if isMicrophoneMuted {
+            for uid in mutedInputUIDs {
+                guard let device = inputDevices.first(where: { $0.uid == uid && $0.isConnected }) else {
+                    // Its saved state brings the mute back on reconnect, below.
+                    mutedInputUIDs.remove(uid)
+                    continue
+                }
+                if !isCoveredByMute(device) {
+                    restoreMicrophone(uid)
+                    mutedInputUIDs.remove(uid)
+                }
+            }
+        } else {
+            for uid in mutedInputUIDs { restoreMicrophone(uid) }
+            mutedInputUIDs = []
         }
         // Anything else still recorded was muted before a crash, or while it
         // was unplugged, and must not come back silently dead.
-        for uid in store.appliedMicrophoneMutes.keys where uid != mutedInputUID {
+        for uid in store.appliedMicrophoneMutes.keys where !mutedInputUIDs.contains(uid) {
             restoreMicrophone(uid)
         }
+        guard isMicrophoneMuted else { return }
+        for device in inputDevices
+        where isCoveredByMute(device) && !mutedInputUIDs.contains(device.uid) && !isHardwareMuted(device) {
+            if applyMicrophoneMute(device) { mutedInputUIDs.insert(device.uid) }
+        }
+        if let current, !mutedInputUIDs.contains(current.uid), !isHardwareMuted(current) {
+            // The microphone in use could not be muted, so nothing is.
+            for uid in mutedInputUIDs { restoreMicrophone(uid) }
+            mutedInputUIDs = []
+            isMicrophoneMuted = false
+        }
+    }
+
+    /// The current microphone, and every other physical one. Virtual and
+    /// aggregate inputs are left alone so routing and recording setups keep
+    /// working. A Bluetooth microphone that is not the current input is left
+    /// too: muting it might move its headphones to call quality, unmeasured,
+    /// so it gets the reminder instead.
+    private func isCoveredByMute(_ device: AudioDevice) -> Bool {
+        device.isConnected
+            && (device.platformID == currentInputID || (!device.isVirtual && !device.isBluetooth))
+    }
+
+    /// While muted, an app recording from a connected physical microphone the
+    /// mute does not hold. A virtual input records from a physical one, which
+    /// the mute already holds.
+    private func findUncoveredRecording() -> UncoveredRecording? {
+        guard isMicrophoneMuted else { return nil }
+        return inputDevices.lazy
+            .filter { $0.isConnected && !$0.isVirtual }
+            .filter { !self.mutedInputUIDs.contains($0.uid) && !self.isHardwareMuted($0) }
+            .filter { self.audio.isRunning($0.platformID) }
+            .map { UncoveredRecording(app: self.audio.appRecording($0.platformID), microphone: $0.name) }
+            .first
     }
 
     /// Mutes through the device's mute property, or by zeroing its input

@@ -78,7 +78,8 @@ final class AppRuntime {
                 canSetMute: { CoreAudioProperties.canSetMute($1, role: $0) },
                 inputVolume: CoreAudioProperties.inputVolume,
                 setInputVolume: CoreAudioProperties.setInputVolume,
-                isRunning: CoreAudioProperties.isRunningSomewhere
+                isRunning: CoreAudioProperties.isRunningSomewhere,
+                appRecording: CoreAudioProperties.appRecording
             ),
             link: LinkOperations(
                 isUsable: { $0.isConnected && jabra.isUsable($0) },

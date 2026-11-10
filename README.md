@@ -134,8 +134,11 @@ switching off to keep it.
 - With **Mute speakers when headphones disconnect**, on by default, the
   speakers start muted when the headphones playing disconnect, are turned off
   or run out of battery.
-- The microphone mute follows automatic switching to the next microphone,
-  and quitting the app restores it.
+- The microphone mute covers every connected microphone, not only the one in
+  use, so a call app or browser tab set to another one hears silence too. It
+  holds through automatic switching and replugs, leaves virtual inputs alone,
+  and quitting the app restores each microphone. A microphone you had muted
+  yourself stays muted.
 
 Speakers, Headphones, and Microphones remain visible in both modes.
 
@@ -201,6 +204,10 @@ The active device always stays listed, even when hidden.
 - A **Microphone muted** reminder appears when an app starts recording while
   you are muted. Click it to hide it until you next record while muted. It
   and the switch notices can each be turned off in Settings.
+- While muted, a Bluetooth headset microphone that isn't the one in use stays
+  live, since muting it could drop its sound to call quality. If an app records
+  from it, the reminder names both, for example "Google Chrome is using AirPods
+  Pro, which isn't muted".
 
 </details>
 
