@@ -79,6 +79,7 @@ struct PanelView: View {
                             .lineLimit(2)
                         if takeover.isBluetooth {
                             Button("Fix in Settings…") {
+                                DebugLog.shared.write("clicked Fix in Settings for \(takeover.logName)")
                                 NSWorkspace.shared.open(Self.headphoneSettingsURL)
                             }
                             .buttonStyle(.link)
@@ -433,6 +434,7 @@ private struct Footer: View {
                 isOn: Binding(
                     get: { model.showAll },
                     set: {
+                        DebugLog.shared.write("clicked show hidden and disconnected devices \($0 ? "on" : "off")")
                         model.showAll = $0
                         model.refreshDevices()
                     }
@@ -450,6 +452,7 @@ private struct Footer: View {
             .contentShape(Rectangle())
             .onTapGesture {
                 model.showAll.toggle()
+                DebugLog.shared.write("clicked show hidden and disconnected devices \(model.showAll ? "on" : "off")")
                 model.refreshDevices()
             }
             .onHover { isHoveringShowAll = $0 }
