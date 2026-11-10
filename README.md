@@ -117,11 +117,15 @@ switching off to keep it.
   you put them in, Audio Priority Bar switches back to the device you picked,
   or to your list. A device you connect still takes over if your list would
   pick it.
-- If macOS takes the device again right after a switch back, as AirPods in
-  your ears can, Audio Priority Bar leaves it and names it in the panel.
-  **Fix in Settings** opens the AirPods settings, where choosing **When Last
-  Connected to This Mac** under **Connect to This Mac** stops them switching
-  on their own.
+- If macOS takes the output again right after a switch back, as AirPods in
+  your ears can, Audio Priority Bar leaves it and names it in the panel, since
+  each round trip is a gap in the sound. **Fix in Settings** opens the AirPods
+  settings, where choosing **When Last Connected to This Mac** under **Connect
+  to This Mac** stops them switching on their own.
+- The microphone is held instead: each time macOS takes it, Audio Priority Bar
+  takes it back, so a call never ends up on the AirPods microphone. Only if
+  another app takes it back within a second, three times in a row, does it
+  pause for 30 seconds, say so in the panel, and then try again.
 - With **Select headset input and output together** enabled, choosing
   either half of a physical USB headset selects the other too. For a dock or
   an audio interface whose microphone you'd rather rank yourself, uncheck

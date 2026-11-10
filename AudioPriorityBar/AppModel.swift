@@ -206,6 +206,14 @@ final class AppModel {
     /// The device macOS moved each role to again soon after a switch back, by
     /// UID. The app leaves it there and names it in the panel.
     var takeoverUIDs: [DeviceRole: String] = [:]
+    /// Retakes of the microphone in a row, each within a second of a switch
+    /// back.
+    private var fastMicrophoneRetakes = 0
+    /// The microphone picked with automatic switching off that the hold
+    /// switches back to.
+    private var heldInputUID: String?
+    private var microphoneHoldResume: Task<Void, Never>?
+    var uptime: () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }
     private let isUserPicking: () -> Bool
     /// Bumped on every Jabra link verdict so `linkState(for:)` is part of the
     /// Observation graph. `link.state` itself lives outside `@Observable`, so
@@ -278,6 +286,8 @@ final class AppModel {
     func stop() {
         muteVolumeRefreshTask?.cancel()
         muteVolumeRefreshTask = nil
+        microphoneHoldResume?.cancel()
+        microphoneHoldResume = nil
         busylightTask?.cancel()
         busylightTask = nil
         micFlashTimer?.invalidate()
@@ -399,6 +409,7 @@ final class AppModel {
                 withSwitchReason("switched back") {
                     select(previousDevice, includesPairedDevice: false)
                 }
+                if movedRole == .input { heldInputUID = previousDevice.uid }
                 switchedBack = true
             }
             if switchedBack {
@@ -454,11 +465,34 @@ final class AppModel {
 
     /// Whether to switch `role` back from `uid`. AirPods Smart Routing ignores
     /// a default set through CoreAudio and retries every few seconds, so once
-    /// the same role is taken again soon after a switch back, the app stops
-    /// rather than fight it.
+    /// the output is taken again soon after a switch back, the app stops
+    /// rather than fight it: an audible flip between speakers and AirPods is
+    /// worse than leaving them. The microphone is held instead, since a call
+    /// on the AirPods microphone is worse than a moment on it. Smart Routing
+    /// waits 2 s before taking it and retried every 4.4 s on AirPods Pro
+    /// (macOS 26.6.2), so only a retake within 1 s of a switch back, three
+    /// in a row, means another app is fighting, and pauses the hold for 30 s.
     private func shouldSwitchBack(_ role: DeviceRole, from uid: String) -> Bool {
         guard takeoverUIDs[role] != uid else { return false }
-        let now = ProcessInfo.processInfo.systemUptime
+        let now = uptime()
+        if role == .input {
+            let isFast = switchedBackAt[.input].map { now - $0 < 1 } ?? false
+            fastMicrophoneRetakes = isFast ? fastMicrophoneRetakes + 1 : 0
+            if fastMicrophoneRetakes >= 3 {
+                DebugLog.shared.write("\(logName(uid, role)) took the microphone back three times within a second of each switch back, pausing the hold for 30 s")
+                takeoverUIDs[.input] = uid
+                fastMicrophoneRetakes = 0
+                microphoneHoldResume?.cancel()
+                microphoneHoldResume = Task { @MainActor [weak self] in
+                    try? await Task.sleep(for: .seconds(30))
+                    guard !Task.isCancelled else { return }
+                    self?.resumeMicrophoneHold()
+                }
+                return false
+            }
+            switchedBackAt[.input] = now
+            return true
+        }
         // ponytail: a fixed 30 s window. A retry slower than that still loops,
         // at its own pace; counting retries per pick would close that.
         if let last = switchedBackAt[role], now - last < 30 {
@@ -468,6 +502,26 @@ final class AppModel {
         }
         switchedBackAt[role] = now
         return true
+    }
+
+    /// Ends a paused microphone hold and takes the microphone back, unless a
+    /// pick, a profile or a device coming or going already started over:
+    /// to the list, or to the pick with automatic switching off.
+    func resumeMicrophoneHold() {
+        microphoneHoldResume = nil
+        guard let uid = takeoverUIDs[.input] else { return }
+        DebugLog.shared.write("resuming the microphone hold after a pause on \(logName(uid, .input))")
+        takeoverUIDs[.input] = nil
+        // A fight still going on pauses again after three more fast retakes.
+        switchedBackAt[.input] = uptime()
+        withSwitchReason("switched back after a pause") {
+            if !isManualMode {
+                applyHighestPriorityInput()
+            } else if let held = inputDevices.first(where: { $0.uid == heldInputUID && $0.isConnected }) {
+                select(held, includesPairedDevice: false)
+                refreshMute()
+            }
+        }
     }
 
     /// The device macOS keeps switching to, while it is still current, output
