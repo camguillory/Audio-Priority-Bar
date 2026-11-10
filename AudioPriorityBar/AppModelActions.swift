@@ -132,6 +132,19 @@ extension AppModel {
     func logSnapshot() {
         let log = DebugLog.shared
         guard log.isEnabled else { return }
+        for line in diagnosticLines() { log.write(line) }
+    }
+
+    /// The snapshot and the recent switches, as plain text to paste into a
+    /// bug report.
+    var diagnostics: String {
+        (diagnosticLines() + ["recent switches:"]
+            + (recentSwitches.isEmpty ? ["none"] : recentSwitches.map(\.description)))
+            .joined(separator: "\n")
+    }
+
+    private func diagnosticLines() -> [String] {
+        var lines: [String] = []
         let info = Bundle.main.infoDictionary
         let version = info?["CFBundleShortVersionString"] as? String ?? "?"
         let build = info?["CFBundleVersion"] as? String ?? "?"
@@ -140,21 +153,22 @@ extension AppModel {
         #else
         let architecture = "x86_64"
         #endif
-        log.write("\(appDisplayName) \(version) (\(build)), macOS \(ProcessInfo.processInfo.operatingSystemVersionString), \(architecture)")
-        log.write("permissions: \(Permissions.summary())")
-        log.write("settings: automatic \(!isManualMode), selectsPairedDevice \(selectsPairedDevice), microphonesFollowOutput \(microphonesFollowOutput), hideNewDisplayOutputs \(hideNewDisplayOutputs), mutesSpeakersWhenHeadphonesDisconnect \(mutesSpeakersWhenHeadphonesDisconnect), lightsBusylightWhileRecording \(lightsBusylightWhileRecording), showsSwitchNotice \(showsSwitchNotice), remindsWhenMuted \(remindsWhenMuted)")
-        log.write("profile: \(profiles.first { $0.id == activeProfileID }?.name ?? "none"), \(profiles.count) in all")
-        log.write("speakers: \(logList(speakerDevices + hiddenSpeakerDevices))")
-        log.write("headphones: \(logList(headphoneDevices + hiddenHeadphoneDevices))")
+        lines.append("\(appDisplayName) \(version) (\(build)), macOS \(ProcessInfo.processInfo.operatingSystemVersionString), \(architecture)")
+        lines.append("permissions: \(Permissions.summary())")
+        lines.append("settings: automatic \(!isManualMode), selectsPairedDevice \(selectsPairedDevice), microphonesFollowOutput \(microphonesFollowOutput), hideNewDisplayOutputs \(hideNewDisplayOutputs), mutesSpeakersWhenHeadphonesDisconnect \(mutesSpeakersWhenHeadphonesDisconnect), lightsBusylightWhileRecording \(lightsBusylightWhileRecording), showsSwitchNotice \(showsSwitchNotice), remindsWhenMuted \(remindsWhenMuted)")
+        lines.append("profile: \(profiles.first { $0.id == activeProfileID }?.name ?? "none"), \(profiles.count) in all")
+        lines.append("speakers: \(logList(speakerDevices + hiddenSpeakerDevices))")
+        lines.append("headphones: \(logList(headphoneDevices + hiddenHeadphoneDevices))")
         if microphonesFollowOutput {
             for category in OutputCategory.allCases {
-                log.write("microphones with \(category.rawValue): \(logList(store.sorted(inputDevices, microphonesFor: category)))")
+                lines.append("microphones with \(category.rawValue): \(logList(store.sorted(inputDevices, microphonesFor: category)))")
             }
         } else {
-            log.write("microphones: \(logList(inputDevices))")
+            lines.append("microphones: \(logList(inputDevices))")
         }
-        log.write("current: output \(currentOutputDevice?.logName ?? "none"), microphone \(currentInputDevice?.logName ?? "none")")
-        if !keptPicks.isEmpty { log.write("kept picks: \(keptPicks)") }
+        lines.append("current: output \(currentOutputDevice?.logName ?? "none"), microphone \(currentInputDevice?.logName ?? "none")")
+        if !keptPicks.isEmpty { lines.append("kept picks: \(keptPicks)") }
+        return lines
     }
 
     /// Devices in order, each with what decides whether it can be chosen.
@@ -698,7 +712,9 @@ extension AppModel {
         // Automatic mode alone picks from the lists, so it chooses this once
         // before the profile's own setting takes over.
         isManualMode = false
-        applyHighestPriorityDevices()
+        withSwitchReason("profile \"\(profiles.first { $0.id == activeProfileID }?.name ?? "")\"") {
+            applyHighestPriorityDevices()
+        }
         isManualMode = store.isManualMode
         guard announces,
               let name = profiles.first(where: { $0.id == activeProfileID })?.name else {

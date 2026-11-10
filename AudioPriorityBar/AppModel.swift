@@ -42,6 +42,17 @@ struct SkippedOutput: Equatable {
     let reason: OutputSkipReason
 }
 
+struct SwitchRecord: Equatable {
+    let date: Date
+    let role: DeviceRole
+    let device: String
+    let reason: String
+
+    var description: String {
+        "\(date.formatted(date: .omitted, time: .standard))  \(role == .input ? "Microphone" : "Output"): \(device), \(reason)"
+    }
+}
+
 struct AutomaticOutputDecision {
     let target: AudioDevice?
     let skipped: SkippedOutput?
@@ -141,6 +152,12 @@ final class AppModel {
     /// Called when a Focus or a shortcut applies a profile, with its name and
     /// the devices that changed.
     var onProfileApplied: ((String, [AudioDevice]) -> Void)?
+    /// The last switches of output or microphone, newest first, for
+    /// Settings and Copy Diagnostics. Kept in memory only.
+    var recentSwitches: [SwitchRecord] = []
+    /// Why the next `select` happens, when its caller knows better than
+    /// "automatic" or "picked".
+    var switchReason: String?
 
     let store: PriorityStore
     let audio: AudioOperations
@@ -325,6 +342,9 @@ final class AppModel {
         let currentUID = currentID.flatMap { connectedUIDsByID[role]?[$0] }
         if previousUIDs[role] != currentUID {
             DebugLog.shared.write("default \(role.rawValue) changed outside the app: \(previousDevices[role]?.logName ?? "none") to \(currentUID.map { logName($0, role) } ?? "none")")
+            if let device = role == .input ? currentInputDevice : currentOutputDevice {
+                recordSwitch(role, device.name, "by macOS, Control Center or another app")
+            }
         }
         guard hasStarted else {
             refreshMute()
@@ -365,7 +385,9 @@ final class AppModel {
                 // macOS or another app moved it, as when AirPods in the ears
                 // take the output back, so the user's own pick wins.
                 DebugLog.shared.write("switching \(movedRole.rawValue) back to \(previousDevice.logName): macOS or another app moved it while automatic switching is off")
-                select(previousDevice, includesPairedDevice: false)
+                withSwitchReason("switched back") {
+                    select(previousDevice, includesPairedDevice: false)
+                }
                 switchedBack = true
             }
             if switchedBack {
@@ -397,7 +419,7 @@ final class AppModel {
                 // microphone on ear detection, so the list wins.
                 DebugLog.shared.write("macOS or another app moved the \(role.rawValue), switching back to the list")
                 let moved = currentUIDs
-                applyHighestPriority(role)
+                withSwitchReason("switched back to the list") { applyHighestPriority(role) }
                 refreshMute()
                 announceAutomaticSwitches(since: moved)
                 return
@@ -1121,6 +1143,8 @@ final class AppModel {
                 return false
             }
             DebugLog.shared.write("set the \(device.role.rawValue) to \(device.logName)")
+            recordSwitch(device.role, device.name, switchReason
+                ?? (automatically ? "automatic\(logReason(device))" : "picked"))
             if device.role == .input {
                 currentInputID = device.platformID
             } else {
@@ -1151,7 +1175,19 @@ final class AppModel {
         guard partner.platformID != partnerCurrentID else { return }
         guard !automatically
             || (!store.isNeverUse(partner) && link.isUsable(partner)) else { return }
-        select(partner)
+        withSwitchReason("with its other half") { select(partner) }
+    }
+
+    func withSwitchReason(_ reason: String, _ body: () -> Void) {
+        let outer = switchReason
+        switchReason = reason
+        body()
+        switchReason = outer
+    }
+
+    private func recordSwitch(_ role: DeviceRole, _ device: String, _ reason: String) {
+        recentSwitches.insert(SwitchRecord(date: Date(), role: role, device: device, reason: reason), at: 0)
+        if recentSwitches.count > 20 { recentSwitches.removeLast() }
     }
 
     /// Whether choosing `device` selects its other half too: the global
