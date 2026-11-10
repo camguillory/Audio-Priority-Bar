@@ -35,6 +35,7 @@ public final class PriorityStore {
         static let showsMenuBarVolume = "showsMenuBarVolume"
         static let pulsesMutedMicrophone = "pulsesMutedMicrophone"
         static let redIconWhenManual = "redIconWhenManual"
+        static let keepsDebugLog = "keepsDebugLog"
         static let priorityProfiles = "priorityProfiles"
         static let activePriorityProfile = "activePriorityProfile"
         static let profileBeforeFocus = "profileBeforeFocus"
@@ -274,6 +275,12 @@ public final class PriorityStore {
     public var redIconWhenManual: Bool {
         get { defaults.bool(forKey: Key.redIconWhenManual) }
         set { defaults.set(newValue, forKey: Key.redIconWhenManual) }
+    }
+
+    /// Whether the app writes what it sees and does to a local log file.
+    public var keepsDebugLog: Bool {
+        get { defaults.bool(forKey: Key.keepsDebugLog) }
+        set { defaults.set(newValue, forKey: Key.keepsDebugLog) }
     }
 
     /// Microphones this app muted and has not restored yet, by UID: the input

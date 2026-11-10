@@ -446,6 +446,15 @@ func redIconWhenManualIsOffUntilTurnedOn() throws {
 }
 
 @Test
+func keepsDebugLogIsOffUntilTurnedOn() throws {
+    try withDefaults { defaults in
+        #expect(!PriorityStore(defaults: defaults).keepsDebugLog)
+        PriorityStore(defaults: defaults).keepsDebugLog = true
+        #expect(PriorityStore(defaults: defaults).keepsDebugLog)
+    }
+}
+
+@Test
 func menuBarShowsOnlyTheOutputUntilChanged() throws {
     try withDefaults { defaults in
         #expect(PriorityStore(defaults: defaults).menuBarDevices == .outputOnly)

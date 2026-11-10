@@ -48,6 +48,9 @@ struct SettingsView: View {
     @Bindable var updates: UpdateChecker
     let pane: SettingsPane
     @State private var isAccessibilityTrusted = false
+    @State private var isConfirmingClear = false
+    /// Bumped by Clear, so the size shows zero at once.
+    @State private var logRevision = 0
 
     private static let homePageURL = URL(
         string: "https://github.com/camguillory/Audio-Priority-Bar/"
@@ -134,6 +137,7 @@ struct SettingsView: View {
                     Text("Allowed").foregroundStyle(.secondary)
                 } else {
                     Button("Allow…") {
+                        DebugLog.shared.write("clicked Allow for Accessibility")
                         AXIsProcessTrustedWithOptions(
                             ["AXTrustedCheckOptionPrompt": true] as CFDictionary
                         )
@@ -201,6 +205,7 @@ struct SettingsView: View {
         Section {
             LabeledContent {
                 Button("Open Focus Settings…") {
+                    DebugLog.shared.write("clicked Open Focus Settings")
                     NSWorkspace.shared.open(Self.focusSettingsURL)
                 }
             } label: {
@@ -225,6 +230,7 @@ struct SettingsView: View {
                 let url = "\(URLCommand.scheme)://\(command.rawValue)"
                 LabeledContent {
                     Button("Copy") {
+                        DebugLog.shared.write("copied \(url)")
                         NSPasteboard.general.clearContents()
                         NSPasteboard.general.setString(url, forType: .string)
                     }
@@ -248,7 +254,10 @@ struct SettingsView: View {
         Section {
             Toggle("Open at Login", isOn: Binding(
                 get: { launchAtLogin.isEnabled },
-                set: { launchAtLogin.setEnabled($0) }
+                set: {
+                    DebugLog.shared.write("setting Open at Login = \($0)")
+                    launchAtLogin.setEnabled($0)
+                }
             ))
 
             if launchAtLogin.requiresApproval {
@@ -273,17 +282,66 @@ struct SettingsView: View {
             if updates.isAvailable {
                 Toggle(isOn: Binding(
                     get: { updates.automaticUpdatesEnabled },
-                    set: { updates.setAutomaticUpdatesEnabled($0) }
+                    set: {
+                        DebugLog.shared.write("setting automatic updates = \($0)")
+                        updates.setAutomaticUpdatesEnabled($0)
+                    }
                 )) {
                     Text("Install updates automatically")
                     Text("Checks daily and restarts the app after installing.")
                 }
 
-                Button("Check for Updates…") { updates.checkForUpdates() }
+                Button("Check for Updates…") {
+                    DebugLog.shared.write("clicked Check for Updates in Settings")
+                    updates.checkForUpdates()
+                }
             } else {
                 Text("Updates are off in development builds.")
                     .foregroundStyle(.secondary)
             }
+        }
+
+        Section("Troubleshooting") {
+            Toggle(isOn: Binding(
+                get: { model.keepsDebugLog },
+                set: { model.setKeepsDebugLog($0) }
+            )) {
+                Text("Keep a debug log")
+                Text("Records device changes, switches and clicks on this Mac, to attach to a bug report.")
+            }
+
+            // Rereads the folder every few seconds, since lines keep landing
+            // while Settings is open.
+            TimelineView(.periodic(from: .now, by: 5)) { _ in
+                let _ = logRevision
+                let log = DebugLog.shared
+                let size = log.totalSize
+                LabeledContent {
+                    HStack {
+                        Button("Show in Finder") {
+                            NSWorkspace.shared.activateFileViewerSelecting([log.files.last ?? log.directory])
+                        }
+                        Button("Clear…") { isConfirmingClear = true }
+                    }
+                    .disabled(size == 0)
+                } label: {
+                    Text("Log files")
+                    Text(size == 0
+                        ? "None yet. One file per day, the last \(log.keptDays) days kept."
+                        : "\(size.formatted(.byteCount(style: .file))), one file per day, the last \(log.keptDays) days kept.")
+                }
+            }
+        }
+        .confirmationDialog("Delete the debug log?", isPresented: $isConfirmingClear) {
+            Button("Delete") {
+                model.clearDebugLog()
+                logRevision += 1
+            }
+            .keyboardShortcut(.defaultAction)
+            Button("Cancel", role: .cancel) {}
+                .keyboardShortcut(.cancelAction)
+        } message: {
+            Text("Every saved day is removed from this Mac.")
         }
 
         Section {
@@ -407,7 +465,10 @@ private struct ProfileRow: View {
                 Button("Use") { model.applyProfile(id: profile.id) }
                     .accessibilityLabel("Use \(profile.name)")
             }
-            Button("Delete", role: .destructive) { isConfirmingDelete = true }
+            Button("Delete", role: .destructive) {
+                DebugLog.shared.write("clicked Delete on the profile \"\(profile.name)\"")
+                isConfirmingDelete = true
+            }
                 .disabled(!canDelete)
                 .help(canDelete ? "Delete this profile" : "The last profile can't be deleted")
                 .accessibilityLabel("Delete \(profile.name)")
@@ -597,6 +658,7 @@ final class SettingsWindowController: NSWindowController {
     /// wherever it was last left, which on a multi-screen desk is usually the
     /// wrong one.
     func showSettings(on screen: NSScreen? = nil, pane: SettingsPane? = nil) {
+        DebugLog.shared.write("Settings opened\(pane.map { " on \($0.label)" } ?? "")")
         NSApp.activate(ignoringOtherApps: true)
         if let pane,
            let tabs = window?.contentViewController as? NSTabViewController,

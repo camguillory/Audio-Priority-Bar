@@ -172,6 +172,7 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         observeNotice()
         observePointer()
         notice.onDismissMutedReminder = { [weak self] in
+            DebugLog.shared.write("clicked the muted reminder away")
             self?.mutedReminder.dismiss()
             self?.refreshMutedReminder()
         }
@@ -270,11 +271,13 @@ final class StatusItemController: NSObject, NSWindowDelegate {
                 in: items,
                 down: key == .down
             ) else { return false }
+            DebugLog.shared.write("keyboard: highlighted \(item)")
             model.keyboardItem = item
         case .left, .right:
             guard let item = model.keyboardItem, items.contains(item) else { return false }
             if case .device(let id) = item {
                 guard key == .right else { return false }
+                DebugLog.shared.write("keyboard: opened the actions menu of \(item)")
                 model.actionsMenuDeviceID = id
                 return true
             }
@@ -283,10 +286,12 @@ final class StatusItemController: NSObject, NSWindowDelegate {
             guard let item = model.keyboardItem, items.contains(item) else { return false }
             switch item {
             case .settings:
+                DebugLog.shared.write("keyboard: used settings")
                 hidePanel()
                 showSettings()
                 return true
             case .takeoverFix:
+                DebugLog.shared.write("keyboard: used Fix in Settings")
                 hidePanel()
                 NSWorkspace.shared.open(PanelView.headphoneSettingsURL)
                 return true
@@ -460,6 +465,7 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         } else {
             action = .togglePanel
         }
+        DebugLog.shared.write("clicked the menu bar icon: \(action)")
         switch action {
         case .togglePanel: togglePanel()
         case .showMenu: showMenu()
@@ -468,6 +474,7 @@ final class StatusItemController: NSObject, NSWindowDelegate {
     }
 
     @objc private func toggleMute() {
+        DebugLog.shared.write("menu bar icon: microphone mute")
         model.setMicrophoneMuted(!model.isMicrophoneMuted)
     }
 
@@ -497,6 +504,7 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         batteryTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.model.battery.refresh() }
         }
+        DebugLog.shared.write("panel opened")
         panel.orderFrontRegardless()
         panel.makeKey()
         button.highlight(true)
@@ -524,6 +532,7 @@ final class StatusItemController: NSObject, NSWindowDelegate {
     }
 
     @objc private func handleUpdatesItem() {
+        DebugLog.shared.write("menu: Check for Updates")
         updates.checkForUpdates()
     }
 
@@ -533,6 +542,7 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         if suppressNextClick {
             suppressNextClickAt = ProcessInfo.processInfo.systemUptime
         }
+        DebugLog.shared.write("panel closed")
         panel.orderOut(nil)
         model.showMicrophoneOrderInUse()
         model.keyboardItem = nil
@@ -654,20 +664,26 @@ final class StatusItemController: NSObject, NSWindowDelegate {
     }
 
     private func refreshMutedReminder() {
-        notice.showsMutedReminder = mutedReminder.update(
+        let shows = mutedReminder.update(
             applies: model.remindsWhenMuted
                 && model.isMicrophoneMuted
                 && model.isInputRecording
         )
+        if shows != notice.showsMutedReminder {
+            DebugLog.shared.write("muted reminder \(shows ? "shown" : "hidden")")
+        }
+        notice.showsMutedReminder = shows
     }
 
     private func showSwitchNotice(_ devices: [AudioDevice]) {
         guard model.showsSwitchNotice, !devices.isEmpty else { return }
+        DebugLog.shared.write("switch notice shown for \(devices.map(\.name))")
         notice.showSwitch(NoticeContent.switched(to: devices, icon: noticeIcon))
     }
 
     private func showProfileNotice(_ profile: String, _ devices: [AudioDevice]) {
         guard model.showsSwitchNotice else { return }
+        DebugLog.shared.write("profile notice shown for \"\(profile)\" with \(devices.map(\.name))")
         notice.showSwitch(NoticeContent.applied(profile: profile, devices: devices, icon: noticeIcon))
     }
 

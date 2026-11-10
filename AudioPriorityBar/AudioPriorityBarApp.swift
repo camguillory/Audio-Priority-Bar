@@ -66,6 +66,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func application(_ application: NSApplication, open urls: [URL]) {
+        for url in urls { DebugLog.shared.write("opened \(url.absoluteString)") }
         let commands = urls.compactMap(URLCommand.init(url:))
         guard let model = runtime?.model else {
             pendingCommands += commands

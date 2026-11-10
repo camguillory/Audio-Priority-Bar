@@ -126,6 +126,7 @@ final class AppModel {
     var showsMenuBarVolume: Bool
     var pulsesMutedMicrophone: Bool
     var redIconWhenManual: Bool
+    var keepsDebugLog: Bool
     /// The menu bar icon's reminder that automatic switching is off.
     var showsRedIconBackground: Bool { redIconWhenManual && isManualMode }
     /// Bluetooth addresses with a connection attempt in flight, each tagged so
@@ -190,6 +191,9 @@ final class AppModel {
     /// recording stops.
     private var declinedBusylights: Set<String> = []
     private var busylightTask: Task<Void, Never>?
+    /// A slider drag sets the level many times a second, so the log gets the
+    /// level it settles on.
+    var levelLogTasks: [DeviceRole: Task<Void, Never>] = [:]
     /// Headset rows with the microphone line open, by output UID, and those
     /// whose line opened with no app recording, so by the call button.
     private var openLineUIDs: Set<String> = []
@@ -224,6 +228,7 @@ final class AppModel {
         showsMenuBarVolume = store.showsMenuBarVolume
         pulsesMutedMicrophone = store.pulsesMutedMicrophone
         redIconWhenManual = store.redIconWhenManual
+        keepsDebugLog = store.keepsDebugLog
         profiles = store.profiles
         activeProfileID = store.activeProfileID
         battery.onPairedAudioChange = { [weak self] in self?.refreshDevices() }
@@ -318,6 +323,9 @@ final class AppModel {
         refreshVolume()
         let currentID = role == .input ? currentInputID : currentOutputID
         let currentUID = currentID.flatMap { connectedUIDsByID[role]?[$0] }
+        if previousUIDs[role] != currentUID {
+            DebugLog.shared.write("default \(role.rawValue) changed outside the app: \(previousDevices[role]?.logName ?? "none") to \(currentUID.map { logName($0, role) } ?? "none")")
+        }
         guard hasStarted else {
             refreshMute()
             return
@@ -356,6 +364,7 @@ final class AppModel {
                 }
                 // macOS or another app moved it, as when AirPods in the ears
                 // take the output back, so the user's own pick wins.
+                DebugLog.shared.write("switching \(movedRole.rawValue) back to \(previousDevice.logName): macOS or another app moved it while automatic switching is off")
                 select(previousDevice, includesPairedDevice: false)
                 switchedBack = true
             }
@@ -374,6 +383,7 @@ final class AppModel {
             return
         }
         if topologyExplainsChange(role) {
+            DebugLog.shared.write("the \(role.rawValue) change follows a device connecting or leaving, so the list decides")
             applyHighestPriorityDevices()
             announceAutomaticSwitches(since: before)
             return
@@ -381,14 +391,19 @@ final class AppModel {
         if let target = automaticTarget(for: role),
            target.platformID != currentID,
            let currentUID {
-            guard isUserPicking() || !shouldSwitchBack(role, from: currentUID) else {
+            let isPicking = isUserPicking()
+            guard isPicking || !shouldSwitchBack(role, from: currentUID) else {
                 // macOS or another app moved it, as when AirPods take the
                 // microphone on ear detection, so the list wins.
+                DebugLog.shared.write("macOS or another app moved the \(role.rawValue), switching back to the list")
                 let moved = currentUIDs
                 applyHighestPriority(role)
                 refreshMute()
                 announceAutomaticSwitches(since: moved)
                 return
+            }
+            if isPicking {
+                DebugLog.shared.write("the \(role.rawValue) was picked in Control Center or Sound Settings")
             }
             keepPick(currentUID, for: role)
         }
@@ -414,6 +429,7 @@ final class AppModel {
         // ponytail: a fixed 30 s window. A retry slower than that still loops,
         // at its own pace; counting retries per pick would close that.
         if let last = switchedBackAt[role], now - last < 30 {
+            DebugLog.shared.write("\(logName(uid, role)) took the \(role.rawValue) again within 30 s of a switch back, leaving it there")
             takeoverUIDs[role] = uid
             return false
         }
@@ -439,8 +455,20 @@ final class AppModel {
             await Task.yield()
             guard let self, !Task.isCancelled else { return }
             muteVolumeRefreshTask = nil
+            // The app updates these itself before CoreAudio echoes its own
+            // changes, so a difference here came from outside.
+            let before = (volume: volume, microphone: microphoneLevel, isMuted: isActiveOutputMuted)
             refreshMute()
             refreshVolume()
+            if (before.volume * 100).rounded() != (volume * 100).rounded() {
+                logSettledLevel(.output, volume, outside: true)
+            }
+            if (before.microphone * 100).rounded() != (microphoneLevel * 100).rounded() {
+                logSettledLevel(.input, microphoneLevel, outside: true)
+            }
+            if before.isMuted != isActiveOutputMuted {
+                DebugLog.shared.write("output \(isActiveOutputMuted ? "muted" : "unmuted") outside the app")
+            }
         }
     }
 
@@ -456,6 +484,9 @@ final class AppModel {
         if inputUIDs != connectedInputUIDs || outputUIDs != connectedOutputUIDs {
             switchedBackAt = [:]
             takeoverUIDs = [:]
+            if DebugLog.shared.isEnabled {
+                logConnections(connected, inputs: inputUIDs, outputs: outputUIDs)
+            }
         }
         connectedInputUIDs = inputUIDs
         connectedOutputUIDs = outputUIDs
@@ -523,9 +554,36 @@ final class AppModel {
         endOvertakenPicks()
     }
 
+    /// Devices that connected or left since the last refresh, read before
+    /// the connected sets are replaced.
+    private func logConnections(
+        _ connected: [AudioDevice],
+        inputs: Set<String>,
+        outputs: Set<String>
+    ) {
+        for device in connected where !(device.role == .input
+            ? connectedInputUIDs
+            : connectedOutputUIDs).contains(device.uid) {
+            DebugLog.shared.write("connected \(device.role.rawValue): \(logEntry(device))")
+        }
+        for (role, left) in [
+            (DeviceRole.input, connectedInputUIDs.subtracting(inputs)),
+            (.output, connectedOutputUIDs.subtracting(outputs)),
+        ] {
+            for uid in left.sorted() {
+                DebugLog.shared.write("disconnected \(role.rawValue): \(logName(uid, role))")
+            }
+        }
+    }
+
+    func logName(_ uid: String, _ role: DeviceRole) -> String {
+        store.storedDevice(uid: uid, role: role)?.disconnectedDevice().logName ?? "[\(uid)]"
+    }
+
     /// Keeps `uid` for `role` until it leaves or the list would use a device
     /// that connects after it.
     func keepPick(_ uid: String, for role: DeviceRole) {
+        DebugLog.shared.write("keeping the \(role.rawValue) pick \(logName(uid, role)) until it leaves or a newer device outranks it")
         keptPicks[role] = uid
         connectedAtPick[role] = role == .input ? connectedInputUIDs : connectedOutputUIDs
     }
@@ -537,14 +595,20 @@ final class AppModel {
         guard !keptPicks.isEmpty else { return }
         for role in DeviceRole.allCases {
             let connected = role == .input ? connectedInputUIDs : connectedOutputUIDs
-            if let uid = keptPicks[role], !connected.contains(uid) { keptPicks[role] = nil }
+            if let uid = keptPicks[role], !connected.contains(uid) {
+                DebugLog.shared.write("the \(role.rawValue) pick \(logName(uid, role)) ended: it left")
+                keptPicks[role] = nil
+            }
             connectedAtPick[role]?.formIntersection(connected)
         }
         let overtaken = keptPicks.keys.contains { role in
             automaticTarget(for: role, honoringPicks: false)
                 .map { connectedAtPick[role]?.contains($0.uid) == false } ?? false
         }
-        if overtaken { keptPicks = [:] }
+        if overtaken {
+            DebugLog.shared.write("picks ended: a device that connected after them now ranks first")
+            keptPicks = [:]
+        }
     }
 
     /// The category whose microphone order the panel shows and edits.
@@ -618,7 +682,11 @@ final class AppModel {
         isActiveInputMuted = currentInputDevice.map {
             mutedRoles.contains($0.roleIdentifier)
         } ?? false
-        isInputRecording = currentInputID.map(audio.isRunning) ?? false
+        let isRecording = currentInputID.map(audio.isRunning) ?? false
+        if isRecording != isInputRecording {
+            DebugLog.shared.write("an app \(isRecording ? "started" : "stopped") recording from \(currentInputDevice?.logName ?? "the microphone")")
+        }
+        isInputRecording = isRecording
         updateMicFlash()
         scheduleAutomaticBusylights()
     }
@@ -635,6 +703,7 @@ final class AppModel {
            let uid = playingHeadphonesUID,
            !(allOutputs.first { $0.uid == uid && $0.isConnected }.map(link.isUsable) ?? false),
            category == .speaker {
+            DebugLog.shared.write("muting \(output.logName): the headphones \(logName(uid, .output)) left")
             _ = audio.setMute(.output, output.platformID, true)
         }
         playingHeadphonesUID = category == .headphone ? output.uid : nil
@@ -648,11 +717,13 @@ final class AppModel {
         if let current {
             let muted = isHardwareMuted(current)
             if current.uid == mutedInputUID, !muted {
+                DebugLog.shared.write("\(current.logName) was unmuted outside the app")
                 isMicrophoneMuted = false
                 mutedInputUID = nil
                 store.appliedMicrophoneMutes[current.uid] = nil
             } else if mutedInputUID == nil, muted, !isMicrophoneMuted,
                       store.appliedMicrophoneMutes[current.uid] == nil {
+                DebugLog.shared.write("\(current.logName) was muted outside the app")
                 isMicrophoneMuted = true
                 mutedInputUID = current.uid
             }
@@ -678,12 +749,19 @@ final class AppModel {
     private func applyMicrophoneMute(_ device: AudioDevice) -> Bool {
         let id = device.platformID
         store.appliedMicrophoneMutes[device.uid] = PriorityStore.mutedByProperty
-        if audio.setMute(.input, id, true) { return true }
+        if audio.setMute(.input, id, true) {
+            DebugLog.shared.write("muted \(device.logName) by its mute property")
+            return true
+        }
         if let level = audio.inputVolume(id) {
             store.appliedMicrophoneMutes[device.uid] = Double(level)
-            if audio.setInputVolume(id, 0) { return true }
+            if audio.setInputVolume(id, 0) {
+                DebugLog.shared.write("muted \(device.logName) by zeroing its level, from \(level)")
+                return true
+            }
         }
         store.appliedMicrophoneMutes[device.uid] = nil
+        DebugLog.shared.write("could not mute \(device.logName)")
         return false
     }
 
@@ -700,8 +778,10 @@ final class AppModel {
             return
         }
         if let level, level != PriorityStore.mutedByProperty {
+            DebugLog.shared.write("unmuting \(logName(uid, .input)) by restoring its level to \(level)")
             _ = audio.setInputVolume(id, Float(level))
         } else {
+            DebugLog.shared.write("unmuting \(logName(uid, .input)) by its mute property")
             _ = audio.setMute(.input, id, false)
         }
         store.appliedMicrophoneMutes[uid] = nil
@@ -809,15 +889,20 @@ final class AppModel {
             case (false, let lit):
                 litBusylights[uid] = nil
                 declinedBusylights.remove(uid)
-                if lit != nil, isBusy { link.setBusy(false, output) }
+                if lit != nil, isBusy {
+                    DebugLog.shared.write("busylight off on \(output.logName): the recording stopped")
+                    link.setBusy(false, output)
+                }
             case (true, nil):
                 guard !isBusy, !declinedBusylights.contains(uid) else { continue }
+                DebugLog.shared.write("busylight on for \(output.logName): an app records from its microphone")
                 litBusylights[uid] = false
                 link.setBusy(true, output)
             case (true, false?):
                 if isBusy { litBusylights[uid] = true }
             case (true, true?):
                 guard !isBusy else { continue }
+                DebugLog.shared.write("busylight on \(output.logName) cleared by the wearer, left off until the recording stops")
                 litBusylights[uid] = nil
                 declinedBusylights.insert(uid)
             }
@@ -844,20 +929,24 @@ final class AppModel {
     }
 
     func setNoiseMode(_ mode: JabraGNP.NoiseMode, for device: AudioDevice) {
+        DebugLog.shared.write("clicked noise mode \(mode) on \(device.logName)")
         link.setNoiseMode(mode, device)
     }
 
     func setSidetone(_ isOn: Bool, for device: AudioDevice) {
+        DebugLog.shared.write("clicked sidetone \(isOn ? "on" : "off") on \(device.logName)")
         link.setSidetone(isOn, device)
     }
 
     func setBusy(_ isBusy: Bool, for device: AudioDevice) {
+        DebugLog.shared.write("clicked busylight \(isBusy ? "on" : "off") on \(device.logName)")
         link.setBusy(isBusy, device)
     }
 
     /// Only a call the headset's call button started: another app's call
     /// is that app's to end.
     func endHeadsetCall(for device: AudioDevice) {
+        DebugLog.shared.write("clicked end call on \(device.logName)")
         guard headsetControls(for: device)?.isHeadsetCall == true else { return }
         link.endHeadsetCall(device)
     }
@@ -961,12 +1050,26 @@ final class AppModel {
     private func applyHighestPriority(_ role: DeviceRole) {
         // Deferral covers both roles: picking a microphone now could pair it
         // with an output we are about to change.
-        guard !automaticOutputDecision.isDeferred else { return }
+        guard !automaticOutputDecision.isDeferred else {
+            DebugLog.shared.write("automatic \(role.rawValue): waiting for a Jabra link check before choosing")
+            return
+        }
         let category = activeOutputCategory
         if let first = automaticTarget(for: role) {
+            if first.platformID != (role == .input ? currentInputID : currentOutputID) {
+                DebugLog.shared.write("automatic \(role.rawValue): \(first.logName)\(logReason(first))")
+            }
             select(first, automatically: true)
         }
         if role == .output { followOutputCategory(from: category) }
+    }
+
+    /// Why the list chose `device`, when it was not simply the first one.
+    private func logReason(_ device: AudioDevice) -> String {
+        if keptPicks[device.role] == device.uid { return ", the kept pick" }
+        guard device.role == .output,
+              let skipped = automaticOutputDecision.skipped else { return "" }
+        return ", skipping \(skipped.device.logName) (\(skipped.reason))"
     }
 
     /// Once the output has moved to the other category, moves the microphone
@@ -1014,8 +1117,10 @@ final class AppModel {
         let currentID = device.role == .input ? currentInputID : currentOutputID
         if currentID != device.platformID {
             guard audio.setDefault(device.role, device.platformID) else {
+                DebugLog.shared.write("could not set the \(device.role.rawValue) to \(device.logName)")
                 return false
             }
+            DebugLog.shared.write("set the \(device.role.rawValue) to \(device.logName)")
             if device.role == .input {
                 currentInputID = device.platformID
             } else {
