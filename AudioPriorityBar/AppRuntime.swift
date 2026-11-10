@@ -1,5 +1,7 @@
 import AppKit
 import AudioPriorityCore
+import CoreBluetooth
+import IOKit.hid
 import KeyboardShortcuts
 
 extension KeyboardShortcuts.Name {
@@ -111,26 +113,108 @@ final class AppRuntime {
         jabra.onHeadsetChange = { [weak model] in
             model?.handleHeadsetChanged()
         }
+
+        // Turned on before Settings and the menu bar item exist, so their
+        // first lines are kept too.
+        let previous = DebugLog.shared.lastMessage
+        DebugLog.shared.isEnabled = model.keepsDebugLog
+        if let previous, ![Self.quitMessage, "debug log turned off"].contains(previous) {
+            DebugLog.shared.write("the previous run ended without quitting: it crashed, was stopped, or the Mac lost power")
+        }
+        DebugLog.shared.write("started")
     }
 
     @discardableResult
     func start() -> Bool {
+        observeSystem()
         jabra.start()
         let isListening = audioObserver.startListening()
+        if !isListening { DebugLog.shared.write("CoreAudio listeners failed to start") }
         model.start()
+        model.logSnapshot()
         updates.start()
         KeyboardShortcuts.onKeyUp(for: .toggleMicrophoneMute) { [weak model] in
+            DebugLog.shared.write("pressed the mute shortcut")
             model?.perform(.toggleMicMute)
         }
         return isListening
     }
 
     func stop() {
+        DebugLog.shared.write("quitting")
         model.releaseAutomaticBusylights()
         // Producers first: once they are down, no callback, timeout or debounce
         // can reach the model and restart work it just tore down.
         jabra.stop()
         audioObserver.stopListening()
         model.stop()
+        DebugLog.shared.write(Self.quitMessage)
+    }
+
+    /// The last line of a run that quit, so the next start can tell a crash.
+    private static let quitMessage = "quit cleanly"
+
+    private var loggedPermissions = Permissions.summary()
+
+    /// Sleep, wake, the screen and the user session, around which devices
+    /// often come and go, and permissions changed in System Settings.
+    private func observeSystem() {
+        let workspace = NSWorkspace.shared.notificationCenter
+        for (name, message) in [
+            (NSWorkspace.willSleepNotification, "the Mac is going to sleep"),
+            (NSWorkspace.didWakeNotification, "the Mac woke up"),
+            (NSWorkspace.screensDidSleepNotification, "the displays slept"),
+            (NSWorkspace.screensDidWakeNotification, "the displays woke"),
+            (NSWorkspace.sessionDidResignActiveNotification, "switched to another user"),
+            (NSWorkspace.sessionDidBecomeActiveNotification, "switched back to this user"),
+        ] {
+            _ = workspace.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    DebugLog.shared.write(message)
+                    self?.logPermissionChanges()
+                }
+            }
+        }
+        for (name, message) in [
+            ("com.apple.screenIsLocked", "the screen locked"),
+            ("com.apple.screenIsUnlocked", "the screen unlocked"),
+        ] {
+            _ = DistributedNotificationCenter.default().addObserver(
+                forName: .init(name), object: nil, queue: .main
+            ) { _ in
+                MainActor.assumeIsolated { DebugLog.shared.write(message) }
+            }
+        }
+        _ = NotificationCenter.default.addObserver(
+            forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.logPermissionChanges() }
+        }
+    }
+
+    private func logPermissionChanges() {
+        let current = Permissions.summary()
+        guard current != loggedPermissions else { return }
+        loggedPermissions = current
+        DebugLog.shared.write("permissions changed: \(current)")
+    }
+}
+
+/// What the app is allowed to do, read without asking for anything.
+enum Permissions {
+    static func summary() -> String {
+        let inputMonitoring = switch IOHIDCheckAccess(kIOHIDRequestTypeListenEvent) {
+        case kIOHIDAccessTypeGranted: "allowed"
+        case kIOHIDAccessTypeDenied: "denied"
+        default: "not asked"
+        }
+        let bluetooth = switch CBManager.authorization {
+        case .allowedAlways: "allowed"
+        case .denied: "denied"
+        case .restricted: "restricted"
+        case .notDetermined: "not asked"
+        @unknown default: "unknown"
+        }
+        return "Input Monitoring \(inputMonitoring), Accessibility \(AXIsProcessTrusted() ? "allowed" : "not allowed"), Bluetooth \(bluetooth)"
     }
 }

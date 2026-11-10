@@ -1,4 +1,5 @@
 import AppKit
+import AudioPriorityCore
 import Observation
 import Sparkle
 
@@ -92,6 +93,7 @@ final class UpdateChecker: NSObject {
 
     func installPendingUpdateIfIdle() {
         guard let install = pendingInstall, isIdle() else { return }
+        DebugLog.shared.write("installing the update and relaunching")
         pendingInstall = nil
         install()
     }
@@ -115,7 +117,36 @@ extension UpdateChecker: SPUUpdaterDelegate {
         willInstallUpdateOnQuit item: SUAppcastItem,
         immediateInstallationBlock immediateInstallHandler: @escaping () -> Void
     ) -> Bool {
+        DebugLog.shared.write("update \(item.displayVersionString) ready, installing once the microphone is neither muted nor recording")
         installWhenIdle(immediateInstallHandler)
         return true
+    }
+
+    func updater(_ updater: SPUUpdater, didFindValidUpdate item: SUAppcastItem) {
+        DebugLog.shared.write("update check found \(item.displayVersionString)")
+    }
+
+    func updaterDidNotFindUpdate(_ updater: SPUUpdater) {
+        DebugLog.shared.write("update check found nothing newer")
+    }
+
+    func updater(_ updater: SPUUpdater, didDownloadUpdate item: SUAppcastItem) {
+        DebugLog.shared.write("update \(item.displayVersionString) downloaded")
+    }
+
+    func updater(_ updater: SPUUpdater, willInstallUpdate item: SUAppcastItem) {
+        DebugLog.shared.write("installing update \(item.displayVersionString)")
+    }
+
+    func updater(_ updater: SPUUpdater, didAbortWithError error: any Error) {
+        DebugLog.shared.write("update stopped: \(error.localizedDescription)")
+    }
+
+    func updater(
+        _ updater: SPUUpdater,
+        didFinishUpdateCycleFor updateCheck: SPUUpdateCheck,
+        error: (any Error)?
+    ) {
+        DebugLog.shared.write("update check (\(updateCheck == .updatesInBackground ? "background" : "asked for")) finished\(error.map { ": \($0.localizedDescription)" } ?? "")")
     }
 }

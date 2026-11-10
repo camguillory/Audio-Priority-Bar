@@ -273,6 +273,17 @@ public final class BluetoothBatteryMonitor {
             if let data {
                 let report = BluetoothBattery.parse(data)
                 let pairedChanged = report.pairedAudio != self.report.pairedAudio
+                if report.byName != self.report.byName {
+                    DebugLog.shared.write("Bluetooth battery: " + (report.byName.isEmpty ? "none" : report.byName
+                        .sorted { $0.key < $1.key }
+                        .map { "\"\($0.key)\" \($0.value.badges.map(\.spokenText).joined(separator: ", "))" }
+                        .joined(separator: "; ")))
+                }
+                if pairedChanged {
+                    DebugLog.shared.write("paired Bluetooth audio: " + report.pairedAudio
+                        .map { "\"\($0.name)\" \($0.address) \($0.category.rawValue)" }
+                        .joined(separator: "; "))
+                }
                 if report != self.report { self.report = report }
                 if pairedChanged { onPairedAudioChange?() }
             }

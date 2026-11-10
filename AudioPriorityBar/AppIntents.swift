@@ -100,6 +100,7 @@ struct SetOutputIntent: AppIntent {
 
     @MainActor
     func perform() async throws -> some IntentResult {
+        DebugLog.shared.write("Shortcuts: Set Output")
         try IntentTarget.requireModel().selectManually(uid: device.id, role: .output)
         return .result()
     }
@@ -120,6 +121,7 @@ struct SetMicrophoneIntent: AppIntent {
 
     @MainActor
     func perform() async throws -> some IntentResult {
+        DebugLog.shared.write("Shortcuts: Set Microphone")
         try IntentTarget.requireModel().selectManually(uid: device.id, role: .input)
         return .result()
     }
@@ -154,6 +156,7 @@ struct MicrophoneMuteIntent: AppIntent {
         case .on: .muteMic
         case .off: .unmuteMic
         }
+        DebugLog.shared.write("Shortcuts: Set Microphone Mute")
         try IntentTarget.requireModel().perform(command)
         return .result()
     }
@@ -198,6 +201,7 @@ struct ApplyPriorityProfileIntent: AppIntent {
 
     @MainActor
     func perform() async throws -> some IntentResult {
+        DebugLog.shared.write("Shortcuts: Apply Profile")
         guard try IntentTarget.requireModel().applyProfile(id: profile.id, announces: true) else {
             throw ShortcutError.unknownProfile
         }
@@ -247,6 +251,7 @@ struct AutomaticSwitchingIntent: AppIntent {
         case .on: .enableAutomatic
         case .off: .disableAutomatic
         }
+        DebugLog.shared.write("Shortcuts: Set Automatic Switching")
         try IntentTarget.requireModel().perform(command)
         return .result()
     }

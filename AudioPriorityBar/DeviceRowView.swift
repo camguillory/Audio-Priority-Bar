@@ -331,8 +331,13 @@ struct DeviceRow: View {
         alert.informativeText = "Its saved priority, category, and visibility will be removed."
         alert.addButton(withTitle: "Forget Device")
         alert.addButton(withTitle: "Cancel")
+        DebugLog.shared.write("clicked Forget on \(device.logName)")
         alert.beginSheetModal(for: window) { [model, device] response in
-            if response == .alertFirstButtonReturn { model.forget(device) }
+            if response == .alertFirstButtonReturn {
+                model.forget(device)
+            } else {
+                DebugLog.shared.write("cancelled forgetting \(device.logName)")
+            }
         }
     }
 
