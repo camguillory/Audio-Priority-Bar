@@ -302,6 +302,9 @@ substantial, then branch from `develop` and open the pull request against
 
 To report a switching problem, turn on **Keep a debug log** in **Settings >
 App**, make it happen again, and attach the file **Show in Finder** selects.
+For a quick report, **Recent switches** there lists the last 20 switches and
+why each happened, and **Copy Diagnostics** copies them with your settings and
+device lists.
 
 ### Build from source
 
