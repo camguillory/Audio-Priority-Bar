@@ -391,6 +391,17 @@ extension AppModel {
         reselect(device.role)
     }
 
+    func setSelectsHalvesTogether(_ device: AudioDevice, _ enabled: Bool) {
+        store.setSelectsHalvesTogether(device, enabled)
+        refreshDevices()
+        guard !isManualMode else { return }
+        if enabled, let output = currentOutputDevice, output.pairingKey == device.pairingKey {
+            selectPairedDevice(of: output, automatically: true)
+        } else if !enabled {
+            applyHighestPriorityInput()
+        }
+    }
+
     func forget(_ device: AudioDevice) {
         store.forget(uid: device.uid, role: device.role)
         refreshDevices()

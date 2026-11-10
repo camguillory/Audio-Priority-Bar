@@ -990,7 +990,7 @@ final class AppModel {
             }
             if let output = currentOutputDevice,
                automaticOutputDecision.target?.id == output.id,
-               selectsPairedDevice,
+               selectsHalvesTogether(output),
                let paired = pairedDevice(for: output),
                !store.isNeverUse(paired),
                link.isUsable(paired) {
@@ -1040,13 +1040,19 @@ final class AppModel {
         // to that output.
         if automatically, device.uid == selectedOnlyOutputUID { return }
         selectedOnlyOutputUID = nil
-        guard selectsPairedDevice, let partner = pairedDevice(for: device) else { return }
+        guard selectsHalvesTogether(device), let partner = pairedDevice(for: device) else { return }
         guard device.role == .output || !automatically else { return }
         let partnerCurrentID = partner.role == .input ? currentInputID : currentOutputID
         guard partner.platformID != partnerCurrentID else { return }
         guard !automatically
             || (!store.isNeverUse(partner) && link.isUsable(partner)) else { return }
         select(partner)
+    }
+
+    /// Whether choosing `device` selects its other half too: the global
+    /// setting, unless this device was set apart from its row.
+    func selectsHalvesTogether(_ device: AudioDevice) -> Bool {
+        selectsPairedDevice && store.selectsHalvesTogether(device)
     }
 
     /// The connected counterpart of `device` that shares its physical
