@@ -1,3 +1,4 @@
+import AppKit
 import AudioPriorityCore
 import AudioToolbox
 import CoreAudio
@@ -189,6 +190,46 @@ enum CoreAudioProperties {
             selector: kAudioDevicePropertyDeviceIsRunningSomewhere,
             into: &running
         ) == noErr && running != 0
+    }
+
+    /// The name of an app recording from the device, from the audio process
+    /// objects macOS 14.2 added. Nil before that, or when no app is found.
+    static func appRecording(from device: AudioObjectID) -> String? {
+        guard #available(macOS 14.2, *) else { return nil }
+        for process in objectIDs(system, selector: kAudioHardwarePropertyProcessObjectList) {
+            var running: UInt32 = 0
+            var pid: pid_t = 0
+            guard read(process, selector: kAudioProcessPropertyIsRunningInput, into: &running) == noErr,
+                  running != 0,
+                  objectIDs(
+                      process,
+                      selector: kAudioProcessPropertyDevices,
+                      scope: kAudioObjectPropertyScopeInput
+                  ).contains(device),
+                  read(process, selector: kAudioProcessPropertyPID, into: &pid) == noErr,
+                  let app = NSRunningApplication(processIdentifier: pid)?.localizedName else {
+                continue
+            }
+            return app
+        }
+        return nil
+    }
+
+    private static func objectIDs(
+        _ id: AudioObjectID,
+        selector: AudioObjectPropertySelector,
+        scope: AudioObjectPropertyScope = kAudioObjectPropertyScopeGlobal
+    ) -> [AudioObjectID] {
+        var address = property(selector, scope: scope)
+        var size: UInt32 = 0
+        guard AudioObjectGetPropertyDataSize(id, &address, 0, nil, &size) == noErr, size > 0 else {
+            return []
+        }
+        var ids = [AudioObjectID](repeating: 0, count: Int(size) / MemoryLayout<AudioObjectID>.size)
+        guard AudioObjectGetPropertyData(id, &address, 0, nil, &size, &ids) == noErr else {
+            return []
+        }
+        return Array(ids.prefix(Int(size) / MemoryLayout<AudioObjectID>.size))
     }
 
     private static func makeDevice(

@@ -19,15 +19,21 @@ struct NoticeContent: Equatable {
         announcement: "Microphone muted"
     )
 
+    /// While muted, an app records from a microphone the mute does not hold.
+    static func unmuted(_ recording: UncoveredRecording) -> NoticeContent {
+        let text = "\(recording.app ?? "An app") is using \(recording.microphone), which isn't muted"
+        return NoticeContent(lines: [Line(icon: "mic.fill", text: text)], announcement: text)
+    }
+
     /// A switch notice wins for its moment, then the muted reminder returns
     /// if it still applies. Nothing shows over the open panel.
     static func current(
         switchNotice: NoticeContent?,
-        showsMutedReminder: Bool,
+        mutedReminder: NoticeContent?,
         isSuppressed: Bool
     ) -> NoticeContent? {
         guard !isSuppressed else { return nil }
-        return switchNotice ?? (showsMutedReminder ? mutedWhileRecording : nil)
+        return switchNotice ?? mutedReminder
     }
 
     /// Describes one automatic switch, one line per device: its icon and
@@ -107,8 +113,8 @@ final class NoticePanel {
     private var clearTask: Task<Void, Never>?
     private var shown: NoticeContent?
 
-    var showsMutedReminder = false {
-        didSet { if oldValue != showsMutedReminder { update() } }
+    var mutedReminder: NoticeContent? {
+        didSet { if oldValue != mutedReminder { update() } }
     }
 
     /// True while the panel is open, which already shows everything.
@@ -146,12 +152,12 @@ final class NoticePanel {
     private func update() {
         let content = NoticeContent.current(
             switchNotice: switchNotice,
-            showsMutedReminder: showsMutedReminder,
+            mutedReminder: mutedReminder,
             isSuppressed: isSuppressed
         )
         guard content != shown else { return }
         shown = content
-        let isReminder = content == .mutedWhileRecording
+        let isReminder = content != nil && content == mutedReminder
         window.ignoresMouseEvents = !isReminder
         let animates = !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
         guard let content else {

@@ -1290,7 +1290,7 @@ func aLineOpenedWithNoAppRecordingIsACallFromTheHeadset() {
 
 @Test
 @MainActor
-func microphoneMuteMovesToTheNewMicrophone() {
+func microphoneMuteHoldsEveryMicrophoneThroughSwitchesAndReconnects() {
     let audio = FakeAudio()
     let headset = input(1, "headset", "Jabra Link 380")
     let builtIn = input(2, "builtin", "MacBook Pro Microphone")
@@ -1298,8 +1298,9 @@ func microphoneMuteMovesToTheNewMicrophone() {
     let model = testModel(audio: audio, defaults: isolatedDefaults())
     model.start()
 
+    // A call app set to the MacBook microphone hears silence too.
     model.setMicrophoneMuted(true)
-    #expect(audio.muted == ["input:1"])
+    #expect(audio.muted == ["input:1", "input:2"])
 
     audio.catalog = [builtIn]
     model.handleDevicesChanged()
@@ -1307,15 +1308,87 @@ func microphoneMuteMovesToTheNewMicrophone() {
     #expect(model.isMicrophoneMuted)
     #expect(audio.muted.contains("input:2"))
 
+    // A replug comes back unmuted on real hardware.
+    audio.muted.remove("input:1")
     audio.catalog = [headset, builtIn]
     model.handleDevicesChanged()
     #expect(model.currentInputID == 1)
-    #expect(audio.muted == ["input:1"])
+    #expect(audio.muted == ["input:1", "input:2"])
 
     model.selectManually(builtIn)
     model.handleDefaultChanged(.input)
-    #expect(audio.muted == ["input:2"])
+    #expect(audio.muted == ["input:1", "input:2"])
     #expect(model.isActiveInputMuted)
+
+    model.setMicrophoneMuted(false)
+    #expect(audio.muted.isEmpty)
+}
+
+@Test
+@MainActor
+func noMicrophoneStaysMutedWhenTheOneInUseCannotBe() {
+    let audio = FakeAudio()
+    let scarlett = input(1, "scarlett", "Scarlett Solo")
+    let builtIn = input(2, "builtin", "MacBook Pro Microphone")
+    audio.catalog = [scarlett, builtIn]
+    audio.noMuteProperty = [1]
+    let model = testModel(audio: audio, defaults: isolatedDefaults())
+    model.start()
+
+    model.setMicrophoneMuted(true)
+
+    #expect(!model.isMicrophoneMuted)
+    #expect(audio.muted.isEmpty)
+}
+
+@Test
+@MainActor
+func aMicrophoneMutedBeforeTheMuteStaysMutedAfterIt() {
+    let audio = FakeAudio()
+    let headset = input(1, "headset", "Jabra Link 380")
+    let builtIn = input(2, "builtin", "MacBook Pro Microphone")
+    audio.catalog = [headset, builtIn]
+    audio.muted = ["input:2"]
+    let model = testModel(audio: audio, defaults: isolatedDefaults())
+    model.start()
+
+    model.setMicrophoneMuted(true)
+    model.setMicrophoneMuted(false)
+
+    #expect(audio.muted == ["input:2"])
+}
+
+@Test
+@MainActor
+func theMuteLeavesVirtualAndOtherBluetoothMicrophonesAndNamesTheAppUsingOne() {
+    let audio = FakeAudio()
+    let headset = input(1, "headset", "Jabra Link 380")
+    var airPods = input(2, "airpods", "AirPods Pro")
+    airPods.transportType = kAudioDeviceTransportTypeBluetooth
+    let zoom = AudioDevice(platformID: 3, uid: "zoom", name: "ZoomAudioDevice", role: .input, isVirtual: true)
+    audio.catalog = [headset, airPods, zoom]
+    var operations = audio.operations
+    operations.appRecording = { $0 == 2 ? "Google Chrome" : "zoom.us" }
+    let model = AppModel(
+        store: PriorityStore(defaults: isolatedDefaults()),
+        audio: operations,
+        link: LinkOperations(isUsable: { _ in true }, state: { _ in nil }),
+        isUserPicking: { false }
+    )
+    model.start()
+
+    model.setMicrophoneMuted(true)
+    #expect(audio.muted == ["input:1"])
+    #expect(model.uncoveredRecording == nil)
+
+    // Recording from the virtual input reads the muted headset, so only the
+    // AirPods are live.
+    audio.running = [2, 3]
+    model.refreshMute()
+    #expect(model.uncoveredRecording == UncoveredRecording(app: "Google Chrome", microphone: "AirPods Pro"))
+
+    model.setMicrophoneMuted(false)
+    #expect(model.uncoveredRecording == nil)
 }
 
 @Test

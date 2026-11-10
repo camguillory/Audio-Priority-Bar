@@ -155,13 +155,13 @@ func aSwitchNoticeOutranksTheMutedReminderButNeverCoversThePanel() {
         announcement: "Output: AirPods Pro"
     )
     #expect(NoticeContent.current(
-        switchNotice: notice, showsMutedReminder: true, isSuppressed: false
+        switchNotice: notice, mutedReminder: .mutedWhileRecording, isSuppressed: false
     ) == notice)
     #expect(NoticeContent.current(
-        switchNotice: nil, showsMutedReminder: true, isSuppressed: false
+        switchNotice: nil, mutedReminder: .mutedWhileRecording, isSuppressed: false
     ) == .mutedWhileRecording)
     #expect(NoticeContent.current(
-        switchNotice: notice, showsMutedReminder: true, isSuppressed: true
+        switchNotice: notice, mutedReminder: .mutedWhileRecording, isSuppressed: true
     ) == nil)
 }
 
