@@ -303,6 +303,69 @@ func automaticSelectionPairsAnAlreadyCurrentOutput() {
 
 @Test
 @MainActor
+func aDockSetApartKeepsTheMicrophoneRankedAboveIt() {
+    let defaults = isolatedDefaults()
+    let store = PriorityStore(defaults: defaults)
+    let dock = dualRole(serial: "dock")
+    let iPhoneMic = input(2, "iphone-mic")
+    store.savePriorities([iPhoneMic, dock.input], role: .input)
+    store.setSelectsHalvesTogether(dock.output, false)
+    let audio = FakeAudio()
+    audio.catalog = [dock.output, dock.input, iPhoneMic]
+    audio.defaults[.output] = dock.output.platformID
+    audio.defaults[.input] = dock.input.platformID
+    let model = testModel(audio: audio, defaults: defaults)
+
+    model.start()
+
+    #expect(model.currentOutputID == dock.output.platformID)
+    #expect(model.currentInputID == iPhoneMic.platformID)
+}
+
+@Test
+@MainActor
+func aDockSetApartStillGetsItsMicrophoneFromTheList() {
+    let defaults = isolatedDefaults()
+    let store = PriorityStore(defaults: defaults)
+    let dock = dualRole(serial: "dock")
+    let iPhoneMic = input(2, "iphone-mic")
+    store.savePriorities([dock.input, iPhoneMic], role: .input)
+    store.setSelectsHalvesTogether(dock.output, false)
+    let audio = FakeAudio()
+    audio.catalog = [dock.output, dock.input, iPhoneMic]
+    audio.defaults[.input] = iPhoneMic.platformID
+    let model = testModel(audio: audio, defaults: defaults)
+
+    model.start()
+
+    #expect(model.currentInputID == dock.input.platformID)
+}
+
+@Test
+@MainActor
+func settingADockApartFromItsRowMovesTheMicrophoneAndBack() {
+    let defaults = isolatedDefaults()
+    let store = PriorityStore(defaults: defaults)
+    let dock = dualRole(serial: "dock")
+    let iPhoneMic = input(2, "iphone-mic")
+    store.savePriorities([iPhoneMic, dock.input], role: .input)
+    let audio = FakeAudio()
+    audio.catalog = [dock.output, dock.input, iPhoneMic]
+    let model = testModel(audio: audio, defaults: defaults)
+    model.start()
+    #expect(model.currentInputID == dock.input.platformID)
+
+    // Either half's row answers for both.
+    model.setSelectsHalvesTogether(dock.input, false)
+    #expect(!model.selectsHalvesTogether(dock.output))
+    #expect(model.currentInputID == iPhoneMic.platformID)
+
+    model.setSelectsHalvesTogether(dock.output, true)
+    #expect(model.currentInputID == dock.input.platformID)
+}
+
+@Test
+@MainActor
 func manualSelectionPairsPhysicalOutputAndInput() {
     let defaults = isolatedDefaults()
     let store = PriorityStore(defaults: defaults)

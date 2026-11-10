@@ -394,6 +394,22 @@ func appliedMicrophoneMutesAndNoticePreferencesPersist() throws {
 }
 
 @Test
+func aDeviceSetApartStaysApartUntilForgotten() throws {
+    try withDefaults { defaults in
+        let base = "AppleUSBAudioEngine:HP:USB-C Dock Audio:0001"
+        let output = AudioDevice(platformID: 1, uid: "\(base):1", name: "Dock", role: .output)
+        let input = AudioDevice(platformID: 2, uid: "\(base):2", name: "Dock", role: .input)
+        #expect(PriorityStore(defaults: defaults).selectsHalvesTogether(output))
+
+        PriorityStore(defaults: defaults).setSelectsHalvesTogether(input, false)
+        #expect(!PriorityStore(defaults: defaults).selectsHalvesTogether(output))
+
+        PriorityStore(defaults: defaults).forget(uid: output.uid, role: .output)
+        #expect(PriorityStore(defaults: defaults).selectsHalvesTogether(input))
+    }
+}
+
+@Test
 func speakersMuteWhenHeadphonesDisconnectUntilTurnedOff() throws {
     try withDefaults { defaults in
         #expect(PriorityStore(defaults: defaults).mutesSpeakersWhenHeadphonesDisconnect)

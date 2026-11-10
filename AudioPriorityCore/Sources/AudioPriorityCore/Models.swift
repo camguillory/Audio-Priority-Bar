@@ -48,7 +48,9 @@ public struct AudioDevice: Identifiable, Equatable, Hashable, Sendable {
 
     public var id: String { roleIdentifier }
     public var roleIdentifier: String { "\(role.rawValue):\(uid)" }
-    public var pairingKey: String {
+    public var pairingKey: String { Self.pairingKey(of: uid) }
+
+    public static func pairingKey(of uid: String) -> String {
         guard uid.hasPrefix("AppleUSBAudioEngine:"),
               uid.split(
                   separator: ":",

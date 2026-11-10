@@ -11,6 +11,7 @@ public final class PriorityStore {
         static let manualMode = "customMode"
         static let linksMicrophone = "linksMicrophone"
         static let selectsPairedDevice = "selectsPairedDevice"
+        static let separatelySelectedDevices = "separatelySelectedDevices"
         static let hideNewDisplayOutputs = "hideNewDisplayOutputs"
         static let displayDefaultsApplied = "displayDefaultsApplied"
         static let knownDevices = "knownDevices"
@@ -170,6 +171,7 @@ public final class PriorityStore {
             remove(uid, from: Key.displayDefaultsApplied)
             add(uid, to: Key.forgottenPairedDevices)
         }
+        remove(AudioDevice.pairingKey(of: uid), from: Key.separatelySelectedDevices)
     }
 
     public var isManualMode: Bool {
@@ -182,6 +184,23 @@ public final class PriorityStore {
     public var selectsPairedDevice: Bool {
         get { defaults.object(forKey: Key.selectsPairedDevice) as? Bool ?? true }
         set { defaults.set(newValue, forKey: Key.selectsPairedDevice) }
+    }
+
+    /// Whether `selectsPairedDevice` applies to this physical device. A dock
+    /// or an audio interface can be set apart, so its output is used without
+    /// its microphone overriding the microphone order. Both halves share
+    /// the answer.
+    public func selectsHalvesTogether(_ device: AudioDevice) -> Bool {
+        defaults.stringArray(forKey: Key.separatelySelectedDevices)?
+            .contains(device.pairingKey) != true
+    }
+
+    public func setSelectsHalvesTogether(_ device: AudioDevice, _ value: Bool) {
+        if value {
+            remove(device.pairingKey, from: Key.separatelySelectedDevices)
+        } else {
+            add(device.pairingKey, to: Key.separatelySelectedDevices)
+        }
     }
 
     /// Whether headphones keep a microphone order of their own, while speakers

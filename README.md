@@ -123,7 +123,9 @@ switching off to keep it.
   Connected to This Mac** under **Connect to This Mac** stops them switching
   on their own.
 - With **Select headset input and output together** enabled, choosing
-  either half of a physical USB headset selects the other too.
+  either half of a physical USB headset selects the other too. For a dock or
+  an audio interface whose microphone you'd rather rank yourself, uncheck
+  **Use Its Microphone Too** in its row's actions menu.
 - With **Microphones follow the output** enabled, speakers and headphones
   each keep their own microphone order, so moving from headphones to
   speakers can also move to the desk microphone. A microphone you pick in

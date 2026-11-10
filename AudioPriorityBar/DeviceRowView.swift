@@ -46,6 +46,7 @@ struct DeviceRow: View {
     private var isHidden: Bool { model.isHidden(device) }
     private var isNeverUse: Bool { model.isNeverUse(device) }
     private var pairedDevice: AudioDevice? { model.pairedDevice(for: device) }
+    private var selectsHalvesTogether: Bool { model.selectsHalvesTogether(device) }
 
     /// Whether this device and its pair are both currently selected, so
     /// selecting them together has nothing left to do.
@@ -71,7 +72,7 @@ struct DeviceRow: View {
     }
 
     private var selectionOverrideHelp: String {
-        if model.selectsPairedDevice {
+        if selectsHalvesTogether {
             return device.role == .input
                 ? "Select only this microphone, not its output"
                 : "Select only this output, not its microphone"
@@ -262,7 +263,7 @@ struct DeviceRow: View {
                 isHoveringSelectionOverride = false
                 return
             }
-            guard model.selectsPairedDevice, isPairedDeviceUsable, !isSelected,
+            guard selectsHalvesTogether, isPairedDeviceUsable, !isSelected,
                   !isHoveringSelectionOverride, let pairedDevice else { return }
             highlightedPartnerID = pairedDevice.id
             highlightedPairedDeviceID = pairedDevice.id
@@ -396,7 +397,7 @@ struct DeviceRow: View {
     /// and the actions menu's title, so the keyboard reaches it too.
     private var selectionOverrideOption: (pill: String, title: String, action: () -> Void)? {
         guard isPairedDeviceUsable else { return nil }
-        if model.selectsPairedDevice {
+        if selectsHalvesTogether {
             guard !isSelected else { return nil }
             return device.role == .input
                 ? ("Mic only", "Use Microphone Only", { model.selectOnly(device) })
@@ -499,7 +500,7 @@ struct DeviceRow: View {
         .focused($isOverrideFocused)
         .onHover { hovering in
             isHoveringSelectionOverride = hovering
-            if model.selectsPairedDevice {
+            if selectsHalvesTogether {
                 // This override selects only the hovered device, so
                 // suppress the partner highlight while hovering it, and
                 // restore it when returning to the row, which still selects
@@ -672,6 +673,15 @@ struct DeviceRow: View {
                 Button(action: option.action) {
                     Label(option.title, systemImage: "rectangle.2.swap")
                 }
+            }
+            if model.selectsPairedDevice, pairedDevice != nil {
+                Toggle(
+                    device.role == .output ? "Use Its Microphone Too" : "Use With Its Output",
+                    isOn: Binding(
+                        get: { selectsHalvesTogether },
+                        set: { model.setSelectsHalvesTogether(device, $0) }
+                    )
+                )
             }
             Divider()
         } else if model.canConnect(device) {

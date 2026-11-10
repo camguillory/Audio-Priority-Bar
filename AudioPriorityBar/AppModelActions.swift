@@ -171,6 +171,7 @@ extension AppModel {
         if device.isDisplayOutput { flags.append("display") }
         if store.isHidden(device) { flags.append("hidden") }
         if store.isNeverUse(device) { flags.append("never automatic") }
+        if !store.selectsHalvesTogether(device) { flags.append("halves apart") }
         if let state = linkState(for: device) { flags.append("link \(state)") }
         return "\(device.logName) (\(flags.joined(separator: ", ")))"
     }
@@ -504,6 +505,18 @@ extension AppModel {
         store.setNeverUse(device, enabled)
         refreshDevices()
         reselect(device.role)
+    }
+
+    func setSelectsHalvesTogether(_ device: AudioDevice, _ enabled: Bool) {
+        DebugLog.shared.write("\(device.logName) \(enabled ? "selects" : "no longer selects") its other half")
+        store.setSelectsHalvesTogether(device, enabled)
+        refreshDevices()
+        guard !isManualMode else { return }
+        if enabled, let output = currentOutputDevice, output.pairingKey == device.pairingKey {
+            selectPairedDevice(of: output, automatically: true)
+        } else if !enabled {
+            applyHighestPriorityInput()
+        }
     }
 
     func forget(_ device: AudioDevice) {
