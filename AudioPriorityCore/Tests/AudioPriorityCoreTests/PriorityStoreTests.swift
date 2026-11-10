@@ -394,6 +394,15 @@ func appliedMicrophoneMutesAndNoticePreferencesPersist() throws {
 }
 
 @Test
+func speakersMuteWhenHeadphonesDisconnectUntilTurnedOff() throws {
+    try withDefaults { defaults in
+        #expect(PriorityStore(defaults: defaults).mutesSpeakersWhenHeadphonesDisconnect)
+        PriorityStore(defaults: defaults).mutesSpeakersWhenHeadphonesDisconnect = false
+        #expect(!PriorityStore(defaults: defaults).mutesSpeakersWhenHeadphonesDisconnect)
+    }
+}
+
+@Test
 func menuBarOutlineIsOffUntilTurnedOn() throws {
     try withDefaults { defaults in
         #expect(!PriorityStore(defaults: defaults).outlinesMenuBarIcon)
