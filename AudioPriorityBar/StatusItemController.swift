@@ -798,12 +798,12 @@ struct StatusLabel: View {
             }
             .opacity(isolateMic ? 0 : 1)
 
-            // Only beside hardware glyphs, which have no waves of their own.
-            // Kept while muted so muting does not change the width.
-            if model.showsMenuBarVolume, hardwareIcon != nil {
+            // Only beside hardware glyphs with a controllable volume. Kept
+            // while muted so muting does not change the width.
+            if model.showsMenuBarVolume, hardwareIcon != nil, model.isVolumeControllable {
                 ZStack {
                     Image(systemName: "wave.3.right").hidden()
-                    if !model.isActiveOutputMuted, model.isVolumeControllable {
+                    if !model.isActiveOutputMuted {
                         Image(
                             systemName: "wave.3.right",
                             variableValue: Double(model.volume)

@@ -249,3 +249,53 @@ func theRedReminderKeepsTheIconWidthWhenSwitchingTurnsOff() throws {
 
     #expect(try width() == automatic)
 }
+
+@Test
+@MainActor
+func volumeWavesDoNotWidenAnOutputWithoutVolumeControl() throws {
+    let audio = FakeAudio()
+    audio.catalog = [AudioDevice(
+        platformID: 1,
+        uid: "display",
+        name: "HDMI",
+        role: .output,
+        isDisplayOutput: true
+    )]
+    audio.defaults = [.output: 1]
+    let model = testModel(audio: audio, defaults: isolatedDefaults())
+    model.start()
+    #expect(!model.isVolumeControllable)
+
+    func width() throws -> CGFloat {
+        try #require(ImageRenderer(content: StatusLabel(model: model)).nsImage).size.width
+    }
+    let withoutVolume = try width()
+    model.setShowsMenuBarVolume(true)
+
+    #expect(try width() == withoutVolume)
+}
+
+@Test
+@MainActor
+func volumeWavesKeepTheirWidthWhileAControllableOutputIsMuted() throws {
+    let audio = FakeAudio()
+    audio.catalog = [output(1, "airpods", "AirPods Pro")]
+    audio.defaults = [.output: 1]
+    audio.volume = 0.5
+    let model = testModel(audio: audio, defaults: isolatedDefaults())
+    model.start()
+    #expect(model.isVolumeControllable)
+
+    func width() throws -> CGFloat {
+        try #require(ImageRenderer(content: StatusLabel(model: model)).nsImage).size.width
+    }
+    let withoutVolume = try width()
+    model.setShowsMenuBarVolume(true)
+    let withVolume = try width()
+    #expect(withVolume > withoutVolume)
+
+    model.setOutputMuted(true)
+
+    #expect(model.isActiveOutputMuted)
+    #expect(try width() == withVolume)
+}
