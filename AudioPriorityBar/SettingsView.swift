@@ -331,6 +331,29 @@ struct SettingsView: View {
                         : "\(size.formatted(.byteCount(style: .file))), one file per day, the last \(log.keptDays) days kept.")
                 }
             }
+
+            DisclosureGroup("Recent switches") {
+                if model.recentSwitches.isEmpty {
+                    Text("None yet.")
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(Array(model.recentSwitches.enumerated()), id: \.offset) { _, record in
+                        Text(record.description)
+                            .textSelection(.enabled)
+                    }
+                }
+            }
+
+            LabeledContent {
+                Button("Copy Diagnostics") {
+                    DebugLog.shared.write("clicked Copy Diagnostics")
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(model.diagnostics, forType: .string)
+                }
+            } label: {
+                Text("Diagnostics")
+                Text("Copies the version, settings, device lists and recent switches, to paste into a bug report.")
+            }
         }
         .confirmationDialog("Delete the debug log?", isPresented: $isConfirmingClear) {
             Button("Delete") {

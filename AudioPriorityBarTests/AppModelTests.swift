@@ -1653,3 +1653,48 @@ func aShortcutPicksAConnectedDeviceAndRefusesOneThatIsNot() throws {
     #expect(model.keptPicks[.input] == headset.uid)
     #expect(model.currentInputID == headset.platformID)
 }
+
+@Test
+@MainActor
+func recentSwitchesSayWhyNewestFirstAndKeepTwenty() {
+    let defaults = isolatedDefaults()
+    let speaker = output(1, "speaker", "MacBook Air Speakers")
+    let headphones = output(2, "headphones", "AirPods Pro")
+    let audio = FakeAudio()
+    audio.catalog = [speaker]
+    let model = testModel(audio: audio, defaults: defaults)
+    model.start()
+
+    audio.catalog = [speaker, headphones]
+    model.handleDevicesChanged()
+    #expect(model.recentSwitches.first?.device == "AirPods Pro")
+    #expect(model.recentSwitches.first?.reason == "automatic")
+
+    model.selectManually(speaker)
+    #expect(model.recentSwitches.first?.device == "MacBook Air Speakers")
+    #expect(model.recentSwitches.first?.reason == "picked")
+
+    for _ in 0..<12 {
+        model.selectManually(headphones)
+        model.selectManually(speaker)
+    }
+    #expect(model.recentSwitches.count == 20)
+}
+
+@Test
+@MainActor
+func diagnosticsCarryTheSettingsAndTheRecentSwitches() {
+    let defaults = isolatedDefaults()
+    let speaker = output(1, "speaker", "MacBook Air Speakers")
+    let headphones = output(2, "headphones", "AirPods Pro")
+    let audio = FakeAudio()
+    audio.catalog = [speaker, headphones]
+    let model = testModel(audio: audio, defaults: defaults)
+    #expect(model.diagnostics.hasSuffix("recent switches:\nnone"))
+    model.start()
+
+    model.selectManually(speaker)
+
+    #expect(model.diagnostics.contains("settings: automatic true"))
+    #expect(model.diagnostics.contains("Output: MacBook Air Speakers, picked"))
+}
