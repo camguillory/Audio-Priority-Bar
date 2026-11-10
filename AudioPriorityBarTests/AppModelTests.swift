@@ -813,7 +813,7 @@ func macOSTakingTheOutputAgainAfterASwitchBackIsLeftAndNamed() {
 
 @Test
 @MainActor
-func automaticModeKeepsAMicrophoneMacOSTakesAgainAfterASwitchBack() {
+func theMicrophoneIsHeldThroughSmartRoutingRetakes() {
     let defaults = isolatedDefaults()
     let store = PriorityStore(defaults: defaults)
     let airPods = output(1, "airpods-out", "AirPods Pro")
@@ -823,16 +823,78 @@ func automaticModeKeepsAMicrophoneMacOSTakesAgainAfterASwitchBack() {
     let audio = FakeAudio()
     audio.catalog = [airPods, airPodsMic, scarlett]
     let model = testModel(audio: audio, defaults: defaults)
+    var clock: TimeInterval = 100
+    model.uptime = { clock }
     model.start()
 
-    for _ in 0..<3 {
+    // The 4.4 s cadence measured on AirPods Pro, macOS 26.6.2.
+    for _ in 0..<10 {
+        clock += 4.4
         audio.defaults[.input] = airPodsMic.platformID
         model.handleDefaultChanged(.input)
     }
 
     #expect(!model.isManualMode)
+    #expect(model.currentInputID == scarlett.platformID)
+    #expect(model.takeoverDevice == nil)
+}
+
+@Test
+@MainActor
+func aFastFightOverTheMicrophonePausesTheHoldThenResumes() {
+    let defaults = isolatedDefaults()
+    let store = PriorityStore(defaults: defaults)
+    store.isManualMode = true
+    let airPodsMic = input(2, "airpods-in", "AirPods Pro")
+    let scarlett = input(3, "scarlett", "Scarlett Solo USB")
+    let audio = FakeAudio()
+    audio.catalog = [airPodsMic, scarlett]
+    audio.defaults[.input] = scarlett.platformID
+    let model = testModel(audio: audio, defaults: defaults)
+    var clock: TimeInterval = 100
+    model.uptime = { clock }
+    model.start()
+
+    // Another app taking it back within a fraction of a second, every time.
+    for _ in 0..<4 {
+        clock += 0.1
+        audio.defaults[.input] = airPodsMic.platformID
+        model.handleDefaultChanged(.input)
+    }
     #expect(model.currentInputID == airPodsMic.platformID)
     #expect(model.takeoverDevice?.uid == airPodsMic.uid)
+
+    clock += 30
+    model.resumeMicrophoneHold()
+    #expect(model.currentInputID == scarlett.platformID)
+    #expect(model.takeoverDevice == nil)
+    #expect(model.isManualMode)
+}
+
+@Test
+@MainActor
+func aPickDuringAPausedHoldEndsIt() {
+    let defaults = isolatedDefaults()
+    let airPodsMic = input(2, "airpods-in", "AirPods Pro")
+    let scarlett = input(3, "scarlett", "Scarlett Solo USB")
+    PriorityStore(defaults: defaults).savePriorities([scarlett, airPodsMic], role: .input)
+    let audio = FakeAudio()
+    audio.catalog = [airPodsMic, scarlett]
+    let model = testModel(audio: audio, defaults: defaults)
+    var clock: TimeInterval = 100
+    model.uptime = { clock }
+    model.start()
+    for _ in 0..<4 {
+        clock += 0.1
+        audio.defaults[.input] = airPodsMic.platformID
+        model.handleDefaultChanged(.input)
+    }
+    #expect(model.takeoverDevice?.uid == airPodsMic.uid)
+
+    model.selectManually(airPodsMic)
+    model.resumeMicrophoneHold()
+
+    #expect(model.currentInputID == airPodsMic.platformID)
 }
 
 @Test

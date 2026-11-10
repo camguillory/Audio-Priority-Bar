@@ -74,7 +74,9 @@ struct PanelView: View {
                 .help("Use device priorities as availability changes")
                 if let takeover = model.takeoverDevice {
                     HStack(spacing: 6) {
-                        Text("macOS keeps switching to \(takeover.name)")
+                        Text(takeover.role == .input
+                            ? "\(takeover.name) keeps taking the microphone, trying again shortly"
+                            : "macOS keeps switching to \(takeover.name)")
                             .foregroundStyle(.secondary)
                             .lineLimit(2)
                         if takeover.isBluetooth {
