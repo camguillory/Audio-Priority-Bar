@@ -416,6 +416,23 @@ func aDisconnectForgetsTheHeadsetItsQueueAndItsMute() {
 }
 
 @Test
+func aCallCutOffByADisconnectIsNotCarriedIntoTheNextConnection() {
+    // The headset drops mid-call before its hook switch and line go down,
+    // and comes back before the dongle's telephony interface does, so the
+    // refresh reads no call signals.
+    var replay = idle(at: 0)
+    replay.play("""
+    6.578 hid rid 4 04 0c 00
+    6.579 hid rid 2 02 07 00
+    8.000 do disconnected
+    """)
+    replay.play(idleHeadset, from: 20)
+    replay.deliver(.signals(.init()), at: 20.3)
+    replay.advance(to: 30)
+    #expect(!replay.controls.playsCallAudio)
+}
+
+@Test
 func noiseControlKeptAtTheAmbienceSettingIsWrittenAndSubscribedThere() {
     // No headset at hand keeps noise control here, so the replies are made
     // up in the op's format: 04 is noise cancellation.
