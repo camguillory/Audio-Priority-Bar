@@ -535,6 +535,7 @@ func speakersStayUnmutedUnlessThePlayingHeadphonesLeaveWithTheOptionOn() {
     let defaults = isolatedDefaults()
     let store = PriorityStore(defaults: defaults)
     store.isManualMode = true
+    store.mutesSpeakersWhenHeadphonesDisconnect = false
     let audio = FakeAudio()
     let speaker = output(1, "speaker")
     let headphones = output(2, "headphones", "AirPods Pro")

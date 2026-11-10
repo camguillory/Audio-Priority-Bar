@@ -129,9 +129,9 @@ switching off to keep it.
   speakers can also move to the desk microphone. A microphone you pick in
   Control Center or Sound Settings still stays until it disconnects or a
   microphone your list would pick connects.
-- With **Mute speakers when headphones disconnect** enabled, the speakers
-  start muted when the headphones playing disconnect, are turned off or run
-  out of battery.
+- With **Mute speakers when headphones disconnect**, on by default, the
+  speakers start muted when the headphones playing disconnect, are turned off
+  or run out of battery.
 - The microphone mute follows automatic switching to the next microphone,
   and quitting the app restores it.
 

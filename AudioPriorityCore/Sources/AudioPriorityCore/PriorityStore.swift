@@ -218,7 +218,7 @@ public final class PriorityStore {
     }
 
     public var mutesSpeakersWhenHeadphonesDisconnect: Bool {
-        get { defaults.bool(forKey: Key.mutesSpeakersWhenHeadphonesDisconnect) }
+        get { defaults.object(forKey: Key.mutesSpeakersWhenHeadphonesDisconnect) as? Bool ?? true }
         set { defaults.set(newValue, forKey: Key.mutesSpeakersWhenHeadphonesDisconnect) }
     }
 
