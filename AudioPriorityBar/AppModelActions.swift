@@ -136,11 +136,19 @@ extension AppModel {
     }
 
     /// The snapshot and the recent switches, as plain text to paste into a
-    /// bug report.
+    /// bug report, with names and identifiers replaced by tags.
     var diagnostics: String {
-        (diagnosticLines() + ["recent switches:"]
+        var redactor = Redactor(deviceNames: knownDeviceNames)
+        return redactor.redact((diagnosticLines() + ["recent switches:"]
             + (recentSwitches.isEmpty ? ["none"] : recentSwitches.map(\.description)))
-            .joined(separator: "\n")
+            .joined(separator: "\n"))
+    }
+
+    /// Every device name the app knows, so the redactor can tag an owner name
+    /// of several words whole.
+    var knownDeviceNames: [String] {
+        (listedDevices + hiddenSpeakerDevices + hiddenHeadphoneDevices).map(\.name)
+            + battery.report.pairedAudio.map(\.name)
     }
 
     private func diagnosticLines() -> [String] {
