@@ -61,6 +61,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         pendingCommands = []
     }
 
+    /// The App Intents service quits an app it counts as launched for a
+    /// shortcut or Focus filter once that app has been idle a while, which
+    /// took the menu bar item away two minutes after login. Only its quit is
+    /// refused; Quit in the app, logout, shutdown and other apps still quit.
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard let event = NSAppleEventManager.shared().currentAppleEvent,
+              event.eventClass == kCoreEventClass,
+              event.eventID == kAEQuitApplication,
+              let pid = event.attributeDescriptor(forKeyword: keySenderPIDAttr)?.int32Value,
+              processName(pid) == "linkd" else {
+            return .terminateNow
+        }
+        DebugLog.shared.write("refused a quit from linkd, the App Intents service, after an idle period")
+        return .terminateCancel
+    }
+
+    private func processName(_ pid: pid_t) -> String {
+        var name = [CChar](repeating: 0, count: 256)
+        return proc_name(pid, &name, UInt32(name.count)) > 0 ? String(cString: name) : ""
+    }
+
     func applicationWillTerminate(_ notification: Notification) {
         runtime?.stop()
     }
