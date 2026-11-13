@@ -74,6 +74,9 @@ struct SettingsView: View {
         }
         .formStyle(.grouped)
         .toggleStyle(.switch)
+        // The window grows to fit, so the scroller would only flash while it
+        // resizes.
+        .scrollIndicators(.never)
         .frame(width: 460)
         // Each tab is as tall as its content, so the window resizes to fit it.
         .fixedSize(horizontal: false, vertical: true)
@@ -332,17 +335,38 @@ struct SettingsView: View {
                 }
             }
 
-            DisclosureGroup("Recent switches") {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Recent switches")
                 if model.recentSwitches.isEmpty {
-                    Text("None yet.")
+                    Text("None since the app started.")
+                        .font(.callout)
                         .foregroundStyle(.secondary)
                 } else {
-                    ForEach(Array(model.recentSwitches.enumerated()), id: \.offset) { _, record in
-                        Text(record.description)
-                            .textSelection(.enabled)
+                    // ponytail: the newest 5 only, so the window barely grows;
+                    // Copy Diagnostics carries all 20.
+                    Grid(alignment: .leading, horizontalSpacing: 8, verticalSpacing: 4) {
+                        ForEach(Array(model.recentSwitches.prefix(5).enumerated()), id: \.offset) { _, record in
+                            GridRow {
+                                Text(record.date, format: .dateTime.hour().minute().second())
+                                    .monospacedDigit()
+                                    .foregroundStyle(.secondary)
+                                Image(systemName: record.role == .input ? "mic" : "speaker.wave.2")
+                                    .foregroundStyle(.secondary)
+                                    .accessibilityLabel(record.role == .input ? "Microphone" : "Output")
+                                Text(record.device)
+                                    .lineLimit(1)
+                                    .truncationMode(.middle)
+                                Text(record.reason)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                            }
+                        }
                     }
+                    .font(.callout)
+                    .textSelection(.enabled)
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
 
             LabeledContent {
                 Button("Copy Diagnostics") {
