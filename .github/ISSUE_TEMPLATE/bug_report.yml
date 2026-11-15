@@ -78,4 +78,4 @@ body:
       description: |
         Add screenshots or crash reports from ~/Library/Logs/DiagnosticReports/ if available.
 
-        For a switching problem, turn on **Keep a debug log** in Settings > App, make the problem happen again, then click **Show in Finder** and attach the file for the day it happened, such as `debug-2026-11-03.log`. It includes your audio device names.
+        For a switching problem, turn on **Keep a debug log** in Settings > App, make the problem happen again, then click **Export Redacted Log** and attach the file it selects in Downloads, such as `debug-redacted-2026-11-03.txt`. It replaces owner names, Bluetooth addresses, serial numbers and display IDs with short tags. **Copy Diagnostics**, in the same place, does the same for a quick paste.

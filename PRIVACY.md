@@ -18,6 +18,10 @@ microphone is in use, and never records or reads audio.
 device names, what you click in the app and what the app did to
 `~/Library/Logs/Audio Priority Bar` on your Mac, one file per day, and keeps
 the last 7 days. **Clear** in Settings deletes them. The app never sends the
-log anywhere; attach it to an issue only if you choose to.
+log anywhere; attach it to an issue only if you choose to. **Export Redacted
+Log** saves a copy to Downloads, and it and **Copy Diagnostics** replace owner
+names in device names, Bluetooth addresses, serial numbers and display IDs
+with short tags. A device you renamed without a possessive, such as "Alex
+Headphones", keeps its name.
 
 Questions: [open an issue](https://github.com/camguillory/Audio-Priority-Bar/issues).

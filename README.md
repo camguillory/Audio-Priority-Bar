@@ -308,10 +308,12 @@ substantial, then branch from `develop` and open the pull request against
 `develop`. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 To report a switching problem, turn on **Keep a debug log** in **Settings >
-App**, make it happen again, and attach the file **Show in Finder** selects.
-For a quick report, **Recent switches** there lists the last 20 switches and
-why each happened, and **Copy Diagnostics** copies them with your settings and
-device lists.
+App**, make it happen again, click **Export Redacted Log**, and attach the
+file it selects in Downloads. For a quick report, **Recent switches** there
+lists the last 20 switches and why each happened, and **Copy Diagnostics**
+copies them with your settings and device lists. Both replace owner names,
+Bluetooth addresses, serial numbers and display IDs with short tags, and keep
+the vendor and model.
 
 ### Build from source
 
