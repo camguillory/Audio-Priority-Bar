@@ -210,8 +210,9 @@ final class AppModel {
     /// back.
     private var fastMicrophoneRetakes = 0
     /// The microphone picked with automatic switching off that the hold
-    /// switches back to.
-    private var heldInputUID: String?
+    /// switches back to: the last one the app selected, or current when
+    /// automatic switching turned off, or picked in Control Center.
+    var heldInputUID: String?
     private var microphoneHoldResume: Task<Void, Never>?
     var uptime: () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }
     private let isUserPicking: () -> Bool
@@ -278,6 +279,7 @@ final class AppModel {
         if !isManualMode {
             applyHighestPriorityDevices()
         } else {
+            heldInputUID = currentUIDs[.input]
             refreshMute()
         }
         hasStarted = true
@@ -328,6 +330,12 @@ final class AppModel {
             return
         }
         guard !isManualMode, hasStarted else {
+            if hasStarted {
+                // A device joining can arrive with the defaults already on
+                // it, so the default-change events after it see nothing.
+                noteOutsideMoves(from: before)
+                holdMicrophone()
+            }
             refreshMute()
             return
         }
@@ -361,12 +369,7 @@ final class AppModel {
         refreshVolume()
         let currentID = role == .input ? currentInputID : currentOutputID
         let currentUID = currentID.flatMap { connectedUIDsByID[role]?[$0] }
-        if previousUIDs[role] != currentUID {
-            DebugLog.shared.write("default \(role.rawValue) changed outside the app: \(previousDevices[role]?.logName ?? "none") to \(currentUID.map { logName($0, role) } ?? "none")")
-            if let device = role == .input ? currentInputDevice : currentOutputDevice {
-                recordSwitch(role, device.name, "by macOS, Control Center or another app")
-            }
-        }
+        noteOutsideMoves(from: previousUIDs)
         guard hasStarted else {
             refreshMute()
             return
@@ -390,28 +393,24 @@ final class AppModel {
         }
         if isManualMode {
             var switchedBack = false
-            for movedRole in [role, role == .input ? .output : .input] {
-                let connectedUIDs = movedRole == .input
-                    ? connectedInputUIDs
-                    : connectedOutputUIDs
-                guard !topologyExplainsChange(movedRole),
-                      let previousDevice = previousDevices[movedRole],
-                      let currentUID = currentUIDs[movedRole],
-                      previousDevice.uid != currentUID,
-                      connectedUIDs.contains(previousDevice.uid),
-                      !isUserPicking(),
-                      shouldSwitchBack(movedRole, from: currentUID) else {
-                    continue
-                }
+            if !topologyExplainsChange(.output),
+               let previousDevice = previousDevices[.output],
+               let currentUID = currentUIDs[.output],
+               previousDevice.uid != currentUID,
+               connectedOutputUIDs.contains(previousDevice.uid),
+               !isUserPicking(),
+               shouldSwitchBack(.output, from: currentUID) {
                 // macOS or another app moved it, as when AirPods in the ears
                 // take the output back, so the user's own pick wins.
-                DebugLog.shared.write("switching \(movedRole.rawValue) back to \(previousDevice.logName): macOS or another app moved it while automatic switching is off")
+                DebugLog.shared.write("switching output back to \(previousDevice.logName): macOS or another app moved it while automatic switching is off")
                 withSwitchReason("switched back") {
                     select(previousDevice, includesPairedDevice: false)
                 }
-                if movedRole == .input { heldInputUID = previousDevice.uid }
                 switchedBack = true
             }
+            // After the output, so a microphone that is the other half of an
+            // output just switched back is no longer taken for its pair.
+            if holdMicrophone() { switchedBack = true }
             if switchedBack {
                 refreshMute()
                 return
@@ -461,6 +460,41 @@ final class AppModel {
             announceAutomaticSwitches(since: moved)
         }
         refreshMute()
+    }
+
+    /// Logs and lists each role macOS or another app moved since
+    /// `previousUIDs`. Both roles, since one refresh can reveal both moves.
+    private func noteOutsideMoves(from previousUIDs: [DeviceRole: String]) {
+        for role in DeviceRole.allCases where previousUIDs[role] != currentUIDs[role] {
+            DebugLog.shared.write("default \(role.rawValue) changed outside the app: \(previousUIDs[role].map { logName($0, role) } ?? "none") to \(currentUIDs[role].map { logName($0, role) } ?? "none")")
+            if let device = role == .input ? currentInputDevice : currentOutputDevice {
+                recordSwitch(role, device.name, "by macOS, Control Center or another app")
+            }
+        }
+    }
+
+    /// With automatic switching off, puts the held microphone back whenever
+    /// another one is current, whatever event shows it: AirPods take it both
+    /// when they connect and on ear detection, and the order of CoreAudio's
+    /// events can hide either move. A pick in Control Center, or the other
+    /// half of the output when halves go together, becomes the one held.
+    @discardableResult
+    private func holdMicrophone() -> Bool {
+        guard isManualMode, let current = currentUIDs[.input], current != heldInputUID else {
+            return false
+        }
+        let isOutputsHalf = currentOutputDevice.map {
+            selectsHalvesTogether($0) && pairedDevice(for: $0)?.uid == current
+        } ?? false
+        if isUserPicking() || isOutputsHalf {
+            heldInputUID = current
+            return false
+        }
+        guard let held = inputDevices.first(where: { $0.uid == heldInputUID && $0.isConnected }),
+              shouldSwitchBack(.input, from: current) else { return false }
+        DebugLog.shared.write("switching input back to \(held.logName): macOS or another app moved it while automatic switching is off")
+        withSwitchReason("switched back") { select(held, includesPairedDevice: false) }
+        return true
     }
 
     /// Whether to switch `role` back from `uid`. AirPods Smart Routing ignores
@@ -1265,6 +1299,7 @@ final class AppModel {
                 currentOutputID = device.platformID
             }
         }
+        if device.role == .input { heldInputUID = device.uid }
         if includesPairedDevice {
             selectPairedDevice(of: device, automatically: automatically)
         }

@@ -123,7 +123,10 @@ switching off to keep it.
   settings, where choosing **When Last Connected to This Mac** under **Connect
   to This Mac** stops them switching on their own.
 - The microphone is held instead: each time macOS takes it, Audio Priority Bar
-  takes it back, so a call never ends up on the AirPods microphone. Only if
+  takes it back, so a call never ends up on the AirPods microphone. With
+  automatic switching off, this includes a device you connect: it takes the
+  output, and a USB headset brings its microphone too with **Select headset
+  input and output together**. Only if
   another app takes it back within a second, three times in a row, does it
   pause for 30 seconds, say so in the panel, and then try again.
 - With **Select headset input and output together** enabled, choosing
