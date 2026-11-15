@@ -10,7 +10,9 @@ extension AppModel {
         keptPicks = [:]
         switchedBackAt = [:]
         takeoverUIDs = [:]
-        if !enabled {
+        if enabled {
+            heldInputUID = currentUIDs[.input]
+        } else {
             applyHighestPriorityDevices()
         }
     }
