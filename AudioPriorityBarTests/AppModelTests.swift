@@ -1834,3 +1834,23 @@ func diagnosticsCarryTheSettingsAndTheRecentSwitches() {
     #expect(model.diagnostics.contains("settings: automatic true"))
     #expect(model.diagnostics.contains("Output: MacBook Air Speakers, picked"))
 }
+
+@Test
+@MainActor
+func diagnosticsTagTheOwnerAndTheBluetoothAddress() {
+    let defaults = isolatedDefaults()
+    let speaker = output(1, "speaker", "MacBook Air Speakers")
+    let headphones = output(2, "AA-11-22-33-44-01:output", "Alex’s AirPods Pro")
+    let audio = FakeAudio()
+    audio.catalog = [speaker]
+    let model = testModel(audio: audio, defaults: defaults)
+    model.start()
+    audio.catalog = [speaker, headphones]
+    model.handleDevicesChanged()
+
+    let diagnostics = model.diagnostics
+    #expect(diagnostics.contains("\"owner1’s AirPods Pro\" [bt1:output]"))
+    #expect(diagnostics.contains("Output: owner1’s AirPods Pro, automatic"))
+    #expect(!diagnostics.contains("Alex"))
+    #expect(!diagnostics.contains("AA-11"))
+}

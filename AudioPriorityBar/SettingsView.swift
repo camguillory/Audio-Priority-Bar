@@ -324,6 +324,21 @@ struct SettingsView: View {
                         Button("Show in Finder") {
                             NSWorkspace.shared.activateFileViewerSelecting([log.files.last ?? log.directory])
                         }
+                        Button("Export Redacted Log") {
+                            log.write("clicked Export Redacted Log")
+                            let files = log.files
+                            let names = model.knownDeviceNames
+                            Task.detached {
+                                do {
+                                    let url = try DebugLog.exportRedacted(
+                                        files: files, deviceNames: names, to: .downloadsDirectory
+                                    )
+                                    await MainActor.run { NSWorkspace.shared.activateFileViewerSelecting([url]) }
+                                } catch {
+                                    await MainActor.run { DebugLog.shared.write("could not export the redacted log: \(error)") }
+                                }
+                            }
+                        }
                         Button("Clear…") { isConfirmingClear = true }
                     }
                     .disabled(size == 0)
@@ -331,7 +346,7 @@ struct SettingsView: View {
                     Text("Log files")
                     Text(size == 0
                         ? "None yet. One file per day, the last \(log.keptDays) days kept."
-                        : "\(size.formatted(.byteCount(style: .file))), one file per day, the last \(log.keptDays) days kept.")
+                        : "\(size.formatted(.byteCount(style: .file))), one file per day, the last \(log.keptDays) days kept. The export, saved to Downloads, replaces names and identifiers with short tags.")
                 }
             }
 
@@ -376,7 +391,7 @@ struct SettingsView: View {
                 }
             } label: {
                 Text("Diagnostics")
-                Text("Copies the version, settings, device lists and recent switches, to paste into a bug report.")
+                Text("Copies the version, settings, device lists and recent switches, with names and identifiers replaced by short tags, to paste into a bug report.")
             }
         }
         .confirmationDialog("Delete the debug log?", isPresented: $isConfirmingClear) {

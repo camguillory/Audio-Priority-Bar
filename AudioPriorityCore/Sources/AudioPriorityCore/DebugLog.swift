@@ -80,6 +80,26 @@ public final class DebugLog {
         totalBytes = 0
     }
 
+    /// Writes the day files, oldest first, into one file in `folder` with
+    /// names and identifiers replaced by tags, for a bug report. Nonisolated
+    /// so it can run off the main actor, since the days can reach the cap.
+    public nonisolated static func exportRedacted(
+        files: [URL],
+        deviceNames: [String],
+        to folder: URL,
+        on date: Date = Date()
+    ) throws -> URL {
+        var redactor = Redactor(deviceNames: deviceNames)
+        var text = ""
+        for url in files {
+            text += redactor.redact(try String(contentsOf: url, encoding: .utf8))
+        }
+        let day = date.formatted(Date.ISO8601FormatStyle(timeZone: .current).year().month().day())
+        let url = folder.appending(path: "debug-redacted-\(day).txt")
+        try Data(text.utf8).write(to: url, options: .atomic)
+        return url
+    }
+
     /// The newest line's message, without its timestamp, or nil when the log
     /// is empty or missing.
     public var lastMessage: String? {

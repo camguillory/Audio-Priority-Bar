@@ -92,6 +92,26 @@ func clearingTheDebugLogDeletesEveryDay() throws {
     }
 }
 
+@Test @MainActor
+func theRedactedExportJoinsTheDaysUnderOneSetOfTags() throws {
+    try withLogFolder { folder in
+        var date = try noon(plus: 0)
+        let log = DebugLog(directory: folder, now: { date })
+        log.isEnabled = true
+        log.write("connected output: \"Alex’s AirPods Pro\" [AA-11-22-33-44-01:output]")
+        date = try noon(plus: 1)
+        log.write("set the output to \"Alex’s AirPods Pro\" [AA-11-22-33-44-01:output]")
+
+        let url = try DebugLog.exportRedacted(files: log.files, deviceNames: [], to: folder, on: date)
+        #expect(url.lastPathComponent == "debug-redacted-2026-11-02.txt")
+        let lines = try String(contentsOf: url, encoding: .utf8).split(separator: "\n")
+        #expect(lines.count == 2)
+        #expect(lines[0].hasSuffix("connected output: \"owner1’s AirPods Pro\" [bt1:output]"))
+        #expect(lines[1].hasSuffix("set the output to \"owner1’s AirPods Pro\" [bt1:output]"))
+        #expect(log.files.count == 2)
+    }
+}
+
 @Test
 func aTransportTypeReadsAsItsFourCharacters() {
     var device = AudioDevice(platformID: 1, uid: "a", name: "A", role: .output)
