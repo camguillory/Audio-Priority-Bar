@@ -804,25 +804,123 @@ func aUSBHeadsetConnectingInManualModeBringsItsMicrophoneWhenHalvesGoTogether() 
 
 @Test
 @MainActor
-func theHeldMicrophoneComesBackWhenItReconnectsInManualMode() {
+func theMicrophoneMacOSPicksWhenTheHeldOneLeavesIsHeldInstead() {
     let defaults = isolatedDefaults()
     let store = PriorityStore(defaults: defaults)
     store.isManualMode = true
-    let builtIn = input(1, "builtin-mic", "MacBook Air Microphone")
-    let scarlett = input(2, "scarlett", "Scarlett Solo USB")
+    let speaker = output(1, "speaker", "MacBook Air Speakers")
+    let airPods = output(2, "airpods-out", "AirPods Pro")
+    let airPodsMic = input(3, "airpods-in", "AirPods Pro")
+    let scarlett = input(4, "scarlett", "Scarlett Solo USB")
     let audio = FakeAudio()
-    audio.catalog = [builtIn, scarlett]
-    audio.defaults[.input] = scarlett.platformID
+    audio.catalog = [speaker, airPods, airPodsMic, scarlett]
+    audio.defaults[.output] = airPods.platformID
+    audio.defaults[.input] = airPodsMic.platformID
     let model = testModel(audio: audio, defaults: defaults)
     model.start()
 
-    audio.catalog = [builtIn]
-    audio.defaults[.input] = builtIn.platformID
+    // Back in the case, macOS moves the microphone to the Scarlett.
+    audio.catalog = [speaker, scarlett]
+    audio.defaults[.output] = speaker.platformID
+    audio.defaults[.input] = scarlett.platformID
     model.handleDevicesChanged()
-    #expect(audio.selections.isEmpty)
+    audio.catalog = [speaker, scarlett, airPods, airPodsMic]
+    audio.defaults[.output] = airPods.platformID
+    audio.defaults[.input] = airPodsMic.platformID
+    model.handleDevicesChanged()
 
-    audio.catalog = [builtIn, scarlett]
+    #expect(model.currentInputID == scarlett.platformID)
+    #expect(audio.selections.map(\.1) == [scarlett.platformID])
+}
+
+@Test
+@MainActor
+func aControlCenterWindowWhileAirPodsConnectIsNotTakenForAPick() {
+    let defaults = isolatedDefaults()
+    let store = PriorityStore(defaults: defaults)
+    store.isManualMode = true
+    store.selectsPairedDevice = false
+    let speaker = output(1, "speaker", "MacBook Air Speakers")
+    let airPods = output(2, "airpods-out", "AirPods Pro")
+    let airPodsMic = input(3, "airpods-in", "AirPods Pro")
+    let scarlett = input(4, "scarlett", "Scarlett 2i2 USB")
+    let audio = FakeAudio()
+    audio.catalog = [speaker, scarlett]
+    audio.defaults[.output] = speaker.platformID
+    audio.defaults[.input] = scarlett.platformID
+    let model = testModel(audio: audio, defaults: defaults, isUserPicking: { true })
+    model.start()
+
+    // Seen in a real trace (AirPods Pro out of the case, macOS 26.6.2): the
+    // output joins with the defaults on it and no known input, the
+    // microphone joins 0.2 s later, and takes the default 1.6 s after that.
+    audio.catalog.append(airPods)
+    audio.defaults[.output] = airPods.platformID
+    audio.defaults[.input] = nil
     model.handleDevicesChanged()
+    audio.catalog.append(airPodsMic)
+    model.handleDevicesChanged()
+    audio.defaults[.input] = airPodsMic.platformID
+    model.handleDefaultChanged(.input)
+
+    #expect(model.currentOutputID == airPods.platformID)
+    #expect(model.currentInputID == scarlett.platformID)
+}
+
+@Test
+@MainActor
+func aMicrophoneFirstSeenByADefaultChangeStillCountsAsJustConnected() {
+    let defaults = isolatedDefaults()
+    let store = PriorityStore(defaults: defaults)
+    store.isManualMode = true
+    store.selectsPairedDevice = false
+    let speaker = output(1, "speaker", "MacBook Air Speakers")
+    let airPods = output(2, "airpods-out", "AirPods Pro")
+    let airPodsMic = input(3, "airpods-in", "AirPods Pro")
+    let scarlett = input(4, "scarlett", "Scarlett 2i2 USB")
+    let audio = FakeAudio()
+    audio.catalog = [speaker, scarlett]
+    audio.defaults[.output] = speaker.platformID
+    audio.defaults[.input] = scarlett.platformID
+    let model = testModel(audio: audio, defaults: defaults, isUserPicking: { true })
+    model.start()
+
+    audio.catalog.append(airPods)
+    audio.defaults[.output] = airPods.platformID
+    audio.defaults[.input] = nil
+    model.handleDevicesChanged()
+    audio.catalog.append(airPodsMic)
+    model.handleDefaultChanged(.output)
+    model.handleDevicesChanged()
+    audio.defaults[.input] = airPodsMic.platformID
+    model.handleDefaultChanged(.input)
+
+    #expect(model.currentInputID == scarlett.platformID)
+}
+
+@Test
+@MainActor
+func aSlowAirPodsHandoverIsNotTakenForAPickWithAutomaticOn() {
+    let defaults = isolatedDefaults()
+    let speaker = output(1, "speaker", "MacBook Air Speakers")
+    let airPods = output(2, "airpods-out", "AirPods Pro")
+    let airPodsMic = input(3, "airpods-in", "AirPods Pro")
+    let scarlett = input(4, "scarlett", "Scarlett 2i2 USB")
+    PriorityStore(defaults: defaults).savePriorities([scarlett, airPodsMic], role: .input)
+    let audio = FakeAudio()
+    audio.catalog = [speaker, scarlett]
+    let model = testModel(audio: audio, defaults: defaults, isUserPicking: { true })
+    var clock: TimeInterval = 100
+    model.uptime = { clock }
+    model.start()
+
+    audio.catalog += [airPods, airPodsMic]
+    audio.defaults[.output] = airPods.platformID
+    model.handleDevicesChanged()
+    clock += 3
+    audio.defaults[.input] = airPodsMic.platformID
+    model.handleDefaultChanged(.input)
+
     #expect(model.currentInputID == scarlett.platformID)
 }
 
