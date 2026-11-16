@@ -869,6 +869,37 @@ func aControlCenterWindowWhileAirPodsConnectIsNotTakenForAPick() {
 
 @Test
 @MainActor
+func aMicrophoneFirstSeenByADefaultChangeStillCountsAsJustConnected() {
+    let defaults = isolatedDefaults()
+    let store = PriorityStore(defaults: defaults)
+    store.isManualMode = true
+    store.selectsPairedDevice = false
+    let speaker = output(1, "speaker", "MacBook Air Speakers")
+    let airPods = output(2, "airpods-out", "AirPods Pro")
+    let airPodsMic = input(3, "airpods-in", "AirPods Pro")
+    let scarlett = input(4, "scarlett", "Scarlett 2i2 USB")
+    let audio = FakeAudio()
+    audio.catalog = [speaker, scarlett]
+    audio.defaults[.output] = speaker.platformID
+    audio.defaults[.input] = scarlett.platformID
+    let model = testModel(audio: audio, defaults: defaults, isUserPicking: { true })
+    model.start()
+
+    audio.catalog.append(airPods)
+    audio.defaults[.output] = airPods.platformID
+    audio.defaults[.input] = nil
+    model.handleDevicesChanged()
+    audio.catalog.append(airPodsMic)
+    model.handleDefaultChanged(.output)
+    model.handleDevicesChanged()
+    audio.defaults[.input] = airPodsMic.platformID
+    model.handleDefaultChanged(.input)
+
+    #expect(model.currentInputID == scarlett.platformID)
+}
+
+@Test
+@MainActor
 func aSlowAirPodsHandoverIsNotTakenForAPickWithAutomaticOn() {
     let defaults = isolatedDefaults()
     let speaker = output(1, "speaker", "MacBook Air Speakers")

@@ -313,14 +313,6 @@ final class AppModel {
         if connectedInputUIDs != oldInputs || connectedOutputUIDs != oldOutputs {
             battery.refresh()
         }
-        let additions: [DeviceRole: Set<String>] = [
-            .input: connectedInputUIDs.subtracting(oldInputs),
-            .output: connectedOutputUIDs.subtracting(oldOutputs),
-        ]
-        for (role, added) in additions where !added.isEmpty {
-            recentlyAddedUIDs[role] = added
-            topologyChangedAt[role] = uptime()
-        }
         if hasStarted, let address = selectingBluetoothAddress,
            let device = allOutputs.first(where: {
                $0.isConnected && bluetoothAddress(of: $0) == address
@@ -625,6 +617,17 @@ final class AppModel {
         if inputUIDs != connectedInputUIDs || outputUIDs != connectedOutputUIDs {
             switchedBackAt = [:]
             takeoverUIDs = [:]
+            // Any refresh can be the first to see a device join, such as the
+            // one a default change makes, so the joins are noted here.
+            if hasStarted {
+                for (role, added) in [
+                    (DeviceRole.input, inputUIDs.subtracting(connectedInputUIDs)),
+                    (.output, outputUIDs.subtracting(connectedOutputUIDs)),
+                ] where !added.isEmpty {
+                    recentlyAddedUIDs[role] = added
+                    topologyChangedAt[role] = uptime()
+                }
+            }
             if DebugLog.shared.isEnabled {
                 logConnections(connected, inputs: inputUIDs, outputs: outputUIDs)
             }
