@@ -211,7 +211,8 @@ final class AppModel {
     private var fastMicrophoneRetakes = 0
     /// The microphone picked with automatic switching off that the hold
     /// switches back to: the last one the app selected, or current when
-    /// automatic switching turned off, or picked in Control Center.
+    /// automatic switching turned off, when the held one left, or when
+    /// picked in Control Center.
     var heldInputUID: String?
     private var microphoneHoldResume: Task<Void, Never>?
     var uptime: () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }
@@ -476,8 +477,9 @@ final class AppModel {
     /// With automatic switching off, puts the held microphone back whenever
     /// another one is current, whatever event shows it: AirPods take it both
     /// when they connect and on ear detection, and the order of CoreAudio's
-    /// events can hide either move. A pick in Control Center, or the other
-    /// half of the output when halves go together, becomes the one held.
+    /// events can hide either move. The current one is held instead when it
+    /// is the other half of the output with halves together, when the held
+    /// one is gone, or when it was picked in Control Center.
     @discardableResult
     private func holdMicrophone() -> Bool {
         guard isManualMode, let current = currentUIDs[.input], current != heldInputUID else {
@@ -486,12 +488,27 @@ final class AppModel {
         let isOutputsHalf = currentOutputDevice.map {
             selectsHalvesTogether($0) && pairedDevice(for: $0)?.uid == current
         } ?? false
-        if isUserPicking() || isOutputsHalf {
+        let held = inputDevices.first { $0.uid == heldInputUID && $0.isConnected }
+        // AirPods Pro took the default 1.6 s after their microphone appeared
+        // (macOS 26.6.2), so a microphone that connected moments ago is
+        // macOS's choice even while a Control Center window is open.
+        // ponytail: a fixed 5 s window; a slower handover reads as a pick.
+        let justConnected = recentlyAddedUIDs[.input]?.contains(current) == true
+            && ProcessInfo.processInfo.systemUptime - (topologyChangedAt[.input] ?? 0) < 5
+        var reason: String?
+        if isOutputsHalf {
+            reason = "the other half of the output"
+        } else if held == nil {
+            reason = "the held one is gone"
+        } else if !justConnected, isUserPicking() {
+            reason = "picked in Control Center or Sound Settings"
+        }
+        if let reason {
+            DebugLog.shared.write("holding the microphone \(logName(current, .input)): \(reason)")
             heldInputUID = current
             return false
         }
-        guard let held = inputDevices.first(where: { $0.uid == heldInputUID && $0.isConnected }),
-              shouldSwitchBack(.input, from: current) else { return false }
+        guard let held, shouldSwitchBack(.input, from: current) else { return false }
         DebugLog.shared.write("switching input back to \(held.logName): macOS or another app moved it while automatic switching is off")
         withSwitchReason("switched back") { select(held, includesPairedDevice: false) }
         return true
