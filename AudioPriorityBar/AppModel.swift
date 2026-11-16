@@ -319,7 +319,7 @@ final class AppModel {
         ]
         for (role, added) in additions where !added.isEmpty {
             recentlyAddedUIDs[role] = added
-            topologyChangedAt[role] = ProcessInfo.processInfo.systemUptime
+            topologyChangedAt[role] = uptime()
         }
         if hasStarted, let address = selectingBluetoothAddress,
            let device = allOutputs.first(where: {
@@ -388,8 +388,7 @@ final class AppModel {
                 } == true
                 || currentUID.map {
                     recentlyAddedUIDs[role]?.contains($0) == true
-                        && ProcessInfo.processInfo.systemUptime
-                            - (topologyChangedAt[role] ?? 0) < 2
+                        && uptime() - (topologyChangedAt[role] ?? 0) < 2
                 } == true
         }
         if isManualMode {
@@ -435,7 +434,7 @@ final class AppModel {
         if let target = automaticTarget(for: role),
            target.platformID != currentID,
            let currentUID {
-            let isPicking = isUserPicking()
+            let isPicking = !connectedMomentsAgo(currentUID, role) && isUserPicking()
             guard isPicking || !shouldSwitchBack(role, from: currentUID) else {
                 // macOS or another app moved it, as when AirPods take the
                 // microphone on ear detection, so the list wins.
@@ -489,18 +488,12 @@ final class AppModel {
             selectsHalvesTogether($0) && pairedDevice(for: $0)?.uid == current
         } ?? false
         let held = inputDevices.first { $0.uid == heldInputUID && $0.isConnected }
-        // AirPods Pro took the default 1.6 s after their microphone appeared
-        // (macOS 26.6.2), so a microphone that connected moments ago is
-        // macOS's choice even while a Control Center window is open.
-        // ponytail: a fixed 5 s window; a slower handover reads as a pick.
-        let justConnected = recentlyAddedUIDs[.input]?.contains(current) == true
-            && ProcessInfo.processInfo.systemUptime - (topologyChangedAt[.input] ?? 0) < 5
         var reason: String?
         if isOutputsHalf {
             reason = "the other half of the output"
         } else if held == nil {
             reason = "the held one is gone"
-        } else if !justConnected, isUserPicking() {
+        } else if !connectedMomentsAgo(current, .input), isUserPicking() {
             reason = "picked in Control Center or Sound Settings"
         }
         if let reason {
@@ -512,6 +505,16 @@ final class AppModel {
         DebugLog.shared.write("switching input back to \(held.logName): macOS or another app moved it while automatic switching is off")
         withSwitchReason("switched back") { select(held, includesPairedDevice: false) }
         return true
+    }
+
+    /// Whether `uid` joined moments ago, so a move to it is macOS following
+    /// the connection and not a pick, even while a Control Center window is
+    /// open. AirPods Pro took the default 1.6 s after their microphone
+    /// appeared (macOS 26.6.2).
+    private func connectedMomentsAgo(_ uid: String, _ role: DeviceRole) -> Bool {
+        // ponytail: a fixed 5 s window; a slower handover reads as a pick.
+        recentlyAddedUIDs[role]?.contains(uid) == true
+            && uptime() - (topologyChangedAt[role] ?? 0) < 5
     }
 
     /// Whether to switch `role` back from `uid`. AirPods Smart Routing ignores

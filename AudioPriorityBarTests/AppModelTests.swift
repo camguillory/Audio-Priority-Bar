@@ -869,6 +869,32 @@ func aControlCenterWindowWhileAirPodsConnectIsNotTakenForAPick() {
 
 @Test
 @MainActor
+func aSlowAirPodsHandoverIsNotTakenForAPickWithAutomaticOn() {
+    let defaults = isolatedDefaults()
+    let speaker = output(1, "speaker", "MacBook Air Speakers")
+    let airPods = output(2, "airpods-out", "AirPods Pro")
+    let airPodsMic = input(3, "airpods-in", "AirPods Pro")
+    let scarlett = input(4, "scarlett", "Scarlett 2i2 USB")
+    PriorityStore(defaults: defaults).savePriorities([scarlett, airPodsMic], role: .input)
+    let audio = FakeAudio()
+    audio.catalog = [speaker, scarlett]
+    let model = testModel(audio: audio, defaults: defaults, isUserPicking: { true })
+    var clock: TimeInterval = 100
+    model.uptime = { clock }
+    model.start()
+
+    audio.catalog += [airPods, airPodsMic]
+    audio.defaults[.output] = airPods.platformID
+    model.handleDevicesChanged()
+    clock += 3
+    audio.defaults[.input] = airPodsMic.platformID
+    model.handleDefaultChanged(.input)
+
+    #expect(model.currentInputID == scarlett.platformID)
+}
+
+@Test
+@MainActor
 func aMicrophonePickedInControlCenterIsHeldInManualMode() {
     let defaults = isolatedDefaults()
     let store = PriorityStore(defaults: defaults)
