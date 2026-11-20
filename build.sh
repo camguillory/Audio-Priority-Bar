@@ -1,7 +1,5 @@
 #!/usr/bin/env bash
-# Builds the app. Defaults to a universal Release build signed with the
-# pinned release certificate; pass --dev for a fast local-iteration build
-# (single-arch, Debug).
+# Build an unsigned universal app, or pass --dev for a single-architecture Debug build.
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")" && pwd)"
@@ -47,7 +45,5 @@ rm -rf "$app"
 cp -R \
   "$derived_data/Build/Products/$configuration/AudioPriorityBar.app" \
   "$app"
-
-"$root/scripts/sign-app.sh" "$app"
 
 echo "Build complete: $app"

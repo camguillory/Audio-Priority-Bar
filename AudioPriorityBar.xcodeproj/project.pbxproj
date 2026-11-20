@@ -384,6 +384,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = app.audioprioritybar;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SPARKLE_FEED_URL = "";
+				SPARKLE_PUBLIC_KEY = "";
 				SWIFT_STRICT_CONCURRENCY = complete;
 				SWIFT_VERSION = 6.0;
 			};
@@ -406,6 +407,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = app.audioprioritybar;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SPARKLE_FEED_URL = "";
+				SPARKLE_PUBLIC_KEY = "";
 				SWIFT_STRICT_CONCURRENCY = complete;
 				SWIFT_VERSION = 6.0;
 			};
