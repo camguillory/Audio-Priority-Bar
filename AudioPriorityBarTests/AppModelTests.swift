@@ -2066,3 +2066,29 @@ func diagnosticsTagTheOwnerAndTheBluetoothAddress() {
     #expect(!diagnostics.contains("Alex"))
     #expect(!diagnostics.contains("AA-11"))
 }
+
+@Test
+@MainActor
+func hiddenSecondaryMicrophonesStayCoveredRegardlessOfPanelVisibility() {
+    let audio = FakeAudio()
+    let primary = input(1, "main")
+    let secondary = input(2, "usb")
+    audio.catalog = [primary, secondary]
+    audio.defaults[.input] = primary.platformID
+    let defaults = isolatedDefaults()
+    let store = PriorityStore(defaults: defaults)
+    store.hide(secondary)
+    let model = testModel(audio: audio, defaults: defaults)
+    model.start()
+    model.setMicrophoneMuted(true)
+    #expect(model.inputDevices.map(\.uid) == ["main"])
+    #expect(audio.muted == ["input:1", "input:2"])
+
+    model.setMicrophoneMuted(false)
+    #expect(audio.muted.isEmpty)
+
+    audio.noMuteProperty = [2]
+    audio.running = [2]
+    model.setMicrophoneMuted(true)
+    #expect(model.uncoveredRecording?.microphone == secondary.name)
+}
