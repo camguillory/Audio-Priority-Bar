@@ -3,6 +3,7 @@ import AudioPriorityCore
 import AudioToolbox
 import CoreAudio
 import Foundation
+import IOKit
 
 enum CoreAudioProperties {
     private static let system = AudioObjectID(kAudioObjectSystemObject)
@@ -247,7 +248,7 @@ enum CoreAudioProperties {
             return nil
         }
         let transport = transport(id)
-        return AudioDevice(
+        var device = AudioDevice(
             platformID: id,
             uid: uid,
             name: name,
@@ -261,6 +262,51 @@ enum CoreAudioProperties {
             isDisplayOutput: role == .output && Self.isDisplayTransport(transport),
             transportType: transport
         )
+        if transport == kAudioDeviceTransportTypeUSB, let location = device.possibleUSBLocation {
+            device.usesUSBLocation = isSeriallessUSBDevice(uid: uid, at: location)
+        }
+        return device
+    }
+
+    /// The registry can lag behind the audio driver. An absent descriptor
+    /// leaves identity unresolved until a later enumeration.
+    static func isSeriallessUSBDevice(
+        uid: String, at location: UInt32,
+        hasSerial: (String) -> Bool = usbSerialExists,
+        descriptorAt: (UInt32) -> (index: Int?, serial: String?)? = usbSerialDescriptor
+    ) -> Bool? {
+        let parts = uid.components(separatedBy: ":")
+        guard parts.count == 5 else { return nil }
+        // A hexadecimal serial can coincide with an unrelated occupied port.
+        if hasSerial(parts[3]) { return false }
+        guard let descriptor = descriptorAt(location) else { return nil }
+        if let serial = descriptor.serial, !serial.isEmpty { return false }
+        return descriptor.index.map { $0 == 0 }
+    }
+
+    private static func usbService(matching key: String, value: Any) -> io_service_t {
+        guard let request = IOServiceMatching("IOUSBHostDevice") as NSMutableDictionary? else {
+            return IO_OBJECT_NULL
+        }
+        request[kIOPropertyMatchKey] = [key: value]
+        return IOServiceGetMatchingService(kIOMainPortDefault, request)
+    }
+
+    private static func usbSerialExists(_ serial: String) -> Bool {
+        let service = usbService(matching: "USB Serial Number", value: serial)
+        guard service != IO_OBJECT_NULL else { return false }
+        IOObjectRelease(service)
+        return true
+    }
+
+    private static func usbSerialDescriptor(at location: UInt32) -> (index: Int?, serial: String?)? {
+        let service = usbService(matching: "locationID", value: location)
+        guard service != IO_OBJECT_NULL else { return nil }
+        defer { IOObjectRelease(service) }
+        func property(_ key: String) -> Any? {
+            IORegistryEntryCreateCFProperty(service, key as CFString, kCFAllocatorDefault, 0)?.takeRetainedValue()
+        }
+        return (property("iSerialNumber") as? Int, property("USB Serial Number") as? String)
     }
 
     /// The category a device claims for itself, or nil when it claims nothing

@@ -32,6 +32,28 @@ private func lifecycle(
     )
 }
 
+@Test
+func usbIdentityUsesLocationAndSerialDescriptorsWhenVendorNamesAreMissing() {
+    let uid = "AppleUSBAudioEngine:Unknown Manufacturer:Jabra Link 380:00114000:1,2"
+    func classify(_ descriptor: (Int?, String?)?, serialExists: Bool = false) -> Bool? {
+        CoreAudioProperties.isSeriallessUSBDevice(uid: uid, at: 0x00114000, hasSerial: { candidate in
+            #expect(candidate == "00114000")
+            return serialExists
+        }, descriptorAt: { location in
+            #expect(location == 0x00114000)
+            return descriptor
+        })
+    }
+    #expect(classify((0, nil)) == true)
+    #expect(classify((0, "")) == true)
+    #expect(classify((3, nil)) == false)
+    #expect(classify((nil, "serial")) == false)
+    #expect(classify((0, "00114000")) == false)
+    #expect(classify((0, nil), serialExists: true) == false)
+    #expect(classify((nil, nil)) == nil)
+    #expect(classify(nil) == nil)
+}
+
 /// Values measured on real hardware, so the mapper is pinned to what macOS
 /// actually reports rather than to what the headers suggest.
 @Test
