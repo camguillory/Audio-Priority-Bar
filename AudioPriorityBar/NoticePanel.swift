@@ -21,7 +21,9 @@ struct NoticeContent: Equatable {
 
     /// While muted, an app records from a microphone the mute does not hold.
     static func unmuted(_ recording: UncoveredRecording) -> NoticeContent {
-        let text = "\(recording.app ?? "An app") is using \(recording.microphone), which isn't muted"
+        let text = recording.isConfirmed
+            ? "\(recording.app ?? "An app") is using \(recording.microphone), which isn't muted"
+            : "\(recording.microphone) is active and may be recording unmuted"
         return NoticeContent(lines: [Line(icon: "mic.fill", text: text)], announcement: text)
     }
 

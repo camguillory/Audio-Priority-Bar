@@ -96,6 +96,17 @@ struct PanelView: View {
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
                 }
+                if !model.microphonesAwaitingRestore.isEmpty {
+                    Label("Couldn’t restore microphone after mute: \(model.microphonesAwaitingRestore.joined(separator: ", ")).",
+                          systemImage: "exclamationmark.triangle")
+                        .font(.caption)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                if let speaker = model.speakerMuteFailure, speaker.uid == model.currentOutputDevice?.uid {
+                    Label("Headphones disconnected. Couldn’t mute \(speaker.name).", systemImage: "exclamationmark.triangle")
+                        .font(.caption)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
                 if let latest = model.recentSwitches.first {
                     VStack(alignment: .leading, spacing: 1) {
                         HStack(spacing: 6) {
@@ -298,6 +309,9 @@ struct PanelView: View {
     private var automationNote: String? {
         guard let current = model.currentOutputDevice else {
             return "No output selected"
+        }
+        if let uid = model.externalInputUID, let mic = model.currentInputDevice, mic.uid == uid {
+            return "Keeping \(mic.name) until it disconnects or you choose another microphone"
         }
         if model.isManualMode {
             return "Your choice stays until you turn this on"

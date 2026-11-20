@@ -4,9 +4,18 @@ import CoreAudio
 import Foundation
 import Observation
 
+struct InputActivity {
+    var recording: Set<UInt32> = []
+    var uncertain: Set<UInt32> = []
+
+    func mayBeRecording(_ id: UInt32) -> Bool {
+        recording.contains(id) || uncertain.contains(id)
+    }
+}
+
 @MainActor
 struct AudioOperations {
-    let devices: () -> [AudioDevice]
+    let devices: () -> [AudioDevice]?
     let defaultDevice: (DeviceRole) -> UInt32?
     let setDefault: (DeviceRole, UInt32) -> Bool
     let outputVolume: () -> Float?
@@ -19,6 +28,7 @@ struct AudioOperations {
     let isRunning: (UInt32) -> Bool
     /// The name of an app recording from the microphone, when macOS says.
     var appRecording: (UInt32) -> String? = { _ in nil }
+    var inputActivity: (([UInt32]) -> InputActivity)?
 }
 
 @MainActor
@@ -55,6 +65,7 @@ struct UncoveredRecording: Equatable {
     /// Nil when macOS cannot say which app, as before macOS 14.2.
     let app: String?
     let microphone: String
+    var isConfirmed = true
 }
 
 struct SwitchRecord: Equatable {
@@ -143,6 +154,8 @@ final class AppModel {
     var isMicrophoneMuted = false
     /// Some app is recording from the current microphone.
     var isInputRecording = false
+    private(set) var currentInputMayBeRecording = false
+    private(set) var anyInputMayBeRecording = false
     /// While muted, an app recording from a microphone the mute could not
     /// cover, such as a Bluetooth headset that is not the current input.
     var uncoveredRecording: UncoveredRecording?
@@ -185,8 +198,19 @@ final class AppModel {
     private var mutedRoles: Set<String> = []
     /// The microphones carrying `isMicrophoneMuted`, by UID.
     private var mutedInputUIDs: Set<String> = []
+    private var connectedInputs: [AudioDevice] = []
+    private(set) var hasCurrentDeviceSnapshot = false
+    private var inventoryRetry: Task<Void, Never>?
+    var speakerMuteFailure: AudioDevice?
+    private var failedMicRestores: Set<String> = []
+    var microphonesAwaitingRestore: [String] {
+        guard !isMicrophoneMuted else { return [] }
+        return connectedInputs.filter { failedMicRestores.contains($0.uid) }.map(\.name)
+    }
     /// The headphones last seen as the current output, by UID.
     private var playingHeadphonesUID: String?
+    private var unresolvedUSBUIDs = Set<String>()
+    private var usbIdentityRetry: Task<Void, Never>?
     private var connectedInputUIDs: Set<String> = []
     private var connectedOutputUIDs: Set<String> = []
     private var connectedUIDsByID: [DeviceRole: [UInt32: String]] = [:]
@@ -204,6 +228,15 @@ final class AppModel {
     /// macOS keeps switching to, by role and UID. Automatic mode keeps them
     /// until they leave or the list would use a device that connects later.
     var keptPicks: [DeviceRole: String] = [:]
+    /// A system input change between devices already present. Core Audio does
+    /// not identify its author, so this also covers a call app or ear detection.
+    var externalInputUID: String? {
+        didSet {
+            restoreExternalInputOnLaunch = false
+            store.externalMicrophoneUID = externalInputUID
+        }
+    }
+    private var restoreExternalInputOnLaunch = true
     /// The UIDs connected when each role's pick was kept that are still
     /// connected, so a device outside them connected after the pick.
     private var connectedAtPick: [DeviceRole: Set<String>] = [:]
@@ -294,6 +327,11 @@ final class AppModel {
     }
 
     func stop() {
+        inventoryRetry?.cancel()
+        inventoryRetry = nil
+        usbIdentityRetry?.cancel()
+        usbIdentityRetry = nil
+        unresolvedUSBUIDs.removeAll()
         muteVolumeRefreshTask?.cancel()
         muteVolumeRefreshTask = nil
         microphoneHoldResume?.cancel()
@@ -316,7 +354,7 @@ final class AppModel {
         let before = currentUIDs
         let oldInputs = connectedInputUIDs
         let oldOutputs = connectedOutputUIDs
-        refreshDevices()
+        guard refreshDevices() else { return }
         if connectedInputUIDs != oldInputs || connectedOutputUIDs != oldOutputs {
             battery.refresh()
         }
@@ -331,9 +369,6 @@ final class AppModel {
         }
         guard !isManualMode, hasStarted else {
             if hasStarted {
-                // A device joining can arrive with the defaults already on
-                // it, so the default-change events after it see nothing.
-                noteOutsideMoves(from: before)
                 holdMicrophone()
             }
             refreshMute()
@@ -365,11 +400,10 @@ final class AppModel {
             .input: connectedInputUIDs,
             .output: connectedOutputUIDs,
         ]
-        refreshDevices()
+        guard refreshDevices() else { return }
         refreshVolume()
         let currentID = role == .input ? currentInputID : currentOutputID
         let currentUID = currentID.flatMap { connectedUIDsByID[role]?[$0] }
-        noteOutsideMoves(from: previousUIDs)
         guard hasStarted else {
             refreshMute()
             return
@@ -418,7 +452,7 @@ final class AppModel {
                 let output = currentOutputDevice
                 if output?.uid != selectedOnlyOutputUID {
                     selectedOnlyOutputUID = nil
-                    if let output { selectPairedDevice(of: output) }
+                    if let output, externalInputUID == nil { selectPairedDevice(of: output) }
                 }
             }
             refreshMute()
@@ -447,7 +481,11 @@ final class AppModel {
             if isPicking {
                 DebugLog.shared.write("the \(role.rawValue) was picked in Control Center or Sound Settings")
             }
-            keepPick(currentUID, for: role)
+            // A temporary yield during a hardware handover expires on its timer.
+            // Turning that yield into a pick would make the timeout select it again.
+            if role == .output || takeoverUIDs[.input] == nil {
+                keepPick(currentUID, for: role)
+            }
         }
         if role == .output, let output = currentOutputDevice {
             selectPairedDevice(of: output, automatically: !isManualMode)
@@ -468,6 +506,15 @@ final class AppModel {
             DebugLog.shared.write("default \(role.rawValue) changed outside the app: \(previousUIDs[role].map { logName($0, role) } ?? "none") to \(currentUIDs[role].map { logName($0, role) } ?? "none")")
             if let device = role == .input ? currentInputDevice : currentOutputDevice {
                 recordSwitch(role, device.name, "by macOS, Control Center or another app")
+                if role == .input, let previous = previousUIDs[.input],
+                   connectedInputUIDs.contains(previous), !connectedMomentsAgo(device.uid, .input) {
+                    externalInputUID = device.uid
+                    heldInputUID = device.uid
+                    keptPicks[.input] = nil
+                    takeoverUIDs[.input] = nil
+                    microphoneHoldResume?.cancel()
+                    microphoneHoldResume = nil
+                }
             }
         }
     }
@@ -486,9 +533,9 @@ final class AppModel {
         let isOutputsHalf = currentOutputDevice.map {
             selectsHalvesTogether($0) && pairedDevice(for: $0)?.uid == current
         } ?? false
-        let held = inputDevices.first { $0.uid == heldInputUID && $0.isConnected }
+        let held = connectedInputs.first { $0.uid == heldInputUID }
         var reason: String?
-        if isOutputsHalf {
+        if externalInputUID == nil, isOutputsHalf {
             reason = "the other half of the output"
         } else if held == nil {
             reason = "the held one is gone"
@@ -612,8 +659,52 @@ final class AppModel {
         }
     }
 
-    func refreshDevices() {
-        let connected = audio.devices()
+    /// The audio driver may announce a device before its USB descriptors.
+    /// Give each newly unresolved set one follow-up read, without polling or
+    /// treating the identity refresh as another automatic route change.
+    private func retryUnresolvedUSBDevices(_ devices: [AudioDevice]) {
+        let unresolved = Set(devices.lazy.filter(\.hasUnresolvedUSBIdentity).map(\.uid))
+        guard unresolved != unresolvedUSBUIDs else { return }
+        unresolvedUSBUIDs = unresolved
+        usbIdentityRetry?.cancel()
+        usbIdentityRetry = nil
+        guard !unresolved.isEmpty else { return }
+        usbIdentityRetry = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(500))
+            guard !Task.isCancelled else { return }
+            self?.refreshDevices()
+        }
+    }
+
+    private func retryDeviceInventory() {
+        guard inventoryRetry == nil else { return }
+        inventoryRetry = Task { @MainActor [weak self] in
+            for milliseconds in [250, 1000, 4000] {
+                do { try await Task.sleep(for: .milliseconds(milliseconds)) } catch { return }
+                guard let self else { return }
+                handleDevicesChanged()
+                if hasCurrentDeviceSnapshot { return }
+            }
+            self?.inventoryRetry = nil
+        }
+    }
+
+    @discardableResult
+    func refreshDevices() -> Bool {
+        guard let connected = audio.devices() else {
+            // A failed HAL read is different from a successful empty list.
+            // Keep the visible state and preferences, but stop using stale IDs.
+            hasCurrentDeviceSnapshot = false
+            anyInputMayBeRecording = true
+            retryDeviceInventory()
+            return false
+        }
+        hasCurrentDeviceSnapshot = true
+        inventoryRetry?.cancel()
+        inventoryRetry = nil
+        let previous = currentUIDs
+        retryUnresolvedUSBDevices(connected)
+        connectedInputs = connected.filter { $0.role == .input }
         if !connectingBluetoothAttempts.isEmpty {
             for address in connected.compactMap(bluetoothAddress(of:)) {
                 connectingBluetoothAttempts[address] = nil
@@ -640,6 +731,9 @@ final class AppModel {
             }
         }
         connectedInputUIDs = inputUIDs
+        if let externalInputUID, !inputUIDs.contains(externalInputUID) {
+            self.externalInputUID = nil
+        }
         connectedOutputUIDs = outputUIDs
         connectedUIDsByID = Dictionary(grouping: connected, by: \.role)
             .mapValues {
@@ -652,18 +746,24 @@ final class AppModel {
         // playing visible even when it is hidden.
         currentInputID = audio.defaultDevice(.input)
         currentOutputID = audio.defaultDevice(.output)
+        if restoreExternalInputOnLaunch, let current = currentUIDs[.input] {
+            restoreExternalInputOnLaunch = false
+            if let saved = store.externalMicrophoneUID {
+                // During a relaunch another app may have changed the default.
+                // Only resume a choice that the system is still using.
+                externalInputUID = store.currentUID(for: saved, role: .input) == current ? current : nil
+            }
+        }
 
-        var inputs = connected.filter { $0.role == .input }
+        var inputs = connectedInputs
         var outputs = connected.filter { $0.role == .output }
         // Every paired Bluetooth speaker and headphones that is off is listed
         // at its rank, dimmed, so it can be connected where it stands. A
-        // connected one whose UID is not built from its address is still
-        // found by name.
-        let connectedNames = Set(connected.filter(\.isBluetooth).map(\.name))
-        let pairedOff = battery.report.pairedAudio.map(\.device).filter {
-            !connectedOutputUIDs.contains($0.uid) && !connectedNames.contains($0.name)
-                && !store.isForgotten(uid: $0.uid)
-        }
+        // connected one with an unfamiliar UID can match an unambiguous paired name.
+        let connectedAddresses = Set(outputs.compactMap(bluetoothAddress(of:)))
+        let pairedOff = battery.report.pairedAudio.filter {
+            !connectedAddresses.contains($0.address) && !store.isForgotten(uid: $0.device.uid)
+        }.map(\.device)
         let pairedOffUIDs = Set(pairedOff.map(\.uid))
         if showAll {
             for stored in store.knownDevices {
@@ -702,7 +802,9 @@ final class AppModel {
             },
             microphonesFor: microphoneOrderCategory
         )
+        if hasStarted { noteOutsideMoves(from: previous) }
         endOvertakenPicks()
+        return true
     }
 
     /// Devices that connected or left since the last refresh, read before
@@ -797,6 +899,7 @@ final class AppModel {
     }
 
     func refreshVolume() {
+        guard hasCurrentDeviceSnapshot else { return }
         if let current = audio.outputVolume() {
             volume = current
             isVolumeControllable = true
@@ -820,6 +923,7 @@ final class AppModel {
     }
 
     func refreshMute() {
+        guard hasCurrentDeviceSnapshot else { return }
         muteSpeakersIfHeadphonesLeft()
         reconcileMicrophoneMute()
         let connected = inputDevices + speakerDevices + headphoneDevices
@@ -829,18 +933,24 @@ final class AppModel {
         isActiveOutputMuted = currentOutputID.map {
             self.audio.isMuted(.output, $0)
         } ?? false
+        if isActiveOutputMuted { speakerMuteFailure = nil }
         // The current microphone is always listed, even when hidden.
         isActiveInputMuted = currentInputDevice.map {
             mutedRoles.contains($0.roleIdentifier)
         } ?? false
-        let isRecording = currentInputID.map(audio.isRunning) ?? false
+        let inputIDs = connectedInputs.map(\.platformID)
+        let activity = audio.inputActivity?(inputIDs)
+            ?? InputActivity(recording: Set(inputIDs.filter(audio.isRunning)))
+        let isRecording = currentInputID.map(activity.recording.contains) ?? false
+        currentInputMayBeRecording = currentInputID.map(activity.mayBeRecording) ?? false
+        anyInputMayBeRecording = !activity.recording.isEmpty || !activity.uncertain.isEmpty
         if isRecording != isInputRecording {
             DebugLog.shared.write("an app \(isRecording ? "started" : "stopped") recording from \(currentInputDevice?.logName ?? "the microphone")")
         }
         isInputRecording = isRecording
-        let uncovered = findUncoveredRecording()
+        let uncovered = findUncoveredRecording(activity)
         if uncovered != uncoveredRecording, let uncovered {
-            DebugLog.shared.write("\(uncovered.app ?? "an app") records from \(uncovered.microphone), which the mute does not cover")
+            DebugLog.shared.write("activity on \(uncovered.microphone), which the mute does not cover; recording confirmed: \(uncovered.isConfirmed)")
         }
         uncoveredRecording = uncovered
         updateMicFlash()
@@ -855,12 +965,20 @@ final class AppModel {
     private func muteSpeakersIfHeadphonesLeft() {
         guard let output = currentOutputDevice else { return }
         let category = store.category(for: output)
+        if speakerMuteFailure?.uid != output.uid || !mutesSpeakersWhenHeadphonesDisconnect {
+            speakerMuteFailure = nil
+        }
         if mutesSpeakersWhenHeadphonesDisconnect,
            let uid = playingHeadphonesUID,
            !(allOutputs.first { $0.uid == uid && $0.isConnected }.map(link.isUsable) ?? false),
            category == .speaker {
-            DebugLog.shared.write("muting \(output.logName): the headphones \(logName(uid, .output)) left")
-            _ = audio.setMute(.output, output.platformID, true)
+            if audio.isMuted(.output, output.platformID) || audio.setMute(.output, output.platformID, true) {
+                DebugLog.shared.write("muted \(output.logName) after the headphones disconnected")
+                speakerMuteFailure = nil
+            } else {
+                speakerMuteFailure = output
+                DebugLog.shared.write("could not mute \(output.logName) after the headphones disconnected")
+            }
         }
         playingHeadphonesUID = category == .headphone ? output.uid : nil
     }
@@ -888,7 +1006,7 @@ final class AppModel {
         }
         if isMicrophoneMuted {
             for uid in mutedInputUIDs {
-                guard let device = inputDevices.first(where: { $0.uid == uid && $0.isConnected }) else {
+                guard let device = connectedInputs.first(where: { $0.uid == uid }) else {
                     // Its saved state brings the mute back on reconnect, below.
                     mutedInputUIDs.remove(uid)
                     continue
@@ -905,12 +1023,21 @@ final class AppModel {
         // Anything else still recorded was muted before a crash, or while it
         // was unplugged, and must not come back silently dead.
         for uid in store.appliedMicrophoneMutes.keys where !mutedInputUIDs.contains(uid) {
+            // A previously muted mic can reconnect under a new HAL ID while
+            // the global mute is still on. Keep its original undo record.
+            if isMicrophoneMuted, let device = connectedInputs.first(where: { $0.uid == uid }),
+               isCoveredByMute(device) { continue }
             restoreMicrophone(uid)
         }
         guard isMicrophoneMuted else { return }
-        for device in inputDevices
-        where isCoveredByMute(device) && !mutedInputUIDs.contains(device.uid) && !isHardwareMuted(device) {
-            if applyMicrophoneMute(device) { mutedInputUIDs.insert(device.uid) }
+        for device in connectedInputs where isCoveredByMute(device) {
+            if isHardwareMuted(device) {
+                if store.appliedMicrophoneMutes[device.uid] != nil { mutedInputUIDs.insert(device.uid) }
+            } else if applyMicrophoneMute(device) {
+                mutedInputUIDs.insert(device.uid)
+            } else {
+                mutedInputUIDs.remove(device.uid)
+            }
         }
         if let current, !mutedInputUIDs.contains(current.uid), !isHardwareMuted(current) {
             // The microphone in use could not be muted, so nothing is.
@@ -933,14 +1060,15 @@ final class AppModel {
     /// While muted, an app recording from a connected physical microphone the
     /// mute does not hold. A virtual input records from a physical one, which
     /// the mute already holds.
-    private func findUncoveredRecording() -> UncoveredRecording? {
+    private func findUncoveredRecording(_ activity: InputActivity) -> UncoveredRecording? {
         guard isMicrophoneMuted else { return nil }
-        return inputDevices.lazy
-            .filter { $0.isConnected && !$0.isVirtual }
-            .filter { !self.mutedInputUIDs.contains($0.uid) && !self.isHardwareMuted($0) }
-            .filter { self.audio.isRunning($0.platformID) }
-            .map { UncoveredRecording(app: self.audio.appRecording($0.platformID), microphone: $0.name) }
-            .first
+        let uncovered = connectedInputs.filter {
+            !$0.isVirtual && activity.mayBeRecording($0.platformID) && !isHardwareMuted($0)
+        }
+        if let device = uncovered.first(where: { activity.recording.contains($0.platformID) }) {
+            return UncoveredRecording(app: audio.appRecording(device.platformID), microphone: device.name)
+        }
+        return uncovered.first.map { UncoveredRecording(app: nil, microphone: $0.name, isConfirmed: false) }
     }
 
     /// Mutes through the device's mute property, or by zeroing its input
@@ -948,6 +1076,13 @@ final class AppModel {
     /// crash in between still leaves something to restore.
     private func applyMicrophoneMute(_ device: AudioDevice) -> Bool {
         let id = device.platformID
+        if let original = store.appliedMicrophoneMutes[device.uid] {
+            // A secondary mic may have been unmuted by another process.
+            // Reapply the original method without overwriting its undo record.
+            return original == PriorityStore.mutedByProperty
+                ? audio.setMute(.input, id, true)
+                : audio.setInputVolume(id, 0)
+        }
         store.appliedMicrophoneMutes[device.uid] = PriorityStore.mutedByProperty
         if audio.setMute(.input, id, true) {
             DebugLog.shared.write("muted \(device.logName) by its mute property")
@@ -968,23 +1103,21 @@ final class AppModel {
     /// Undoes a mute the same way it was applied. A disconnected microphone
     /// stays recorded and is restored once it reconnects.
     private func restoreMicrophone(_ uid: String) {
-        let level = store.appliedMicrophoneMutes[uid]
-        guard let id = connectedUIDsByID[.input]?.first(where: {
-            $0.value == uid
-        })?.key else {
-            if level == nil {
-                store.appliedMicrophoneMutes[uid] = PriorityStore.mutedByProperty
-            }
-            return
-        }
-        if let level, level != PriorityStore.mutedByProperty {
-            DebugLog.shared.write("unmuting \(logName(uid, .input)) by restoring its level to \(level)")
-            _ = audio.setInputVolume(id, Float(level))
+        guard hasCurrentDeviceSnapshot else { return }
+        let level = store.appliedMicrophoneMutes[uid] ?? PriorityStore.mutedByProperty
+        guard let device = connectedInputs.first(where: { $0.uid == uid }) else { return }
+        let restored = level == PriorityStore.mutedByProperty
+            ? audio.setMute(.input, device.platformID, false)
+            : audio.setInputVolume(device.platformID, Float(level))
+        if restored {
+            failedMicRestores.remove(uid)
+            store.appliedMicrophoneMutes[uid] = nil
+            DebugLog.shared.write("restored \(device.logName) after microphone mute")
         } else {
-            DebugLog.shared.write("unmuting \(logName(uid, .input)) by its mute property")
-            _ = audio.setMute(.input, id, false)
+            failedMicRestores.insert(uid)
+            store.appliedMicrophoneMutes[uid] = level
+            DebugLog.shared.write("could not restore \(device.logName); keeping its saved mute state")
         }
-        store.appliedMicrophoneMutes[uid] = nil
     }
 
     /// A zeroed input only counts as muted when this app zeroed it: some
@@ -996,7 +1129,7 @@ final class AppModel {
               level != PriorityStore.mutedByProperty else {
             return false
         }
-        return (audio.inputVolume(device.platformID) ?? 1) < 0.01
+        return audio.inputVolume(device.platformID) == 0
     }
 
     var currentInputDevice: AudioDevice? {
@@ -1067,9 +1200,14 @@ final class AppModel {
     /// follows it only once it has held for a second.
     private func scheduleAutomaticBusylights() {
         busylightTask?.cancel()
+        guard lightsBusylightWhileRecording || !litBusylights.isEmpty || !declinedBusylights.isEmpty else {
+            busylightTask = nil
+            return
+        }
         busylightTask = Task { @MainActor [weak self] in
             try? await Task.sleep(for: .seconds(1))
             guard let self, !Task.isCancelled else { return }
+            busylightTask = nil
             updateAutomaticBusylights()
         }
     }
@@ -1185,18 +1323,18 @@ final class AppModel {
         outputDecision(honoringPicks: true)
     }
 
-    private func outputDecision(honoringPicks: Bool) -> AutomaticOutputDecision {
+    private func outputDecision(honoringPicks: Bool, excluding rejected: Set<String> = []) -> AutomaticOutputDecision {
         guard !isManualMode else {
             return AutomaticOutputDecision(target: nil, skipped: nil)
         }
-        if honoringPicks, let uid = keptPicks[.output],
+        if honoringPicks, let uid = keptPicks[.output], !rejected.contains(uid),
            let kept = allOutputs.first(where: { $0.uid == uid && $0.isConnected }) {
             return AutomaticOutputDecision(target: kept, skipped: nil)
         }
         var skipped: SkippedOutput?
         for device in headphoneDevices + speakerDevices {
             let category = store.category(for: device)
-            guard device.isConnected,
+            guard device.isConnected, !rejected.contains(device.uid),
                   !store.isHidden(device, in: category) else { continue }
             if store.isNeverUse(device) {
                 skipped = skipped ?? SkippedOutput(
@@ -1248,6 +1386,7 @@ final class AppModel {
     }
 
     private func applyHighestPriority(_ role: DeviceRole) {
+        guard hasCurrentDeviceSnapshot else { return }
         // Deferral covers both roles: picking a microphone now could pair it
         // with an output we are about to change.
         guard !automaticOutputDecision.isDeferred else {
@@ -1255,16 +1394,19 @@ final class AppModel {
             return
         }
         let category = activeOutputCategory
-        if let first = automaticTarget(for: role) {
-            if first.platformID != (role == .input ? currentInputID : currentOutputID) {
-                DebugLog.shared.write("automatic \(role.rawValue): \(first.logName), \(automaticReason(for: first, forDebugLog: true))")
+        var rejected: Set<String> = []
+        while let candidate = automaticTarget(for: role, excluding: rejected) {
+            if candidate.platformID != (role == .input ? currentInputID : currentOutputID) {
+                DebugLog.shared.write("automatic \(role.rawValue): \(candidate.logName), \(automaticReason(for: candidate, forDebugLog: true))")
             }
-            select(first, automatically: true)
+            if select(candidate, automatically: true) { break }
+            rejected.insert(candidate.uid)
         }
         if role == .output { followOutputCategory(from: category) }
     }
 
     private func automaticReason(for device: AudioDevice, forDebugLog: Bool = false) -> String {
+        if device.role == .input, externalInputUID == device.uid { return "kept the system microphone choice" }
         if keptPicks[device.role] == device.uid { return "kept your selection" }
         if device.role == .input, preferredPairedMicrophone?.id == device.id {
             return "paired with the selected output"
@@ -1287,21 +1429,26 @@ final class AppModel {
 
     private func automaticTarget(
         for role: DeviceRole,
-        honoringPicks: Bool = true
+        honoringPicks: Bool = true,
+        excluding rejected: Set<String> = []
     ) -> AudioDevice? {
         if role == .input {
-            if honoringPicks, let uid = keptPicks[.input],
+            if honoringPicks, let uid = externalInputUID, !rejected.contains(uid),
+               let external = connectedInputs.first(where: { $0.uid == uid }) {
+                return external
+            }
+            if honoringPicks, let uid = keptPicks[.input], !rejected.contains(uid),
                let kept = inputDevices.first(where: { $0.uid == uid && $0.isConnected }) {
                 return kept
             }
-            if let paired = preferredPairedMicrophone { return paired }
+            if let paired = preferredPairedMicrophone, !rejected.contains(paired.uid) { return paired }
             // The panel may be showing the other category's order.
             return store.firstSelectable(
                 in: store.sorted(inputDevices, microphonesFor: activeOutputCategory),
-                isUsable: link.isUsable
+                isUsable: { !rejected.contains($0.uid) && self.link.isUsable($0) }
             )
         }
-        return outputDecision(honoringPicks: honoringPicks).target
+        return outputDecision(honoringPicks: honoringPicks, excluding: rejected).target
     }
 
     private var preferredPairedMicrophone: AudioDevice? {
@@ -1320,6 +1467,8 @@ final class AppModel {
         automatically: Bool = false,
         includesPairedDevice: Bool = true
     ) -> Bool {
+        guard hasCurrentDeviceSnapshot || refreshDevices(),
+              connectedUIDsByID[device.role]?[device.platformID] == device.uid else { return false }
         let currentID = device.role == .input ? currentInputID : currentOutputID
         if currentID != device.platformID {
             guard audio.setDefault(device.role, device.platformID) else {
@@ -1335,7 +1484,10 @@ final class AppModel {
                 currentOutputID = device.platformID
             }
         }
-        if device.role == .input { heldInputUID = device.uid }
+        if device.role == .input {
+            heldInputUID = device.uid
+            if !automatically, externalInputUID != device.uid { externalInputUID = nil }
+        }
         if includesPairedDevice {
             selectPairedDevice(of: device, automatically: automatically)
         }
@@ -1350,6 +1502,7 @@ final class AppModel {
     /// output's own decision. The already-current guard below is what stops
     /// an output-to-mic-to-output cycle.
     func selectPairedDevice(of device: AudioDevice, automatically: Bool = false) {
+        if automatically, device.role == .output, externalInputUID != nil { return }
         // Output only holds while automatic switching keeps or switches back
         // to that output.
         if automatically, device.uid == selectedOnlyOutputUID { return }

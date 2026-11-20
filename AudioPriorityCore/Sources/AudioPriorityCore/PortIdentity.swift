@@ -35,3 +35,16 @@ struct PortIdentity {
         }
     }
 }
+
+/// Independent choices at each raw port before its settings were merged.
+/// Used only if simultaneous devices later disprove the identity match.
+struct PortHistory: Codable, Equatable, Sendable {
+    var ports: [String: PortChoices]
+    var inherited: PortChoices
+}
+
+struct PortChoices: Codable, Equatable, Sendable {
+    /// A saved position for an order, zero for an unordered flag, missing for neither.
+    var positions: [String: Int] = [:]
+    var category: String?
+}

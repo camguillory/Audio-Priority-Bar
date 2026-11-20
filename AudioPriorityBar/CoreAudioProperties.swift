@@ -8,34 +8,20 @@ import IOKit
 enum CoreAudioProperties {
     private static let system = AudioObjectID(kAudioObjectSystemObject)
 
-    static func devices() -> [AudioDevice] {
-        deviceIDs().flatMap { id in
+    static func devices() -> [AudioDevice]? {
+        deviceIDs()?.flatMap { id in
             DeviceRole.allCases.compactMap { role in
                 makeDevice(id: id, role: role)
             }
         }
     }
 
-    static func deviceIDs() -> [AudioObjectID] {
-        var address = property(kAudioHardwarePropertyDevices)
-        var size: UInt32 = 0
-        guard AudioObjectGetPropertyDataSize(
-            system, &address, 0, nil, &size
-        ) == noErr else {
-            return []
-        }
-        var ids = [AudioObjectID](
-            repeating: 0,
-            count: Int(size) / MemoryLayout<AudioObjectID>.size
-        )
-        guard AudioObjectGetPropertyData(
-            system, &address, 0, nil, &size, &ids
-        ) == noErr else {
-            return []
-        }
-        return Array(ids.prefix(
-            Int(size) / MemoryLayout<AudioObjectID>.size
-        ))
+    static func deviceIDs() -> [AudioObjectID]? {
+        objectIDs(system, selector: kAudioHardwarePropertyDevices)
+    }
+
+    static func deviceUID(_ id: AudioObjectID) -> String? {
+        stringProperty(id, selector: kAudioDevicePropertyDeviceUID)
     }
 
     static func defaultDevice(_ role: DeviceRole) -> AudioObjectID? {
@@ -113,13 +99,13 @@ enum CoreAudioProperties {
             scope: scope,
             element: 1,
             into: &muted
-        ) == noErr, muted != 0 {
+        ) == noErr, muted != 0, hasSingleChannel(id, scope: scope) {
             return true
         }
-        return role == .output && deviceVolume(id) < 0.01
+        return role == .output && deviceVolume(id) == 0
     }
 
-    /// Sets the mute property, trying the main element before channel 1.
+    /// Sets the master mute or a verified single-channel mute.
     /// False when the device has no settable mute, so the caller can fall back
     /// to zero input volume.
     static func setMute(
@@ -130,19 +116,10 @@ enum CoreAudioProperties {
         let scope = role == .input
             ? kAudioDevicePropertyScopeInput
             : kAudioDevicePropertyScopeOutput
+        guard let element = wholeDeviceMuteElement(id, scope: scope) else { return false }
         var value: UInt32 = muted ? 1 : 0
-        for element in [kAudioObjectPropertyElementMain, 1] {
-            if write(
-                id,
-                selector: kAudioDevicePropertyMute,
-                scope: scope,
-                element: element,
-                value: &value
-            ) == noErr {
-                return true
-            }
-        }
-        return false
+        return write(id, selector: kAudioDevicePropertyMute, scope: scope,
+                     element: element, value: &value) == noErr
     }
 
     static func inputVolume(_ id: AudioObjectID) -> Float? {
@@ -166,69 +143,109 @@ enum CoreAudioProperties {
         ) == noErr
     }
 
-    /// Whether the mute property can be set, on the main element or channel 1,
-    /// matching where `setMute` writes it.
     static func canSetMute(_ id: AudioObjectID, role: DeviceRole) -> Bool {
-        let scope = role == .input
-            ? kAudioDevicePropertyScopeInput
-            : kAudioDevicePropertyScopeOutput
-        return [kAudioObjectPropertyElementMain, 1].contains { element in
-            var address = property(
-                kAudioDevicePropertyMute, scope: scope, element: element
-            )
+        let scope = role == .input ? kAudioDevicePropertyScopeInput : kAudioDevicePropertyScopeOutput
+        return wholeDeviceMuteElement(id, scope: scope) != nil
+    }
+
+    private static func wholeDeviceMuteElement(
+        _ id: AudioObjectID, scope: AudioObjectPropertyScope
+    ) -> AudioObjectPropertyElement? {
+        for element in [kAudioObjectPropertyElementMain, 1] {
+            var address = property(kAudioDevicePropertyMute, scope: scope, element: element)
             var settable: DarwinBoolean = false
-            return AudioObjectIsPropertySettable(id, &address, &settable) == noErr
-                && settable.boolValue
-        }
-    }
-
-    /// Whether any process is using the device, which for a microphone means
-    /// some app is recording from it.
-    static func isRunningSomewhere(_ id: AudioObjectID) -> Bool {
-        var running: UInt32 = 0
-        return read(
-            id,
-            selector: kAudioDevicePropertyDeviceIsRunningSomewhere,
-            into: &running
-        ) == noErr && running != 0
-    }
-
-    /// The name of an app recording from the device, from the audio process
-    /// objects macOS 14.2 added. Nil before that, or when no app is found.
-    static func appRecording(from device: AudioObjectID) -> String? {
-        guard #available(macOS 14.2, *) else { return nil }
-        for process in objectIDs(system, selector: kAudioHardwarePropertyProcessObjectList) {
-            var running: UInt32 = 0
-            var pid: pid_t = 0
-            guard read(process, selector: kAudioProcessPropertyIsRunningInput, into: &running) == noErr,
-                  running != 0,
-                  objectIDs(
-                      process,
-                      selector: kAudioProcessPropertyDevices,
-                      scope: kAudioObjectPropertyScopeInput
-                  ).contains(device),
-                  read(process, selector: kAudioProcessPropertyPID, into: &pid) == noErr,
-                  let app = NSRunningApplication(processIdentifier: pid)?.localizedName else {
-                continue
+            guard AudioObjectIsPropertySettable(id, &address, &settable) == noErr,
+                  settable.boolValue else { continue }
+            // A mute on channel 1 leaves the rest of a multi-channel interface live.
+            if element == kAudioObjectPropertyElementMain || hasSingleChannel(id, scope: scope) {
+                return element
             }
-            return app
         }
         return nil
+    }
+
+    private static func hasSingleChannel(_ id: AudioObjectID, scope: AudioObjectPropertyScope) -> Bool {
+        let ids = streams(id, scope: scope)
+        guard ids.count == 1, let stream = ids.first else { return false }
+        var format = AudioStreamBasicDescription()
+        return read(stream, selector: kAudioStreamPropertyVirtualFormat, into: &format) == noErr
+            && format.mChannelsPerFrame == 1
+    }
+
+    static func inputActivity(_ inputIDs: [AudioObjectID]) -> InputActivity {
+        let active = Set(inputIDs.filter { id in
+            var running: UInt32 = 0
+            return read(id, selector: kAudioDevicePropertyDeviceIsRunningSomewhere, into: &running) == noErr
+                && running != 0
+        })
+        guard !active.isEmpty else { return InputActivity() }
+        guard #available(macOS 14.2, *) else {
+            let inputOnly = Set(active.filter {
+                objectIDs($0, selector: kAudioDevicePropertyStreams, scope: kAudioDevicePropertyScopeOutput)?.isEmpty == true
+            })
+            return InputActivity(recording: inputOnly, uncertain: active.subtracting(inputOnly))
+        }
+        guard let processes = objectIDs(system, selector: kAudioHardwarePropertyProcessObjectList) else {
+            return InputActivity(uncertain: active)
+        }
+        var recording: Set<AudioObjectID> = []
+        var incomplete = false
+        for process in processes {
+            var running: UInt32 = 0
+            guard read(process, selector: kAudioProcessPropertyIsRunningInput, into: &running) == noErr else {
+                incomplete = true
+                continue
+            }
+            guard running != 0 else { continue }
+            if let inputs = objectIDs(process, selector: kAudioProcessPropertyDevices, scope: kAudioObjectPropertyScopeInput) {
+                recording.formUnion(inputs)
+            } else {
+                incomplete = true
+            }
+        }
+        recording.formIntersection(active)
+        return InputActivity(recording: recording, uncertain: incomplete ? active.subtracting(recording) : [])
+    }
+
+    static func isRecording(_ device: AudioObjectID) -> Bool {
+        inputActivity([device]).recording.contains(device)
+    }
+
+    @available(macOS 14.2, *)
+    static func processIDs() -> [AudioObjectID] {
+        objectIDs(system, selector: kAudioHardwarePropertyProcessObjectList) ?? []
+    }
+
+    @available(macOS 14.2, *)
+    private static func recordingProcess(on device: AudioObjectID) -> AudioObjectID? {
+        processIDs().first { process in
+            var running: UInt32 = 0
+            return read(process, selector: kAudioProcessPropertyIsRunningInput, into: &running) == noErr
+                && running != 0
+                && objectIDs(process, selector: kAudioProcessPropertyDevices,
+                             scope: kAudioObjectPropertyScopeInput)?.contains(device) == true
+        }
+    }
+
+    static func appRecording(from device: AudioObjectID) -> String? {
+        guard #available(macOS 14.2, *), let process = recordingProcess(on: device) else { return nil }
+        var pid: pid_t = 0
+        guard read(process, selector: kAudioProcessPropertyPID, into: &pid) == noErr else { return nil }
+        return NSRunningApplication(processIdentifier: pid)?.localizedName
     }
 
     private static func objectIDs(
         _ id: AudioObjectID,
         selector: AudioObjectPropertySelector,
         scope: AudioObjectPropertyScope = kAudioObjectPropertyScopeGlobal
-    ) -> [AudioObjectID] {
+    ) -> [AudioObjectID]? {
         var address = property(selector, scope: scope)
         var size: UInt32 = 0
-        guard AudioObjectGetPropertyDataSize(id, &address, 0, nil, &size) == noErr, size > 0 else {
-            return []
-        }
+        guard AudioObjectGetPropertyDataSize(id, &address, 0, nil, &size) == noErr else { return nil }
+        guard size > 0 else { return [] }
         var ids = [AudioObjectID](repeating: 0, count: Int(size) / MemoryLayout<AudioObjectID>.size)
         guard AudioObjectGetPropertyData(id, &address, 0, nil, &size, &ids) == noErr else {
-            return []
+            return nil
         }
         return Array(ids.prefix(Int(size) / MemoryLayout<AudioObjectID>.size))
     }
@@ -273,18 +290,25 @@ enum CoreAudioProperties {
         return device
     }
 
-    private static func isSeriallessUSBDevice(uid: String, at location: UInt32) -> Bool {
+    /// The registry can lag behind the audio driver. An absent descriptor
+    /// leaves identity unresolved until a later enumeration.
+    private static func isSeriallessUSBDevice(uid: String, at location: UInt32) -> Bool? {
         let parts = uid.components(separatedBy: ":")
-        guard parts.count == 5, let match = IOServiceMatching("IOUSBHostDevice") as NSMutableDictionary?
-        else { return false }
-        match[kIOPropertyMatchKey] = [
-            "locationID": location, "iSerialNumber": 0,
-            "USB Vendor Name": parts[1], "USB Product Name": parts[2],
-        ] as [String: Any]
-        let service = IOServiceGetMatchingService(kIOMainPortDefault, match)
-        guard service != IO_OBJECT_NULL else { return false }
-        IOObjectRelease(service)
-        return true
+        guard parts.count == 5 else { return nil }
+        func matches(_ properties: [String: Any]) -> Bool {
+            guard let request = IOServiceMatching("IOUSBHostDevice") as NSMutableDictionary? else { return false }
+            var fields = properties
+            fields["USB Vendor Name"] = parts[1]
+            fields["USB Product Name"] = parts[2]
+            request[kIOPropertyMatchKey] = fields
+            let service = IOServiceGetMatchingService(kIOMainPortDefault, request)
+            guard service != IO_OBJECT_NULL else { return false }
+            IOObjectRelease(service)
+            return true
+        }
+        if matches(["USB Serial Number": parts[3]]) { return false }
+        if matches(["locationID": location, "iSerialNumber": 0]) { return true }
+        return nil
     }
 
     /// The category a device claims for itself, or nil when it claims nothing

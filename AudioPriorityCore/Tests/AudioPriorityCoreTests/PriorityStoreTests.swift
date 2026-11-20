@@ -533,7 +533,7 @@ func legacyDisplayAliasesKeepVisibilityAndTheHighestRankInEachProfile() throws {
     }
 }
 
-private func portMic(_ location: String, stream: String = "2", verified: Bool = true) -> AudioDevice {
+private func portMic(_ location: String, stream: String = "2", verified: Bool? = true) -> AudioDevice {
     var mic = device("AppleUSBAudioEngine:Vendor:Interface:\(location):\(stream)", role: .input)
     mic.usesUSBLocation = verified
     return mic
@@ -624,7 +624,7 @@ func aLiveLegacyDeviceWithALocationShapedSerialKeepsItsSettings() throws {
         #expect(store.knownDevices.count == 2)
         // A transient lack of registry information for the same UID must
         // not erase an earlier confirmed match.
-        store.remember([portMic("114000", verified: false)])
+        store.remember([portMic("114000", verified: nil)])
         let moved = portMic("1114000")
         store.remember([moved])
         #expect(store.knownDevices.count == 2)
@@ -1098,4 +1098,166 @@ func aFocusRestoresTheProfileFromBeforeIt() {
     let deleted = PriorityStore.focusChange(requested: nil, active: meeting, before: UUID(), existing: all)
     #expect(deleted.apply == nil)
     #expect(deleted.before == nil)
+}
+
+@Test
+func aLateUSBDescriptorDoesNotStrandSettingsAtTheOldPort() throws {
+    try withDefaults { defaults in
+        let store = PriorityStore(defaults: defaults)
+        let old = portMic("114000", verified: nil)
+        let new = portMic("1114000")
+        store.remember([old])
+        store.hide(old)
+        store.remember([new])
+        #expect(store.knownDevices.map(\.uid) == [new.uid])
+        #expect(store.isHidden(new))
+        #expect(store.currentUID(for: old.uid, role: .input) == new.uid)
+    }
+}
+
+@Test
+func twoPortsDiscoveredLateGetTheirIndependentSettingsBack() throws {
+    try withDefaults { defaults in
+        let a = portMic("114000"), b = portMic("1114000")
+        let builtin = device("builtin", role: .input)
+        let store = PriorityStore(defaults: defaults)
+        store.remember([a, builtin])
+        store.hide(a)
+        store.setSelectsHalvesTogether(a, false)
+        store.savePriorities([a, builtin], microphonesFor: .speaker)
+        let desk = store.addProfile(named: "Desk")
+        store.savePriorities([builtin, a], microphonesFor: .speaker)
+        store.remember([b, builtin])
+        #expect(store.isHidden(b))
+        store.setNeverUse(b, true) // A choice made on B while using inherited settings.
+        let reopened = PriorityStore(defaults: defaults)
+        reopened.remember([a, b, builtin])
+        #expect(reopened.isHidden(a))
+        #expect(!reopened.isHidden(b))
+        #expect(!reopened.selectsHalvesTogether(a))
+        #expect(reopened.selectsHalvesTogether(b))
+        #expect(reopened.isNeverUse(b))
+        #expect(!reopened.isNeverUse(a))
+        #expect(reopened.sorted([b, a, builtin], microphonesFor: .speaker) == [builtin, a, b])
+        #expect(reopened.loadProfile(desk.id))
+        #expect(reopened.sorted([b, a, builtin], microphonesFor: .speaker) == [a, builtin, b])
+        #expect(reopened.currentUID(for: a.uid, role: .input) == a.uid)
+    }
+}
+
+@Test
+func malformedRecordsPreserveReadableRowsAndOriginalData() throws {
+    try withDefaults { defaults in
+        let first = device("known")
+        let store = PriorityStore(defaults: defaults)
+        store.remember([first])
+        let work = store.addProfile(named: "Work")
+        let keys = ["knownDevices", "priorityProfiles"]
+        for key in keys {
+            let good = try #require(defaults.data(forKey: key))
+            let rows = try #require(JSONSerialization.jsonObject(with: good) as? [[String: Any]])
+            let damaged = try JSONSerialization.data(withJSONObject: rows + [["bad": true]])
+            defaults.set(damaged, forKey: key)
+        }
+        let before = keys.map { defaults.data(forKey: $0) }
+        let recovered = PriorityStore(defaults: defaults)
+        #expect(recovered.profiles.contains { $0.id == work.id })
+        #expect(recovered.knownDevices.map(\.uid) == [first.uid])
+        recovered.remember([device("second")])
+        recovered.renameProfile(work.id, to: "Renamed")
+        for (key, raw) in zip(keys, before) {
+            #expect((defaults.array(forKey: key + ".unreadable") as? [Data]) == [try #require(raw)])
+        }
+        #expect(recovered.knownDevices.count == 2)
+        #expect(recovered.profiles.count == 2)
+    }
+}
+
+@Test
+func profileWithNoIndependentMicrophoneOrderStartsItFromItsLatestList() throws {
+    try withDefaults { defaults in
+        let store = PriorityStore(defaults: defaults)
+        store.savePriorities([roomMic, boomMic], microphonesFor: .speaker)
+        let work = store.addProfile(named: "Work")
+        #expect(store.loadProfile(work.id))
+        store.savePriorities([boomMic, roomMic], microphonesFor: .speaker)
+        store.microphonesFollowOutput = true
+        #expect(store.sorted([roomMic, boomMic], microphonesFor: .headphone) == [boomMic, roomMic])
+    }
+}
+
+@Test
+func stableSnapshotsAvoidCatalogRewritesAndMarkDisconnectTime() throws {
+    try withDefaults { defaults in
+        var instant = Date(timeIntervalSinceReferenceDate: 1_000)
+        let store = PriorityStore(defaults: defaults, now: { instant })
+        let mic = device("desk-mic", role: .input)
+        store.remember([mic])
+        let first = defaults.data(forKey: "knownDevices")
+        instant.addTimeInterval(10)
+        store.remember([mic])
+        #expect(defaults.data(forKey: "knownDevices") == first)
+        #expect(defaults.object(forKey: "forgottenPairedDevices") == nil)
+        instant.addTimeInterval(10)
+        store.remember([])
+        #expect(store.knownDevices.first?.lastSeen == instant)
+        store.forget(uid: "wired-speaker", role: .output)
+        #expect(!store.isForgotten(uid: "wired-speaker"))
+    }
+}
+
+@Test
+func lateDisplayConflictRestoresDefaultsAndExplicitVisibility() throws {
+    for changeAtSecondPort in [false, true] {
+        try withDefaults { defaults in
+            let base = UUID().uuidString
+            let a = monitor(base), b = monitor(base + "_00000010")
+            let store = PriorityStore(defaults: defaults)
+            store.remember([a])
+            if !changeAtSecondPort { store.unhide(a, from: .speaker) }
+            store.remember([b])
+            if changeAtSecondPort { store.unhide(b, from: .speaker) }
+            store.remember([a, b])
+            #expect(store.isHidden(a, in: .speaker) == changeAtSecondPort)
+            #expect(store.isHidden(b, in: .speaker) != changeAtSecondPort)
+            #expect(store.isHidden(a, in: .headphone))
+            #expect(store.isHidden(b, in: .headphone))
+        }
+    }
+}
+
+@Test
+func malformedArchivedPortRankIsClampedWhenSplittingCopies() throws {
+    try withDefaults { defaults in
+        let a = portMic("114000"), b = portMic("1114000")
+        let store = PriorityStore(defaults: defaults)
+        store.remember([a])
+        store.savePriorities([a], microphonesFor: .speaker)
+        store.remember([b])
+        var records = store.knownDevices
+        records[0].portHistory?.ports[a.uid]?.positions["inputPriorities"] = -2
+        defaults.set(try JSONEncoder().encode(records), forKey: "knownDevices")
+        store.remember([a, b])
+        #expect(store.sorted([b, a], microphonesFor: .speaker) == [a, b])
+    }
+}
+
+@Test
+func splittingPortsAfterAProfileSwitchUsesThatProfilesRanks() throws {
+    try withDefaults { defaults in
+        let a = portMic("114000"), b = portMic("1114000")
+        let builtin = device("builtin", role: .input)
+        let store = PriorityStore(defaults: defaults)
+        store.remember([a, builtin])
+        store.savePriorities([a, builtin], microphonesFor: .speaker)
+        let desk = try #require(store.profiles.first)
+        let travel = store.addProfile(named: "Travel")
+        store.savePriorities([builtin, a], microphonesFor: .speaker)
+        store.remember([b, builtin])
+        #expect(store.loadProfile(travel.id))
+        store.remember([a, b, builtin])
+        #expect(store.sorted([b, a, builtin], microphonesFor: .speaker) == [a, builtin, b])
+        #expect(store.loadProfile(desk.id))
+        #expect(store.sorted([b, a, builtin], microphonesFor: .speaker) == [builtin, a, b])
+    }
 }

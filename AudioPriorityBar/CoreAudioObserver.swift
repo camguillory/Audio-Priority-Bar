@@ -8,6 +8,9 @@ final class CoreAudioObserver {
     var onDefaultChanged: ((DeviceRole) -> Void)?
     var onMuteOrVolumeChanged: (() -> Void)?
 
+    private var retryTask: Task<Void, Never>?
+    private var shouldListen = false
+
     private lazy var callbackGate = CoreAudioCallbackGate { [weak self] event in
         Task { @MainActor [weak self] in
             self?.handle(event)
@@ -18,29 +21,78 @@ final class CoreAudioObserver {
         addSystem: { [unowned self] in addSystemListener($0) },
         removeSystem: { [unowned self] in removeSystemListener($0) },
         deviceIDs: CoreAudioProperties.deviceIDs,
+        deviceUID: CoreAudioProperties.deviceUID,
+        processIDs: processInventory,
         addDevice: { [unowned self] in addDeviceListener($0) },
         removeDevice: { [unowned self] in removeDeviceListener($0) }
     )
 
+    private var processInventory: (() -> [AudioObjectID])? {
+        if #available(macOS 14.2, *) { return CoreAudioProperties.processIDs }
+        return nil
+    }
+
     @discardableResult
     func startListening() -> Bool {
+        shouldListen = true
         callbackGate.setActive(true)
         let started = listeners.start()
-        if !started { callbackGate.setActive(false) }
+        if started {
+            retryTask?.cancel()
+            retryTask = nil
+        } else {
+            scheduleRetry()
+        }
         return started
     }
 
     func stopListening() {
-        listeners.stop()
+        shouldListen = false
+        retryTask?.cancel()
+        retryTask = nil
         callbackGate.setActive(false)
+        listeners.stop()
+    }
+
+    func rebindListeners() {
+        guard shouldListen else { return }
+        if listeners.restart() {
+            retryTask?.cancel()
+            retryTask = nil
+            onDevicesChanged?()
+        } else {
+            scheduleRetry()
+        }
+    }
+
+    private func scheduleRetry() {
+        guard retryTask == nil else { return }
+        retryTask = Task { @MainActor [weak self] in
+            for seconds in [1, 2, 4, 8, 16] {
+                do { try await Task.sleep(for: .seconds(seconds)) } catch { return }
+                guard let self, shouldListen else { return }
+                if listeners.start() {
+                    retryTask = nil
+                    onDevicesChanged?()
+                    return
+                }
+            }
+            self?.retryTask = nil
+            DebugLog.shared.write("CoreAudio monitoring is unavailable after retrying")
+        }
     }
 
     private func handle(_ event: CoreAudioEvent) {
         guard listeners.isListening else { return }
         switch event {
         case .devicesChanged:
-            onDevicesChanged?()
             listeners.rebuildDeviceListeners()
+            onDevicesChanged?()
+        case .serviceRestarted:
+            rebindListeners()
+        case .processesChanged:
+            listeners.rebuildProcessListeners()
+            onMuteOrVolumeChanged?()
         case let .defaultChanged(role):
             onDefaultChanged?(role)
         case .muteOrVolumeChanged:
@@ -71,6 +123,7 @@ final class CoreAudioObserver {
             mScope: scope,
             mElement: element
         )
+        guard AudioObjectHasProperty(id, &address) else { return false }
         return AudioObjectAddPropertyListener(
             id, &address, Self.muteVolumeProc, callbackContext
         ) == noErr
@@ -101,6 +154,9 @@ final class CoreAudioObserver {
         case .devices: kAudioHardwarePropertyDevices
         case .defaultInput: kAudioHardwarePropertyDefaultInputDevice
         case .defaultOutput: kAudioHardwarePropertyDefaultOutputDevice
+        case .serviceRestarted: kAudioHardwarePropertyServiceRestarted
+        case .processList:
+            if #available(macOS 14.2, *) { kAudioHardwarePropertyProcessObjectList } else { preconditionFailure() }
         }
         return AudioObjectPropertyAddress(
             mSelector: selector,
@@ -116,6 +172,8 @@ final class CoreAudioObserver {
         case .devices: Self.devicesProc
         case .defaultInput: Self.defaultInputProc
         case .defaultOutput: Self.defaultOutputProc
+        case .serviceRestarted: Self.serviceRestartProc
+        case .processList: Self.processListProc
         }
     }
 
@@ -147,6 +205,18 @@ final class CoreAudioObserver {
                 kAudioDevicePropertyScopeInput,
                 kAudioObjectPropertyElementMain
             )
+        case let .processInputRunning(id):
+            if #available(macOS 14.2, *) {
+                return (id, kAudioProcessPropertyIsRunningInput, kAudioObjectPropertyScopeGlobal,
+                        kAudioObjectPropertyElementMain)
+            }
+            preconditionFailure()
+        case let .processInputDevices(id):
+            if #available(macOS 14.2, *) {
+                return (id, kAudioProcessPropertyDevices, kAudioObjectPropertyScopeInput,
+                        kAudioObjectPropertyElementMain)
+            }
+            preconditionFailure()
         case let .running(id):
             return (
                 id,
@@ -168,6 +238,18 @@ final class CoreAudioObserver {
     private static let devicesProc: AudioObjectPropertyListenerProc = {
         _, _, _, context in
         gate(context)?.send(.devicesChanged)
+        return noErr
+    }
+
+    private static let serviceRestartProc: AudioObjectPropertyListenerProc = {
+        _, _, _, context in
+        gate(context)?.send(.serviceRestarted)
+        return noErr
+    }
+
+    private static let processListProc: AudioObjectPropertyListenerProc = {
+        _, _, _, context in
+        gate(context)?.send(.processesChanged)
         return noErr
     }
 

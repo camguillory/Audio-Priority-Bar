@@ -34,6 +34,7 @@ enum ShortcutError: Error, CustomLocalizedStringResourceConvertible {
     case starting
     case unknownDevice
     case notConnected(String)
+    case selectionFailed(String)
     case unknownProfile
 
     var localizedStringResource: LocalizedStringResource {
@@ -41,6 +42,7 @@ enum ShortcutError: Error, CustomLocalizedStringResourceConvertible {
         case .starting: "Audio Priority Bar is still starting. Try again in a moment."
         case .unknownDevice: "Audio Priority Bar doesn't know this device. Choose it again in the action."
         case .notConnected(let name): "\(name) isn't connected."
+        case .selectionFailed(let name): "The Mac could not switch to \(name). Check that the device is ready."
         case .unknownProfile: "This profile no longer exists. Choose another in the action."
         }
     }

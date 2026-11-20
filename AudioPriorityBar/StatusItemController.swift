@@ -499,10 +499,10 @@ final class StatusItemController: NSObject, NSWindowDelegate {
             $0.convertToScreen(button.convert(button.bounds, to: nil)).midX
         }
         positionPanel(relativeTo: button)
-        model.battery.refresh()
+        model.battery.refreshIfNeeded()
         model.refreshHeadsetControls()
         batteryTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated { self?.model.battery.refresh() }
+            MainActor.assumeIsolated { self?.model.battery.refreshIfNeeded() }
         }
         DebugLog.shared.write("panel opened")
         panel.orderFrontRegardless()
@@ -667,7 +667,7 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         // A microphone left live outside the mute matters more than talking
         // into a muted one.
         let content = model.uncoveredRecording.map(NoticeContent.unmuted)
-            ?? (model.isMicrophoneMuted && model.isInputRecording ? .mutedWhileRecording : nil)
+            ?? (model.isMicrophoneMuted && model.currentInputMayBeRecording ? .mutedWhileRecording : nil)
         let shown = mutedReminder.update(applies: model.remindsWhenMuted && content != nil)
             ? content : nil
         if shown != notice.mutedReminder {
