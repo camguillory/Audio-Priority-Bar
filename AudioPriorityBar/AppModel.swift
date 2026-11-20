@@ -89,7 +89,7 @@ struct AutomaticOutputDecision {
 /// Something in the panel the arrow keys can highlight.
 enum PanelItem: Hashable {
     case automatic, profile, takeoverFix, outputLevel, microphoneLevel
-    case microphoneOrder, showAll, settings
+    case microphoneOrder, activity, showAll, settings
     case device(String)
 }
 
@@ -103,15 +103,18 @@ final class AppModel {
     var listedDevices: [AudioDevice] { speakerDevices + headphoneDevices + inputDevices }
     /// What the arrow keys walk through, in the panel's order.
     var panelItems: [PanelItem] {
-        var items: [PanelItem] = [.automatic]
+        var items: [PanelItem] = [.settings]
+        if currentOutputID != nil { items.append(.outputLevel) }
+        if currentInputID != nil { items.append(.microphoneLevel) }
+        items.append(.automatic)
         if profiles.count > 1 { items.append(.profile) }
         if takeoverDevice?.isBluetooth == true { items.append(.takeoverFix) }
-        items.append(.outputLevel)
-        if currentInputID != nil { items.append(.microphoneLevel) }
         items += (speakerDevices + headphoneDevices).map { .device($0.id) }
         if microphonesFollowOutput { items.append(.microphoneOrder) }
         items += inputDevices.map { .device($0.id) }
-        return items + [.showAll, .settings]
+        items.append(.showAll)
+        if !recentSwitches.isEmpty { items.append(.activity) }
+        return items
     }
     var hiddenSpeakerDevices: [AudioDevice] = []
     var hiddenHeadphoneDevices: [AudioDevice] = []

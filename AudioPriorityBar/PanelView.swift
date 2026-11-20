@@ -7,6 +7,8 @@ struct PanelView: View {
     @Bindable var model: AppModel
     let showSettings: () -> Void
     var showProfiles: () -> Void = {}
+    var showActivity: () -> Void = {}
+    var panelScreen: () -> NSScreen? = { NSScreen.main }
     /// Reports the size the content needs, which the panel takes on.
     var fit: (CGSize) -> Void = { _ in }
 
@@ -42,189 +44,146 @@ struct PanelView: View {
         return min(layout.contentHeight + growth, maximumListHeight)
     }
 
+    @State private var headerHeight: CGFloat = 200
+    @State private var footerHeight: CGFloat = 80
+    @State private var screenHeight: CGFloat = NSScreen.main?.visibleFrame.height ?? 800
+
     private var maximumListHeight: CGFloat {
-        let screen = NSScreen.screens.first {
-            $0.frame.contains(NSEvent.mouseLocation)
-        } ?? NSScreen.main
-        return min(500, max(240, (screen?.visibleFrame.height ?? 900) / 2))
+        min(520, max(DeviceRowMetrics.height, screenHeight - headerHeight - footerHeight - 16))
     }
 
     var body: some View {
         VStack(spacing: 0) {
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(spacing: 0) {
                 HStack {
-                    Text("Automatic switching")
-                        .font(.system(size: 13, weight: .semibold))
-                        .accessibilityHidden(true)
+                    Text("Audio devices")
+                        .font(.system(size: 20, weight: .semibold))
+                        .accessibilityAddTraits(.isHeader)
                     Spacer()
-                    if model.profiles.count > 1 {
-                        profileMenu
+                    Button(action: showSettings) {
+                        Label("Settings…", systemImage: "gearshape")
                     }
-                    Toggle(
-                        "Automatic switching",
-                        isOn: Binding(
-                            get: { !model.isManualMode },
-                            set: { model.setManualMode(!$0) }
-                        )
-                    )
-                    .labelsHidden()
-                    .toggleStyle(.switch)
+                    .controlSize(.regular)
+                    .keyboardShortcut(",", modifiers: .command)
+                    .keyboardHighlight(model.keyboardItem == .settings)
+                    .help("Open Audio Priority Bar Settings (⌘,)")
                 }
-                .keyboardHighlight(model.keyboardItem == .automatic)
-                .help("Use device priorities as availability changes")
-                if let takeover = model.takeoverDevice {
-                    HStack(spacing: 6) {
-                        Text(takeover.role == .input
-                            ? "\(takeover.name) keeps taking the microphone, trying again shortly"
-                            : "macOS keeps switching to \(takeover.name)")
-                            .foregroundStyle(.secondary)
-                            .lineLimit(2)
-                        if takeover.isBluetooth {
-                            Button("Fix in Settings…") {
-                                DebugLog.shared.write("clicked Fix in Settings for \(takeover.logName)")
-                                NSWorkspace.shared.open(Self.headphoneSettingsURL)
-                            }
-                            .buttonStyle(.link)
-                            .keyboardHighlight(model.keyboardItem == .takeoverFix)
-                            .help("Under Connect to This Mac, choose When Last Connected to This Mac")
-                        }
-                    }
-                    .font(.caption)
-                } else if let automationNote {
-                    Text(automationNote)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                }
-                if !model.microphonesAwaitingRestore.isEmpty {
-                    Label("Couldn’t restore microphone after mute: \(model.microphonesAwaitingRestore.joined(separator: ", ")).",
-                          systemImage: "exclamationmark.triangle")
-                        .font(.caption)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                if let speaker = model.speakerMuteFailure, speaker.uid == model.currentOutputDevice?.uid {
-                    Label("Headphones disconnected. Couldn’t mute \(speaker.name).", systemImage: "exclamationmark.triangle")
-                        .font(.caption)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                if let latest = model.recentSwitches.first {
-                    VStack(alignment: .leading, spacing: 1) {
-                        HStack(spacing: 6) {
-                            Text(latest.role == .input ? "Last microphone switch" : "Last output switch")
-                                .fontWeight(.semibold)
-                            Text(latest.date, format: .dateTime.hour().minute())
-                        }
-                        .foregroundStyle(.secondary)
-                        Text("\(latest.device) · \(latest.reason)")
-                            .lineLimit(3)
-                    }
-                    .font(.caption)
-                    .padding(.top, 4)
-                    .help(latest.description)
-                    .accessibilityElement(children: .combine)
-                }
-            }
-            .padding(.horizontal, 12)
-            .padding(.top, 10)
+                .padding(.bottom, 11)
 
-            VStack(spacing: 8) {
-                LevelControl(
-                    name: "Output",
-                    deviceName: model.currentOutputDevice?.name,
-                    icon: model.isActiveOutputMuted ? "speaker.slash.fill" : outputIcon,
-                    toggledIcon: model.isActiveOutputMuted ? outputIcon : "speaker.slash.fill",
-                    isMuted: model.isActiveOutputMuted,
-                    level: model.volume,
-                    isControllable: model.isVolumeControllable,
-                    uncontrollableNote: "This device does not allow volume control",
-                    canToggleMute: model.isOutputMutable,
-                    toggleMute: { model.setOutputMuted(!model.isActiveOutputMuted) },
-                    setLevel: model.setVolume
-                )
-                .keyboardHighlight(model.keyboardItem == .outputLevel)
-                if model.currentInputID != nil {
+                VStack(spacing: 9) {
                     LevelControl(
-                        name: "Microphone",
-                        deviceName: model.currentInputDevice?.name,
-                        icon: model.isMicrophoneMuted ? "mic.slash.fill" : "mic.fill",
-                        toggledIcon: model.isMicrophoneMuted ? "mic.fill" : "mic.slash.fill",
+                        role: .output,
+                        device: model.currentOutputDevice,
+                        icon: outputIcon,
+                        isMuted: model.isActiveOutputMuted,
+                        level: model.volume,
+                        isControllable: model.isVolumeControllable,
+                        canToggleMute: model.isOutputMutable,
+                        toggleMute: { model.setOutputMuted(!model.isActiveOutputMuted) },
+                        setLevel: model.setVolume
+                    )
+                    .keyboardHighlight(model.keyboardItem == .outputLevel)
+                    LevelControl(
+                        role: .input,
+                        device: model.currentInputDevice,
+                        icon: "mic.fill",
                         isMuted: model.isMicrophoneMuted,
                         level: model.microphoneLevel,
                         isControllable: model.isMicrophoneLevelControllable,
-                        uncontrollableNote: "This mic does not allow volume control",
                         canToggleMute: model.isMicrophoneMutable,
                         toggleMute: { model.setMicrophoneMuted(!model.isMicrophoneMuted) },
                         setLevel: model.setMicrophoneLevel
                     )
                     .keyboardHighlight(model.keyboardItem == .microphoneLevel)
                 }
+                .padding(10)
+                .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 10))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 10)
+                        .strokeBorder(Color(nsColor: .separatorColor), lineWidth: 0.5)
+                        .allowsHitTesting(false)
+                }
+                switchingControls
+                    .padding(.vertical, 10)
             }
-            .padding(.horizontal, 12)
-            .padding(.top, 8)
-            .padding(.bottom, 10)
+            .padding(.horizontal, PanelLayout.horizontalPadding)
+            .padding(.top, 12)
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { headerHeight = $0 }
 
-            Divider().padding(.horizontal, 12)
+            Divider()
 
-            ScrollViewReader { proxy in
-                ScrollView(
-                    .vertical,
-                    showsIndicators: listHeight >= maximumListHeight
-                ) {
-                    VStack(spacing: PanelLayout.sectionGap) {
-                        DeviceSectionView(
-                            model: model,
-                            section: .speaker,
-                            title: "Speakers",
-                            emptyText: "No speakers shown",
-                            devices: model.speakerDevices,
-                            currentID: model.currentOutputID,
-                            layout: layout,
-                            drag: $drag,
-                            highlightedPairedDeviceID: $highlightedPairedDeviceID
-                        )
-                        .zIndex(drag?.section == .speaker ? 1 : 0)
-                        DeviceSectionView(
-                            model: model,
-                            section: .headphone,
-                            title: "Headphones",
-                            emptyText: "No headphones shown",
-                            showsSeparator: true,
-                            devices: model.headphoneDevices,
-                            currentID: model.currentOutputID,
-                            layout: layout,
-                            drag: $drag,
-                            highlightedPairedDeviceID: $highlightedPairedDeviceID
-                        )
-                        .zIndex(drag?.section == .headphone ? 1 : 0)
-                        DeviceSectionView(
-                            model: model,
-                            section: .input,
-                            title: "Microphones",
-                            emptyText: "No microphones shown",
-                            showsSeparator: true,
-                            devices: model.inputDevices,
-                            currentID: model.currentInputID,
-                            layout: layout,
-                            drag: $drag,
-                            highlightedPairedDeviceID: $highlightedPairedDeviceID
-                        )
-                        .zIndex(drag?.section == .input ? 1 : 0)
+            if model.listedDevices.isEmpty && !model.microphonesFollowOutput {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("No audio devices to show").font(.headline)
+                    Text(model.showAll
+                         ? "Connect a speaker, headset, or microphone to get started."
+                         : "Connect an audio device, or show hidden and disconnected devices below.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(PanelLayout.horizontalPadding)
+            } else {
+                deviceLists
+            }
+
+            VStack(spacing: 0) {
+                Divider()
+                Toggle("Show hidden and disconnected devices", isOn: Binding(
+                    get: { model.showAll },
+                    set: { value in
+                        model.showAll = value
+                        model.refreshDevices()
                     }
+                ))
+                .toggleStyle(.checkbox)
+                .font(.callout)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .keyboardHighlight(model.keyboardItem == .showAll)
+                .padding(.horizontal, PanelLayout.horizontalPadding)
+                .padding(.vertical, 8)
+                if let latest = model.recentSwitches.first {
+                    Divider()
+                    Button(action: showActivity) {
+                        HStack(alignment: .firstTextBaseline, spacing: 8) {
+                            Image(systemName: "clock.arrow.circlepath")
+                                .foregroundStyle(.secondary)
+                            VStack(alignment: .leading, spacing: 2) {
+                                HStack {
+                                    Text(latest.role == .input ? "Last microphone switch" : "Last output switch")
+                                        .fontWeight(.semibold)
+                                    Text(latest.date, format: .dateTime.hour().minute())
+                                        .monospacedDigit()
+                                        .foregroundStyle(.secondary)
+                                    Spacer(minLength: 4)
+                                    Text("History")
+                                    Image(systemName: "chevron.forward")
+                                        .font(.caption.weight(.semibold))
+                                }
+                                Text("\(latest.device) · \(latest.reason)")
+                                    .foregroundStyle(Color.primary.opacity(0.78))
+                                    .lineLimit(2)
+                            }
+                        }
+                        .font(.callout)
+                        .padding(.vertical, 9)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(PanelLinkStyle())
+                    .keyboardHighlight(model.keyboardItem == .activity)
+                    .accessibilityLabel("Open switch history")
+                    .accessibilityValue(latest.description)
+                    .help("Open switch history · \(latest.description)")
                     .padding(.horizontal, PanelLayout.horizontalPadding)
-                    .padding(.top, PanelLayout.topPadding)
-                    .padding(.bottom, PanelLayout.bottomPadding)
-                    .coordinateSpace(name: PanelLayout.space)
-                }
-                .frame(height: listHeight)
-                .onChange(of: model.keyboardItem) { _, item in
-                    if case .device(let id)? = item { proxy.scrollTo(id) }
                 }
             }
-
-            Divider().padding(.horizontal, 12)
-            Footer(model: model, showSettings: showSettings)
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { footerHeight = $0 }
         }
-        .frame(width: 380)
+        .frame(width: 416)
+        .onAppear(perform: updateScreenHeight)
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { _ in updateScreenHeight() }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didChangeScreenParametersNotification)) { _ in updateScreenHeight() }
         .onChange(of: renderedDeviceIDs) { _, ids in
             if let drag, !ids.contains(drag.device.id) {
                 self.drag = nil
@@ -256,6 +215,123 @@ struct PanelView: View {
         // Holds the content to the top while the window catches up with a new
         // height, rather than centering it for a frame.
         .frame(maxHeight: .infinity, alignment: .top)
+    }
+
+    private var deviceLists: some View {
+        ScrollViewReader { proxy in
+            ScrollView(
+                .vertical,
+                showsIndicators: listHeight >= maximumListHeight
+            ) {
+                VStack(spacing: PanelLayout.sectionGap) {
+                    DeviceSectionView(
+                        model: model,
+                        section: .speaker,
+                        title: "Speakers",
+                        emptyText: "No speakers shown",
+                        devices: model.speakerDevices,
+                        currentID: model.currentOutputID,
+                        layout: layout,
+                        drag: $drag,
+                        highlightedPairedDeviceID: $highlightedPairedDeviceID
+                    )
+                    .zIndex(drag?.section == .speaker ? 1 : 0)
+                    DeviceSectionView(
+                        model: model,
+                        section: .headphone,
+                        title: "Headphones",
+                        emptyText: "No headphones shown",
+                        showsSeparator: true,
+                        devices: model.headphoneDevices,
+                        currentID: model.currentOutputID,
+                        layout: layout,
+                        drag: $drag,
+                        highlightedPairedDeviceID: $highlightedPairedDeviceID
+                    )
+                    .zIndex(drag?.section == .headphone ? 1 : 0)
+                    DeviceSectionView(
+                        model: model,
+                        section: .input,
+                        title: "Microphones",
+                        emptyText: "No microphones shown",
+                        showsSeparator: true,
+                        devices: model.inputDevices,
+                        currentID: model.currentInputID,
+                        layout: layout,
+                        drag: $drag,
+                        highlightedPairedDeviceID: $highlightedPairedDeviceID
+                    )
+                    .zIndex(drag?.section == .input ? 1 : 0)
+                }
+                .padding(.horizontal, PanelLayout.horizontalPadding)
+                .padding(.top, PanelLayout.topPadding)
+                .padding(.bottom, PanelLayout.bottomPadding)
+                .coordinateSpace(name: PanelLayout.space)
+            }
+            .frame(height: listHeight)
+            .onChange(of: model.keyboardItem) { _, item in
+                if case .device(let id)? = item { proxy.scrollTo(id) }
+            }
+        }
+    }
+
+    private func updateScreenHeight() {
+        if let screen = panelScreen() { screenHeight = screen.visibleFrame.height }
+    }
+
+    private var switchingControls: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 10) {
+                Toggle("Automatic switching", isOn: Binding(
+                    get: { !model.isManualMode },
+                    set: { model.setManualMode(!$0) }
+                ))
+                .toggleStyle(.switch)
+                .controlSize(.small)
+                .font(.body.weight(.medium))
+                .fixedSize()
+                .keyboardHighlight(model.keyboardItem == .automatic)
+                .help("Choose devices using your saved priority order")
+                Spacer(minLength: 0)
+                if model.profiles.count > 1 { profileMenu }
+            }
+            if let takeover = model.takeoverDevice {
+                HStack(spacing: 6) {
+                    Text(takeover.role == .input
+                        ? "\(takeover.name) keeps taking the microphone. Retrying shortly."
+                        : "macOS keeps switching to \(takeover.name).")
+                        .lineLimit(2)
+                    if takeover.isBluetooth {
+                        Button("Fix in Settings…") { NSWorkspace.shared.open(Self.headphoneSettingsURL) }
+                            .buttonStyle(.link)
+                            .fixedSize()
+                            .keyboardHighlight(model.keyboardItem == .takeoverFix)
+                            .help("Under Connect to This Mac, choose When Last Connected to This Mac")
+                    }
+                }
+                .font(.callout)
+                .foregroundStyle(.secondary)
+            } else if let automationNote {
+                Text(automationNote)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .help(automationNote)
+            }
+            if !model.microphonesAwaitingRestore.isEmpty {
+                warning("Couldn’t restore microphone after mute: \(model.microphonesAwaitingRestore.joined(separator: ", ")).")
+            }
+            if let speaker = model.speakerMuteFailure, speaker.uid == model.currentOutputDevice?.uid {
+                warning("Headphones disconnected. Couldn’t mute \(speaker.name).")
+            }
+        }
+    }
+
+    private func warning(_ text: String) -> some View {
+        Label(text, systemImage: "exclamationmark.triangle")
+            .font(.callout)
+            .lineLimit(2)
+            .help(text)
     }
 
     /// The profile in use, and the others to switch to. Shown only once there
@@ -307,18 +383,16 @@ struct PanelView: View {
     /// Why automatic switching chose what it did, shown only when there is
     /// something the lists and the toggle do not already say.
     private var automationNote: String? {
-        guard let current = model.currentOutputDevice else {
-            return "No output selected"
-        }
+        guard let current = model.currentOutputDevice else { return nil }
         if let uid = model.externalInputUID, let mic = model.currentInputDevice, mic.uid == uid {
             return "Keeping \(mic.name) until it disconnects or you choose another microphone"
         }
         if model.isManualMode {
-            return "Your choice stays until you turn this on"
+            return nil
         }
         if model.keptPicks[.output] == current.uid
             || model.currentInputDevice.map({ model.keptPicks[.input] == $0.uid }) == true {
-            return "Your choice stays until a device your list would pick connects"
+            return "Keeping your choice until a preferred device connects."
         }
         guard let skipped = model.automaticOutputDecision.skipped,
               skipped.device.id != current.id else {
@@ -328,200 +402,106 @@ struct PanelView: View {
     }
 }
 
-/// One row for the current output or microphone: the icon mutes, the slider
-/// sets the level. Both rows share it so they look and behave alike.
+/// The two channels share the same columns so the device name, mute button
+/// and level stay in predictable positions as the route changes.
 private struct LevelControl: View {
-    private static let buttonSize: CGFloat = 26
-    private static let spacing: CGFloat = 10
-
-    let name: String
-    /// The device the row controls, named in the tooltip and for VoiceOver
-    /// rather than taking a line of its own.
-    let deviceName: String?
+    let role: DeviceRole
+    let device: AudioDevice?
     let icon: String
-    /// Shown while hovering, so the button previews what a click will do.
-    let toggledIcon: String
     let isMuted: Bool
     let level: Float
     let isControllable: Bool
-    /// Shown in place of the slider when the level cannot be set, so a
-    /// disabled slider is not mistaken for a broken one.
-    var uncontrollableNote: String?
-    /// False when muting cannot work, so the button shows as disabled rather
-    /// than pressing and doing nothing.
-    var canToggleMute = true
+    let canToggleMute: Bool
     let toggleMute: () -> Void
     let setLevel: (Float) -> Void
 
-    @State private var isHoveringMute = false
-    /// Set by a click so the result shows until the pointer leaves, instead
-    /// of the preview flipping straight back to the previous state.
-    @State private var isPreviewSuppressed = false
+    private var name: String { role == .input ? "Microphone" : "Output" }
+    private var muteTitle: String {
+        "\(isMuted ? "Unmute" : "Mute") \(name.lowercased())"
+    }
+    private var muteIcon: String { role == .input ? "mic.slash.fill" : "speaker.slash.fill" }
+    private var value: String { level.formatted(.percent.precision(.fractionLength(0))) }
 
     var body: some View {
-        HStack(spacing: Self.spacing) {
-            Button {
-                isPreviewSuppressed = true
-                toggleMute()
-            } label: {
-                Image(systemName: isHoveringMute && canToggleMute && !isPreviewSuppressed ? toggledIcon : icon)
-                    .foregroundStyle(isMuted ? AnyShapeStyle(.white) : AnyShapeStyle(.primary))
-                    .frame(width: Self.buttonSize, height: Self.buttonSize)
-                    .background(Circle().fill(muteBackground).brightness(isMuted && isHoveringMute ? -0.12 : 0))
-                    .contentShape(Circle())
-                    .animation(.easeInOut(duration: 0.15), value: icon)
-                    .animation(.easeInOut(duration: 0.15), value: isHoveringMute)
+        HStack(spacing: 10) {
+            Button(action: toggleMute) {
+                Image(systemName: isMuted ? muteIcon : icon)
+                    .font(.system(size: 16, weight: .medium))
+                    .frame(width: 34, height: 34)
+                    .foregroundStyle(isMuted ? Color.red : .primary)
+                    .background(Color.primary.opacity(0.07), in: RoundedRectangle(cornerRadius: 8))
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .onHover {
-                isHoveringMute = $0
-                if !$0 { isPreviewSuppressed = false }
-            }
-            .animation(.easeInOut(duration: 0.12), value: isHoveringMute)
+            .disabled(device == nil || !canToggleMute)
             .help(muteTitle)
             .accessibilityLabel(muteTitle)
-            .disabled(!canToggleMute)
-            if !isControllable, let uncontrollableNote {
-                Text(uncontrollableNote)
-                    .font(.callout)
-                    .foregroundStyle(.tertiary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .help(deviceName ?? name)
-            } else {
-                slider
+            .accessibilityValue(device?.name ?? "Unavailable")
+
+            VStack(alignment: .leading, spacing: 1) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(name)
+                        .font(.callout)
+                        .foregroundStyle(Color.primary.opacity(0.74))
+                        .frame(width: 68, alignment: .leading)
+                    Text(device?.name ?? "None selected")
+                        .font(.body.weight(.semibold))
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .help(device?.name ?? "None selected")
+                    Spacer(minLength: 0)
+                    if isMuted {
+                        Text("Muted")
+                            .font(.callout.weight(.semibold))
+                            .fixedSize()
+                    }
+                }
+                .accessibilityElement(children: .combine)
+
+                if device != nil, isControllable {
+                    HStack(spacing: 8) {
+                        Slider(value: Binding(get: { Double(level) }, set: { setLevel(Float($0)) }), in: 0...1)
+                            .controlSize(.small)
+                            .accessibilityLabel(role == .input ? "Microphone input level" : "Output volume")
+                            .accessibilityValue("\(value), \(device?.name ?? name)")
+                        Text(value)
+                            .monospacedDigit()
+                            .font(.callout)
+                            .foregroundStyle(Color.primary.opacity(0.74))
+                            .frame(minWidth: 34, alignment: .trailing)
+                            .accessibilityHidden(true)
+                    }
+                } else if device != nil {
+                    Text(role == .input ? "Input level unavailable" : "Volume control unavailable")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .background(ScrollWheelReceiver { delta in
-            guard isControllable else { return }
+            guard device != nil, isControllable else { return }
             setLevel(max(0, min(1, level + Float(delta * 0.02))))
         })
     }
-
-    @ViewBuilder
-    private var slider: some View {
-        Slider(
-            value: Binding(
-                get: { Double(level) },
-                set: { setLevel(Float($0)) }
-            ),
-            in: 0...1
-        )
-        .controlSize(.small)
-        .disabled(!isControllable)
-        .opacity(isMuted ? 0.5 : 1)
-        .help(deviceName ?? name)
-        .accessibilityLabel("\(name) volume")
-        .accessibilityValue(valueDescription)
-        // Sized to the widest value, so it sits close to the slider
-        // without the slider resizing as the digits change.
-        ZStack(alignment: .leading) {
-            Text("100%").hidden()
-            Text(isControllable ? "\(Int(level * 100))%" : "—")
-        }
-        .font(.callout.monospacedDigit())
-        .foregroundStyle(.secondary)
-        .fixedSize()
-        .padding(.leading, 6 - Self.spacing)
-        .accessibilityHidden(true)
-    }
-
-    private var muteTitle: String {
-        "\(isMuted ? "Unmute" : "Mute") \(deviceName ?? name)"
-    }
-
-    /// Always filled so the icon reads as a button, and solid red under a
-    /// white glyph while muted: a red glyph on a translucent red tint takes
-    /// its contrast from whatever the glass shows behind it.
-    private var muteBackground: AnyShapeStyle {
-        isMuted
-            ? AnyShapeStyle(Color.red)
-            : AnyShapeStyle(Color.primary.opacity(isHoveringMute ? 0.24 : 0.16))
-    }
-
-    private var valueDescription: String {
-        var values = [isControllable ? "\(Int(level * 100)) percent" : "Unavailable"]
-        if isMuted { values.insert("Muted", at: 0) }
-        if let deviceName { values.append(deviceName) }
-        return values.joined(separator: ", ")
-    }
 }
 
-private struct Footer: View {
-    @Bindable var model: AppModel
-    let showSettings: () -> Void
+private struct PanelLinkStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label.modifier(Highlight(pressed: configuration.isPressed))
+    }
 
-    @State private var isHoveringSettings = false
-    @State private var isHoveringShowAll = false
+    private struct Highlight: ViewModifier {
+        var pressed: Bool
+        @State private var hovering = false
 
-    var body: some View {
-        VStack(spacing: 0) {
-            Toggle(
-                "Show hidden and disconnected devices",
-                isOn: Binding(
-                    get: { model.showAll },
-                    set: {
-                        DebugLog.shared.write("clicked show hidden and disconnected devices \($0 ? "on" : "off")")
-                        model.showAll = $0
-                        model.refreshDevices()
-                    }
-                )
-            )
-            .toggleStyle(.checkbox)
-            .font(.system(size: 13))
-            .frame(maxWidth: .infinity, minHeight: 20, alignment: .leading)
-            .padding(.horizontal, 8)
-            .background(
-                Color.primary.opacity(isHoveringShowAll || model.keyboardItem == .showAll ? 0.1 : 0),
-                in: RoundedRectangle(cornerRadius: 6)
-            )
-            // The highlight covers the whole row, so the whole row toggles.
-            .contentShape(Rectangle())
-            .onTapGesture {
-                model.showAll.toggle()
-                DebugLog.shared.write("clicked show hidden and disconnected devices \(model.showAll ? "on" : "off")")
-                model.refreshDevices()
-            }
-            .onHover { isHoveringShowAll = $0 }
-            .animation(.easeInOut(duration: 0.12), value: isHoveringShowAll)
-            .padding(.horizontal, 4)
-            // Matches the system Wifi menu, which keeps equal space around its
-            // show-hidden toggle. Both values sit outside the highlight box.
-            .padding(.top, 6)
-            .padding(.bottom, 6)
-
-            Divider().padding(.horizontal, 12)
-
-            Button(action: showSettings) {
-                // A plain button only hits its visible pixels, so give the
-                // label the whole row to click.
-                HStack(spacing: 0) {
-                    // Fills the gap that lined the text up with the checkbox
-                    // title above, which starts 22 points past the box's
-                    // leading edge.
-                    Image(systemName: "gearshape")
-                        .font(.system(size: 13))
-                        .frame(width: 30, alignment: .center)
-                        .accessibilityHidden(true)
-                    Text("Audio Priority Bar Settings…")
-                        .font(.system(size: 13))
-                    Spacer(minLength: 0)
-                }
-                .frame(maxWidth: .infinity, minHeight: 20, alignment: .leading)
-                .padding(.trailing, 8)
-                .background(
-                    Color.primary.opacity(isHoveringSettings || model.keyboardItem == .settings ? 0.1 : 0),
-                    in: RoundedRectangle(cornerRadius: 6)
-                )
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .onHover { isHoveringSettings = $0 }
-            .animation(.easeInOut(duration: 0.12), value: isHoveringSettings)
-            .padding(.horizontal, 4)
-            .padding(.top, 6)
-            .padding(.bottom, 6)
+        func body(content: Content) -> some View {
+            content
+                .padding(.horizontal, 5)
+                .background(Color.primary.opacity(pressed ? 0.12 : hovering ? 0.07 : 0),
+                            in: RoundedRectangle(cornerRadius: 5))
+                .padding(.horizontal, -5)
+                .onHover { hovering = $0 }
         }
     }
 }
@@ -563,9 +543,15 @@ extension View {
         padding(.horizontal, 8)
             .padding(.vertical, 3)
             .background(
-                Color.primary.opacity(isOn ? 0.06 : 0),
+                Color.accentColor.opacity(isOn ? 0.12 : 0),
                 in: RoundedRectangle(cornerRadius: 8)
             )
+            .overlay {
+                if isOn {
+                    RoundedRectangle(cornerRadius: 8).strokeBorder(Color.accentColor, lineWidth: 1.5)
+                        .allowsHitTesting(false)
+                }
+            }
             .padding(.horizontal, -8)
             .padding(.vertical, -3)
     }
@@ -574,6 +560,8 @@ extension View {
 /// Matches the menu bar's own menus: Liquid Glass on macOS 26 and later, and
 /// the menu material blurred over whatever is behind the panel before that.
 struct PanelBackground: ViewModifier {
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.colorSchemeContrast) private var contrast
     private let cornerRadius: CGFloat = 12
 
     private var shape: RoundedRectangle {
@@ -581,7 +569,12 @@ struct PanelBackground: ViewModifier {
     }
 
     func body(content: Content) -> some View {
-        if #available(macOS 26, *) {
+        if reduceTransparency || contrast == .increased {
+            content
+                .background(Color(nsColor: .windowBackgroundColor), in: shape)
+                .overlay { shape.strokeBorder(Color(nsColor: .separatorColor), lineWidth: 1) }
+                .clipShape(shape)
+        } else if #available(macOS 26, *) {
             content
                 .clipShape(shape)
                 .glassEffect(.regular, in: shape)

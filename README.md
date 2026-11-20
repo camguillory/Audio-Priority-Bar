@@ -15,7 +15,10 @@
 </p>
 
 <p align="center">
-  <img src="demo.gif" width="800" alt="A tour of Audio Priority Bar in the menu bar. A Jabra headset and then AirPods connect and the Mac switches to each with a notice. The panel shows the AirPods buds and case battery and the Jabra battery, the Jabra's busylight and sidetone turn on from its row, dragging the Jabra above the AirPods switches the sound at once, and the app switches back when macOS takes over. Picking Studio Display Speakers keeps automatic switching on, the Meeting profile puts the Jabra first, and turning automatic switching off turns the icon red. Option-Shift-M mutes the microphone, a reminder appears when an app records while muted, and a URL unmutes it">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="screenshot-dark.png">
+    <img src="screenshot-light.png" width="416" alt="Audio devices panel with Settings at the top right, the current output and microphone beside their level controls, ranked devices, and the reason for the latest switch">
+  </picture>
 </p>
 
 ## Why
@@ -56,18 +59,14 @@ bundle identifier may require re-approving Input Monitoring or Open at Login.
 
 ## Use
 
-Click the icon in the menu bar to open the panel. Drag devices to rank them;
-the active one is highlighted. After an output or microphone switch, the panel
-shows which device was selected, when, and why. A device you pick by hand
-stays until it disconnects or a device your list would pick connects. Turn
-automatic switching off to keep it.
+Click the menu bar icon to see the current output and microphone at the top of
+the panel. A checkmark marks each one in its priority list. Click a device to
+use it or drag it to change its priority. Click **Settings…** in the upper-right
+corner, or press **⌘,** while the panel is open, to configure the app.
+After a switch, the panel shows the device, time, and reason. Click **History**
+to see the last 20 switches since launch.
 
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="screenshot-dark.png">
-    <img src="screenshot-light.png" width="380" alt="Audio Priority Bar panel showing automatic switching on with the Desk profile, output and microphone levels, and the Speakers, Headphones and Microphones priority lists, with AirPods and a Jabra headset showing their battery, the Jabra's noise control, sidetone and busylight buttons, and paired Bluetooth devices dimmed while they are off">
-  </picture>
-</p>
+[Watch the audio switching demo (earlier interface).](demo.gif)
 
 <details>
 <summary>How switching works</summary>
@@ -112,7 +111,7 @@ automatic switching off to keep it.
   and restores the original mute or input level on unmute or quit. If a device
   is unavailable, restoration retries when it reconnects.
 
-Speakers, Headphones, and Microphones remain visible in both modes.
+Both modes use the same Speakers, Headphones, and Microphones lists.
 
 </details>
 
@@ -128,7 +127,7 @@ Speakers, Headphones, and Microphones remain visible in both modes.
   opens Settings. Left and Right change the highlighted volume, profile, or
   microphone order, Right opens a device's actions menu, and Escape closes
   the panel.
-- Use each row's actions menu for keyboard-accessible Move Up, Move Down, and
+- Open a row’s ellipsis menu for keyboard-accessible Move Up, Move Down, and
   Move to commands. Right-click a row to open the same menu.
 - Hide a device to remove it from Speakers, Headphones, or Microphones, or
   keep it visible while blocking automatic selection with **Never
@@ -147,7 +146,7 @@ Speakers, Headphones, and Microphones remain visible in both modes.
   or **Use both** while it's off. It appears only when picking it would
   change something, and the actions menu offers it too.
 - Set the output volume and microphone level by slider or scroll wheel. Click
-  the round icon beside a slider to mute; it turns red while muted.
+  the device icon beside a slider to mute. The channel shows **Muted**.
 - Speakers and headphones are sorted by what each device reports, in any
   system language.
 
@@ -209,10 +208,10 @@ noise control (Off, Noise Cancellation or HearThrough), sidetone to hear your
 own voice in calls, and the busylight. While a call or an app uses the
 microphone, HearThrough isn't available, and sidetone replaces noise control
 when it's on. A call keeps the busylight on until it ends. A call started with
-the headset's call button ends from the red button on the row. **Light a Jabra
-headset's busylight while an app uses its microphone** in Settings, off by
-default, covers calls in apps that don't signal one, such as Meet or Teams in a
-browser. Tested on an Evolve2 85 behind a Link 380.
+the headset's call button ends from the red button on the row. In **Settings >
+Devices**, enable **Turn on the busy light when the headset mic is in use** to
+cover calls in apps that don't signal one, such as Meet or Teams in a browser.
+This option is off by default. Tested on an Evolve2 85 behind a Link 380.
 
 </details>
 
@@ -260,8 +259,8 @@ open "audioprioritybar://disable-automatic"
 ```
 
 In Shortcuts, add an **Open URLs** action with one of them. The app opens if it
-isn't running. Any other form of the URL is ignored. The Shortcuts tab in
-Settings lists them with a Copy button.
+isn't running. Any other form of the URL is ignored. **Settings > Shortcuts**
+lists the supported URLs with a Copy button next to each one.
 
 ### Permissions
 
@@ -280,13 +279,11 @@ Issues and pull requests are welcome. Open an issue first for anything
 substantial, then branch from `develop` and open the pull request against
 `develop`. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
-To report a switching problem, turn on **Keep a debug log** in **Settings >
-App**, make it happen again, click **Export Redacted Log**, and attach the
-file it selects in Downloads. For a quick report, **Recent switches** there
-lists the last 20 switches and why each happened, and **Copy Diagnostics**
-copies them with your settings and device lists. Both replace owner names,
-Bluetooth addresses, serial numbers and display IDs with short tags, and keep
-the vendor and model.
+**Settings > Switch History** shows the last 20 switches and why each happened.
+For a bug report, use **Copy Diagnostics** in **Settings > Diagnostics**. For a
+detailed log, turn on **Keep a debug log on this Mac**, reproduce the issue,
+and click **Export Redacted Log**. Both exports replace owner names,
+Bluetooth addresses, serial numbers and display IDs with short tags.
 
 ### Build from source
 

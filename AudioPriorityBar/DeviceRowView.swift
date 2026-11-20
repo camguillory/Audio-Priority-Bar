@@ -34,12 +34,10 @@ struct DeviceRow: View {
     @State private var isHovering = false
     @State private var isHoveringSelectionOverride = false
     @State private var highlightedPartnerID: String?
-    @State private var controlsWidth: CGFloat = 0
-    @State private var isHoveringBluetoothPill = false
     @State private var frameInWindow: CGRect = .zero
     @State private var isExplainingCall = false
     @FocusState private var isOverrideFocused: Bool
-    @FocusState private var isActionsFocused: Bool
+    @FocusState private var isBluetoothFocused: Bool
 
     private var linkState: LinkState? { model.linkState(for: device) }
     private var isUnavailable: Bool { linkState == .down }
@@ -87,13 +85,6 @@ struct DeviceRow: View {
     }
     private var statuses: [Status] {
         var result: [Status] = []
-        if isSelected && isUnavailable {
-            result.append(Status(
-                icon: "exclamationmark.circle",
-                text: "Current",
-                tint: .orange
-            ))
-        }
         if model.isConnecting(device) {
             result.append(Status(icon: "dot.radiowaves.left.and.right", text: "Connecting…"))
         } else if !device.isConnected {
@@ -136,6 +127,9 @@ struct DeviceRow: View {
         if isHidden {
             result.append(Status(icon: "eye.slash", text: "Hidden"))
         }
+        if isNeverUse {
+            result.append(Status(icon: "nosign", text: "Never auto-select"))
+        }
         if model.isMuted(device) {
             result.append(Status(
                 icon: device.role == .input ? "mic.slash" : "speaker.slash",
@@ -175,74 +169,61 @@ struct DeviceRow: View {
     }
 
     var body: some View {
-        HStack(spacing: 6) {
-            ZStack(alignment: .leading) {
-                // The priority number gives way to the drag handle while the
-                // row is hovered or dragged.
+        let details = statuses
+        HStack(spacing: 8) {
+            ZStack {
                 Text("\(index + 1)")
-                    .font(.caption.monospacedDigit().weight(.semibold))
-                    .foregroundStyle(.secondary)
+                    .font(.caption.monospacedDigit().weight(.medium))
                     .opacity(showsDragHandle ? 0 : 1)
                 Image(systemName: "line.3.horizontal")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.secondary)
+                    .font(.caption)
                     .opacity(showsDragHandle ? 1 : 0)
             }
-            .animation(reduceMotion ? nil : .easeInOut(duration: 0.12), value: showsDragHandle)
-            .frame(width: 14, height: DeviceRowMetrics.height, alignment: .leading)
-            .padding(.leading, 4)
-            .contentShape(Rectangle())
+            .foregroundStyle(.secondary)
+            .frame(minWidth: 16)
+            .help("Priority \(index + 1) of \(count). Drag to reorder.")
             .accessibilityHidden(true)
 
-            HStack(spacing: 8) {
-                Image(systemName: device.hardwareIcon(category: category))
-                    .font(.system(size: 12))
-                    .foregroundStyle(isSelected ? Color.white : Color.secondary)
-                    .frame(width: 26, height: 26)
-                    .background(
-                        isSelected ? selectionTint : Color.primary.opacity(0.1),
-                        in: Circle()
-                    )
-                    .accessibilityHidden(true)
+            Image(systemName: device.hardwareIcon(category: category))
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(isSelected ? selectionTint : .secondary)
+                .frame(width: 22)
+                .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: 1) {
                 Text(device.name)
-                    .lineLimit(1)
-                    .strikethrough(isNeverUse, color: .secondary)
-                    .help(isNeverUse ? "\(device.name) · Never auto-select" : device.name)
+                    .font(.body.weight(isSelected ? .semibold : .regular))
                     .foregroundStyle(nameColor)
-                    .layoutPriority(1)
-                if !statuses.isEmpty {
-                    HStack(spacing: 8) {
-                        ForEach(statuses, id: \.description) { status in
-                            Group {
-                                if status.isIconOnly {
-                                    Image(systemName: status.icon)
-                                } else {
-                                    Label(status.text, systemImage: status.icon)
-                                }
-                            }
-                            .font(.caption)
-                            .foregroundStyle(status.tint)
-                        }
-                    }
                     .lineLimit(1)
-                    .truncationMode(.tail)
-                    // A headset row's statuses are glyphs and a percentage,
-                    // short enough to outrank a long name.
-                    .layoutPriority(model.headsetControls(for: device) == nil ? 0 : 2)
-                    .help(statuses.map(\.description).joined(separator: " · "))
-                    .accessibilityHidden(true)
+                    .truncationMode(.middle)
+                    .help(device.name)
+                if !details.isEmpty {
+                    statusLine(details)
                 }
             }
-            .padding(.trailing, controlsRoom)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .contentShape(Rectangle())
+
+            if isSelected {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(selectionTint)
+                    .help(device.role == .input ? "Current microphone" : "Current sound output")
+                    .accessibilityHidden(true)
+            }
+            rowControls
         }
-        .overlay(alignment: .trailing) { rowControls }
         .padding(.horizontal, 8)
         .frame(height: DeviceRowMetrics.height)
         .background {
-            RoundedRectangle(cornerRadius: 8)
+            RoundedRectangle(cornerRadius: 7)
                 .fill(isLifted ? AnyShapeStyle(.regularMaterial) : AnyShapeStyle(rowBackground))
+        }
+        .overlay {
+            if model.keyboardItem == .device(device.id) {
+                RoundedRectangle(cornerRadius: 7)
+                    .strokeBorder(Color(nsColor: .keyboardFocusIndicatorColor), lineWidth: 2)
+                    .allowsHitTesting(false)
+            }
         }
         .scaleEffect(isLifted && !reduceMotion ? 1.02 : 1)
         .shadow(
@@ -284,16 +265,35 @@ struct DeviceRow: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(device.name)
-        .accessibilityValue(accessibilityValue)
+        .accessibilityValue(accessibilityValue(details))
         .accessibilityHint(accessibilityHint)
         .accessibilityAction { activate() }
         .accessibilityAddTraits(isSelected ? .isSelected : [])
-        .accessibilityAction(named: "Move Up") {
-            if index > 0 { move(index - 1) }
+        .accessibilityActions {
+            if index > 0 {
+                Button("Move Up") { move(index - 1) }
+            }
+            if index < count - 1 {
+                Button("Move Down") { move(index + 1) }
+            }
         }
-        .accessibilityAction(named: "Move Down") {
-            if index < count - 1 { move(index + 1) }
+    }
+
+    private func statusLine(_ details: [Status]) -> some View {
+        HStack(spacing: 8) {
+            ForEach(Array(details.enumerated()), id: \.offset) { _, detail in
+                HStack(spacing: 3) {
+                    Image(systemName: detail.icon)
+                    if !detail.isIconOnly {
+                        Text(detail.text).lineLimit(1)
+                    }
+                }
+                .foregroundStyle(detail.tint)
+            }
         }
+        .font(.caption.monospacedDigit())
+        .help(details.map(\.description).joined(separator: " · "))
+        .accessibilityHidden(true)
     }
 
     /// SwiftUI has no way to open a context menu, so the keyboard asks the
@@ -350,35 +350,32 @@ struct DeviceRow: View {
         }
         if isUnavailable { return "This device is unavailable" }
         if isSelected { return "Current device" }
-        return model.isManualMode
-            ? "Activate to make this device active"
-            : "Activate to select this device and turn off automatic switching"
+        return device.role == .input ? "Use as the microphone" : "Use for sound output"
     }
 
     private func activate() { model.activate(device) }
 
-    /// Orange rather than the accent while the current device is unavailable,
-    /// matching its "Current" status.
+    /// The warning on a link-down device also applies to its current-route mark.
     private var selectionTint: Color {
         isUnavailable ? .orange : .accentColor
     }
 
     private var showsDragHandle: Bool { isHovering || isLifted }
 
-    /// The selection override and actions menu appear only on hover, like
-    /// the system's own lists, but stay visible to VoiceOver, which has no
-    /// pointer to hover with, and while one has keyboard focus.
-    private var showsRowControls: Bool {
-        isHovering || voiceOverEnabled || isOverrideFocused || isActionsFocused
+    private var showsQuickActions: Bool {
+        isHovering || voiceOverEnabled || isOverrideFocused || isBluetoothFocused
+            || model.keyboardItem == .device(device.id)
     }
 
     private var nameColor: Color {
-        !device.isConnected || isUnavailable || isNeverUse ? .secondary : .primary
+        !device.isConnected || isUnavailable ? .secondary : .primary
     }
 
     private var rowBackground: Color {
-        isHovering || isHighlightedPairedDevice || model.keyboardItem == .device(device.id)
-            ? Color.primary.opacity(0.06) : .clear
+        if isSelected {
+            return selectionTint.opacity(isHovering || isHighlightedPairedDevice ? 0.15 : 0.09)
+        }
+        return isHovering || isHighlightedPairedDevice ? Color.primary.opacity(0.07) : .clear
     }
 
     /// The override for the current default: offers to select only this
@@ -407,74 +404,38 @@ struct DeviceRow: View {
         return ("Use both", "Use for Input and Output", { model.selectWithPairedDevice(device) })
     }
 
-    /// Drawn over the end of the row and room made for them only while they
-    /// show, so statuses keep the full width until the row is hovered. The
-    /// name has layout priority, so it holds still as the pointer crosses rows.
-    /// A headset row always shows its buttons and always keeps room for the
-    /// actions menu at the far right, so hovering moves and covers nothing;
-    /// its selection override waits in the actions menu instead.
+    /// Keep the actions menu visible. Pairing shortcuts appear on interaction,
+    /// and real headset controls stay available alongside their device.
     private var rowControls: some View {
-        let headset = model.headsetControls(for: device)
-        return HStack(spacing: 6) {
-            if headset == nil {
-                Group {
-                    connectControl
-                    selectionOverride
-                }
-                .opacity(showsRowControls ? 1 : 0)
-                .allowsHitTesting(showsRowControls)
+        HStack(spacing: 4) {
+            if let headset = model.headsetControls(for: device) {
+                headsetButtons(headset)
+            } else if showsQuickActions {
+                connectControl
+                selectionOverride
             }
-            if let headset { headsetButtons(headset) }
             actions
-                .opacity(showsRowControls ? 1 : 0)
-                .allowsHitTesting(showsRowControls)
         }
-        .animation(reduceMotion ? nil : .easeInOut(duration: 0.12), value: showsRowControls)
-        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { controlsWidth = $0 }
-    }
-
-    private var controlsRoom: CGFloat {
-        showsRowControls || model.headsetControls(for: device) != nil ? controlsWidth + 6 : 0
+        .fixedSize()
     }
 
     @ViewBuilder
     private var connectControl: some View {
         if model.canConnect(device) {
             if !model.isConnecting(device) {
-                bluetoothPill("Connect", tint: .accentColor) { model.connect(device) }
+                bluetoothPill("Connect") { model.connect(device) }
             }
         } else if model.canDisconnect(device), !model.isInUse(device) {
             bluetoothPill("Disconnect") { model.disconnect(device) }
         }
     }
 
-    /// Connect, the one thing a dimmed row offers, is filled with the accent
-    /// colour like a default button: a translucent tint takes the colour of
-    /// whatever the glass shows behind it, and accent text on it can vanish.
-    /// It darkens under the pointer, which keeps the white label legible.
-    /// Disconnect stays as quiet as the other row controls and only brightens,
-    /// like the selection override.
-    private func bluetoothPill(
-        _ title: String,
-        tint: Color? = nil,
-        action: @escaping () -> Void
-    ) -> some View {
-        let hovering = isHoveringBluetoothPill
-        return Button(action: action) {
-            Text(title)
-                .font(.caption2.weight(.semibold))
-                .foregroundStyle(tint == nil ? Color.secondary : .white)
-                .padding(.horizontal, 6)
-                .frame(height: 18)
-                .background(Capsule().fill(
-                    tint ?? .primary.opacity(hovering ? 0.12 : 0.06)
-                ).brightness(tint != nil && hovering ? -0.12 : 0))
-        }
-        .onHover { isHoveringBluetoothPill = $0 }
-        .buttonStyle(.plain)
-        .help("\(title) \(device.name) over Bluetooth")
-        .accessibilityLabel("\(title) \(device.name)")
-        .focused($isOverrideFocused)
+    private func bluetoothPill(_ title: String, action: @escaping () -> Void) -> some View {
+        Button(title, action: action)
+            .controlSize(.small)
+            .help("\(title) \(device.name) over Bluetooth")
+            .accessibilityLabel("\(title) \(device.name)")
+            .focused($isBluetoothFocused)
     }
 
     private func selectionOverridePill(
@@ -482,45 +443,34 @@ struct DeviceRow: View {
         label: String,
         action: @escaping () -> Void
     ) -> some View {
-        Button(action: action) {
-            Text(label)
-                .font(.caption2.weight(.semibold))
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 6)
-                .frame(height: 18)
-                .background(
-                    Capsule().fill(
-                        Color.primary.opacity(isHoveringSelectionOverride ? 0.12 : 0.06)
-                    )
-                )
-        }
-        .buttonStyle(.plain)
-        .help(selectionOverrideHelp)
-        .accessibilityLabel(selectionOverrideHelp)
-        .focused($isOverrideFocused)
-        .onHover { hovering in
-            isHoveringSelectionOverride = hovering
-            if selectsHalvesTogether {
-                // This override selects only the hovered device, so
-                // suppress the partner highlight while hovering it, and
-                // restore it when returning to the row, which still selects
-                // both.
-                if hovering {
-                    if highlightedPairedDeviceID == partner.id {
-                        highlightedPairedDeviceID = nil
+        Button(label, action: action)
+            .controlSize(.small)
+            .help(selectionOverrideHelp)
+            .accessibilityLabel(selectionOverrideHelp)
+            .focused($isOverrideFocused)
+            .onHover { hovering in
+                isHoveringSelectionOverride = hovering
+                if selectsHalvesTogether {
+                    // This override selects only the hovered device, so
+                    // suppress the partner highlight while hovering it, and
+                    // restore it when returning to the row, which still selects
+                    // both.
+                    if hovering {
+                        if highlightedPairedDeviceID == partner.id {
+                            highlightedPairedDeviceID = nil
+                        }
+                    } else if isHovering, !isSelected {
+                        highlightedPartnerID = partner.id
+                        highlightedPairedDeviceID = partner.id
                     }
-                } else if isHovering, !isSelected {
-                    highlightedPartnerID = partner.id
+                } else if hovering {
+                    // "Use both" is the only control that selects the partner
+                    // while selecting one device at a time is the default.
                     highlightedPairedDeviceID = partner.id
+                } else if highlightedPairedDeviceID == partner.id {
+                    highlightedPairedDeviceID = nil
                 }
-            } else if hovering {
-                // "Use both" is the only control that selects the partner
-                // while selecting one device at a time is the default.
-                highlightedPairedDeviceID = partner.id
-            } else if highlightedPairedDeviceID == partner.id {
-                highlightedPairedDeviceID = nil
             }
-        }
     }
 
     /// Settings the headset keeps itself: noise control, sidetone and the
@@ -649,14 +599,17 @@ struct DeviceRow: View {
         Menu {
             actionItems
         } label: {
-            Image(systemName: "ellipsis.circle")
-                .frame(width: 28, height: 28)
+            Image(systemName: "ellipsis")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .frame(width: 24, height: 28)
+                .contentShape(Rectangle())
         }
-        .menuStyle(.borderlessButton)
+        .menuStyle(.button)
+        .buttonStyle(.plain)
         .menuIndicator(.hidden)
-        .frame(width: 28)
+        .help("Actions for \(device.name)")
         .accessibilityLabel("Actions for \(device.name)")
-        .focused($isActionsFocused)
     }
 
     @ViewBuilder
@@ -775,12 +728,10 @@ struct DeviceRow: View {
         return device.role == .input ? "Use as Microphone" : "Use for Sound Output"
     }
 
-    private var accessibilityValue: String {
+    private func accessibilityValue(_ details: [Status]) -> String {
         var values = ["Priority \(index + 1) of \(count)"]
-        if isSelected, !isUnavailable { values.append("Active") }
-        values.append(contentsOf: statuses.map(\.description))
-        // Shown only as strikethrough, so it needs saying here.
-        if isNeverUse { values.append("Never auto-select") }
+        if isSelected { values.append("Current") }
+        values.append(contentsOf: details.map(\.description))
         return values.joined(separator: ", ")
     }
 }

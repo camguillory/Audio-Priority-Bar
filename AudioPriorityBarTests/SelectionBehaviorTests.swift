@@ -303,7 +303,9 @@ func panelKeysToggleAndStepTheHighlightedControls() {
     model.start()
 
     // No microphone, so no microphone level to walk through.
-    #expect(model.panelItems == [.automatic, .outputLevel, .device(speakers.id), .showAll, .settings])
+    #expect(model.panelItems == [.settings, .outputLevel, .automatic, .device(speakers.id), .showAll])
+    model.recentSwitches = [SwitchRecord(date: Date(), role: .output, device: speakers.name, reason: "selected")]
+    #expect(model.panelItems.suffix(2) == [.showAll, .activity])
 
     #expect(model.adjust(.outputLevel, up: true))
     #expect(model.volume == 0.5625)

@@ -226,6 +226,8 @@ final class StatusItemController: NSObject, NSWindowDelegate {
                     hidePanel()
                     settings.showSettings(on: statusItem.button?.window?.screen, pane: .profiles)
                 },
+                showActivity: { [weak self] in self?.showActivity() },
+                panelScreen: { [weak self] in self?.statusItem.button?.window?.screen ?? NSScreen.main },
                 fit: { [weak self] in self?.fitPanel(to: $0) }
             )
         )
@@ -290,6 +292,9 @@ final class StatusItemController: NSObject, NSWindowDelegate {
                 hidePanel()
                 showSettings()
                 return true
+            case .activity:
+                showActivity()
+                return true
             case .takeoverFix:
                 DebugLog.shared.write("keyboard: used Fix in Settings")
                 hidePanel()
@@ -327,6 +332,7 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         )
         case .showAll: "Show hidden and disconnected devices, \(model.showAll ? "on" : "off")"
         case .settings: "\(appDisplayName) Settings"
+        case .activity: "Switch history, \(model.recentSwitches.first?.description ?? "")"
         case .device(let id): model.listedDevices.first { $0.id == id }?.name ?? ""
         }
         NSAccessibility.post(
@@ -523,6 +529,11 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         statusItem.menu = menu
         statusItem.button?.performClick(nil)
         statusItem.menu = nil
+    }
+
+    private func showActivity() {
+        hidePanel()
+        settings.showSettings(on: statusItem.button?.window?.screen, pane: .activity)
     }
 
     @objc private func showSettings() {

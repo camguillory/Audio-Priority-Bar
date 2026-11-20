@@ -393,7 +393,7 @@ extension AppModel {
             refreshDevices()
         case .device(let id):
             if let device = listedDevices.first(where: { $0.id == id }) { activate(device) }
-        case .settings, .takeoverFix: break
+        case .settings, .activity, .takeoverFix: break
         }
     }
 
