@@ -664,3 +664,27 @@ func unrelatedConnectionDoesNotMaskSoundSettingsChoice() {
     #expect(!model.isManualMode)
     #expect(model.currentOutputID == speaker.platformID)
 }
+
+@Test
+@MainActor
+func restingRowHitTestMatchesRowsAndSkipsHeadersGapsAndEmptyLists() throws {
+    let layout = PanelLayout(sections: [
+        (.speaker, 2), (.headphone, 0), (.input, 1),
+    ])
+    let speakerTop = try #require(layout.contentTop(of: .speaker))
+    let headphoneTop = try #require(layout.contentTop(of: .headphone))
+    let inputTop = try #require(layout.contentTop(of: .input))
+
+    // First and second speaker rows, including the 8-point horizontal overhang.
+    #expect(layout.row(at: CGPoint(x: 4, y: speakerTop + 1)) == DropTarget(section: .speaker, index: 0))
+    #expect(layout.row(at: CGPoint(x: 376, y: speakerTop + DeviceRowMetrics.pitch + 15)) == DropTarget(section: .speaker, index: 1))
+
+    // Outside the horizontal overhang, in the section header, and in the 3-point gap between rows.
+    #expect(layout.row(at: CGPoint(x: 3, y: speakerTop + 10)) == nil)
+    #expect(layout.row(at: CGPoint(x: 100, y: speakerTop - 2)) == nil)
+    #expect(layout.row(at: CGPoint(x: 100, y: speakerTop + DeviceRowMetrics.height + 1.5)) == nil)
+
+    // Empty headphone placeholder has no row to hover; microphone row below it does.
+    #expect(layout.row(at: CGPoint(x: 100, y: headphoneTop + 10)) == nil)
+    #expect(layout.row(at: CGPoint(x: 100, y: inputTop + 10)) == DropTarget(section: .input, index: 0))
+}

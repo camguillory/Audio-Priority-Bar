@@ -18,20 +18,23 @@ struct DeviceRow: View {
 
     @Bindable var model: AppModel
     let device: AudioDevice
+    let section: DeviceSection
     let index: Int
     let count: Int
+    let layout: PanelLayout
     let isSelected: Bool
     let category: OutputCategory?
     let isLifted: Bool
+    var isDragging = false
     let select: () -> Void
     let move: (Int) -> Void
+    @Binding var hoveredDeviceID: String?
     /// Set to a device's `id` while the selection override on its paired
     /// device's row is hovered, so this row can mirror that highlight.
     @Binding var highlightedPairedDeviceID: String?
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
-    @State private var isHovering = false
     @State private var isHoveringSelectionOverride = false
     @State private var highlightedPartnerID: String?
     @State private var controlsWidth: CGFloat = 0
@@ -237,36 +240,37 @@ struct DeviceRow: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())
         }
-        .overlay(alignment: .trailing) { rowControls }
+        .overlay(alignment: .trailing) { rowControls.allowsHitTesting(!isDragging) }
         .padding(.horizontal, 8)
         .frame(height: DeviceRowMetrics.height)
-        .background {
+        .background(rowBackground, in: RoundedRectangle(cornerRadius: 8))
+        .overlay {
             RoundedRectangle(cornerRadius: 8)
-                .fill(isLifted ? AnyShapeStyle(.regularMaterial) : AnyShapeStyle(rowBackground))
+                .strokeBorder(Color.primary.opacity(isLifted ? 0.16 : 0), lineWidth: 1)
         }
         .scaleEffect(isLifted && !reduceMotion ? 1.02 : 1)
-        .shadow(
-            color: .black.opacity(isLifted ? 0.28 : 0),
-            radius: isLifted ? 10 : 0,
-            y: isLifted ? 5 : 0
-        )
-        .onHover { hovering in
-            isHovering = hovering
-            if !hovering {
-                if highlightedPairedDeviceID == highlightedPartnerID {
-                    highlightedPairedDeviceID = nil
+        .onContinuousHover(coordinateSpace: .named(PanelLayout.space)) { phase in
+            switch phase {
+            case .active(let point):
+                guard !isDragging,
+                      layout.containsRow(at: index, in: section, point: point) else { return }
+                if hoveredDeviceID != device.id {
+                    hoveredDeviceID = device.id
                 }
-                highlightedPartnerID = nil
-                // The override cannot still be hovered once the pointer has
-                // left the row, and it reports nothing when selecting a
-                // device stops it being rendered at all.
-                isHoveringSelectionOverride = false
-                return
+            case .ended:
+                if hoveredDeviceID == device.id {
+                    hoveredDeviceID = nil
+                }
             }
-            guard selectsHalvesTogether, isPairedDeviceUsable, !isSelected,
-                  !isHoveringSelectionOverride, let pairedDevice else { return }
-            highlightedPartnerID = pairedDevice.id
-            highlightedPairedDeviceID = pairedDevice.id
+        }
+        .onChange(of: isRowHovered) { _, hovered in
+            applyHover(hovered)
+        }
+        .onDisappear {
+            if hoveredDeviceID == device.id {
+                hoveredDeviceID = nil
+            }
+            applyHover(false)
         }
         .contentShape(Rectangle())
         .onTapGesture { activate() }
@@ -363,13 +367,34 @@ struct DeviceRow: View {
         isUnavailable ? .orange : .accentColor
     }
 
-    private var showsDragHandle: Bool { isHovering || isLifted }
+    private func applyHover(_ hovering: Bool) {
+        if !hovering {
+            if highlightedPairedDeviceID == highlightedPartnerID {
+                highlightedPairedDeviceID = nil
+            }
+            highlightedPartnerID = nil
+            // The override cannot still be hovered once the pointer has
+            // left the row, and it reports nothing when selecting a
+            // device stops it being rendered at all.
+            isHoveringSelectionOverride = false
+            isHoveringBluetoothPill = false
+            return
+        }
+        guard selectsHalvesTogether, isPairedDeviceUsable, !isSelected,
+              !isHoveringSelectionOverride, let pairedDevice else { return }
+        highlightedPartnerID = pairedDevice.id
+        highlightedPairedDeviceID = pairedDevice.id
+    }
+
+    private var isRowHovered: Bool { hoveredDeviceID == device.id && !isDragging }
+
+    private var showsDragHandle: Bool { isRowHovered || isLifted }
 
     /// The selection override and actions menu appear only on hover, like
     /// the system's own lists, but stay visible to VoiceOver, which has no
     /// pointer to hover with, and while one has keyboard focus.
     private var showsRowControls: Bool {
-        isHovering || voiceOverEnabled || isOverrideFocused || isActionsFocused
+        isRowHovered || voiceOverEnabled || isOverrideFocused || isActionsFocused
     }
 
     private var nameColor: Color {
@@ -377,7 +402,8 @@ struct DeviceRow: View {
     }
 
     private var rowBackground: Color {
-        isHovering || isHighlightedPairedDevice || model.keyboardItem == .device(device.id)
+        if isLifted { return Color.primary.opacity(0.12) }
+        return isRowHovered || (!isDragging && isHighlightedPairedDevice) || model.keyboardItem == .device(device.id)
             ? Color.primary.opacity(0.06) : .clear
     }
 
@@ -499,6 +525,7 @@ struct DeviceRow: View {
         .accessibilityLabel(selectionOverrideHelp)
         .focused($isOverrideFocused)
         .onHover { hovering in
+            let hovering = hovering && !isDragging
             isHoveringSelectionOverride = hovering
             if selectsHalvesTogether {
                 // This override selects only the hovered device, so
@@ -509,7 +536,7 @@ struct DeviceRow: View {
                     if highlightedPairedDeviceID == partner.id {
                         highlightedPairedDeviceID = nil
                     }
-                } else if isHovering, !isSelected {
+                } else if isRowHovered, !isSelected {
                     highlightedPartnerID = partner.id
                     highlightedPairedDeviceID = partner.id
                 }
