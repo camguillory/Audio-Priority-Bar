@@ -419,7 +419,8 @@ extension AppModel {
     /// A Shortcuts action's pick, which acts like a click on the device's row.
     func selectManually(uid: String, role: DeviceRole) throws(ShortcutError) {
         let known = role == .input ? inputDevices : speakerDevices + headphoneDevices
-        guard let device = known.first(where: { $0.uid == uid }) else {
+        let currentUID = store.currentUID(for: uid, role: role)
+        guard let device = known.first(where: { $0.uid == currentUID }) else {
             throw .unknownDevice
         }
         guard device.isConnected else { throw .notConnected(device.name) }
