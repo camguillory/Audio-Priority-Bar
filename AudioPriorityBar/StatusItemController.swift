@@ -226,6 +226,8 @@ final class StatusItemController: NSObject, NSWindowDelegate {
                     hidePanel()
                     settings.showSettings(on: statusItem.button?.window?.screen, pane: .profiles)
                 },
+                showActivity: { [weak self] in self?.showActivity() },
+                panelScreen: { [weak self] in self?.statusItem.button?.window?.screen ?? NSScreen.main },
                 fit: { [weak self] in self?.fitPanel(to: $0) }
             )
         )
@@ -290,6 +292,9 @@ final class StatusItemController: NSObject, NSWindowDelegate {
                 hidePanel()
                 showSettings()
                 return true
+            case .activity:
+                showActivity()
+                return true
             case .takeoverFix:
                 DebugLog.shared.write("keyboard: used Fix in Settings")
                 hidePanel()
@@ -327,6 +332,7 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         )
         case .showAll: "Show hidden and disconnected devices, \(model.showAll ? "on" : "off")"
         case .settings: "\(appDisplayName) Settings"
+        case .activity: "Switch history, \(model.recentSwitches.first?.description ?? "")"
         case .device(let id): model.listedDevices.first { $0.id == id }?.name ?? ""
         }
         NSAccessibility.post(
@@ -499,10 +505,10 @@ final class StatusItemController: NSObject, NSWindowDelegate {
             $0.convertToScreen(button.convert(button.bounds, to: nil)).midX
         }
         positionPanel(relativeTo: button)
-        model.battery.refresh()
+        model.battery.refreshIfNeeded()
         model.refreshHeadsetControls()
         batteryTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated { self?.model.battery.refresh() }
+            MainActor.assumeIsolated { self?.model.battery.refreshIfNeeded() }
         }
         DebugLog.shared.write("panel opened")
         panel.orderFrontRegardless()
@@ -523,6 +529,11 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         statusItem.menu = menu
         statusItem.button?.performClick(nil)
         statusItem.menu = nil
+    }
+
+    private func showActivity() {
+        hidePanel()
+        settings.showSettings(on: statusItem.button?.window?.screen, pane: .activity)
     }
 
     @objc private func showSettings() {
@@ -667,7 +678,7 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         // A microphone left live outside the mute matters more than talking
         // into a muted one.
         let content = model.uncoveredRecording.map(NoticeContent.unmuted)
-            ?? (model.isMicrophoneMuted && model.isInputRecording ? .mutedWhileRecording : nil)
+            ?? (model.isMicrophoneMuted && model.currentInputMayBeRecording ? .mutedWhileRecording : nil)
         let shown = mutedReminder.update(applies: model.remindsWhenMuted && content != nil)
             ? content : nil
         if shown != notice.mutedReminder {

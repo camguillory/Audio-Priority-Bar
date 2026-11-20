@@ -12,6 +12,11 @@ on:
         type: boolean
         default: false
 
+      signed_updates:
+        description: Sign the app and publish automatic updates with this repository's keys
+        type: boolean
+        default: false
+
 permissions:
   contents: write
 
@@ -34,14 +39,15 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ inputs.tag }}
+          RELEASE_BRANCH: ${{ vars.RELEASE_BRANCH || github.event.repository.default_branch }}
         run: |
           if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-(rc|beta|alpha)\.[0-9]+)?$ ]]; then
             echo "Invalid release tag: $TAG" >&2
             exit 1
           fi
           git show-ref --verify --quiet "refs/tags/$TAG"
-          if ! git merge-base --is-ancestor "refs/tags/$TAG^{commit}" origin/main; then
-            echo "$TAG is not on main. Promote it through the release pull request first." >&2
+          if ! git merge-base --is-ancestor "refs/tags/$TAG^{commit}" "origin/$RELEASE_BRANCH"; then
+            echo "$TAG is not on $RELEASE_BRANCH. Promote it through the release pull request first." >&2
             exit 1
           fi
           if gh release view "$TAG" >/dev/null 2>&1; then
@@ -74,6 +80,7 @@ jobs:
             CODE_SIGNING_ALLOWED=NO
 
       - name: Import signing certificate
+        if: inputs.signed_updates
         env:
           CERTIFICATE_P12: ${{ secrets.CODESIGN_CERTIFICATE_P12 }}
           CERTIFICATE_PASSWORD: ${{ secrets.CODESIGN_CERTIFICATE_PASSWORD }}
@@ -97,6 +104,7 @@ jobs:
             $(security list-keychains -d user | tr -d '"')
 
       - name: Download previous releases for delta updates
+        if: inputs.signed_updates
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -110,9 +118,15 @@ jobs:
           done
           echo "PREVIOUS_RELEASES=$previous" >> "$GITHUB_ENV"
 
-      - name: Build and verify release artifact
+      - name: Package unsigned app
+        if: ${{ !inputs.signed_updates }}
+        run: scripts/package-release.sh --unsigned "$VERSION" "$GITHUB_RUN_NUMBER"
+
+      - name: Package signed app and updates
+        if: inputs.signed_updates
         env:
-          REQUIRE_SIGNING_CERTIFICATE: "1"
+          CODESIGN_IDENTITY: ${{ vars.CODESIGN_IDENTITY }}
+          SPARKLE_PUBLIC_KEY: ${{ vars.SPARKLE_PUBLIC_KEY }}
           SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
           SPARKLE_FEED_URL: https://github.com/${{ github.repository }}/releases/latest/download/appcast.xml
           DOWNLOAD_BASE: https://github.com/${{ github.repository }}/releases/download/${{ inputs.tag }}
@@ -127,18 +141,23 @@ jobs:
           test -s release/appcast.xml
           test -s release/appcast-app.xml
 
+      - name: Collect release artifacts
+        id: artifacts
+        run: |
+          test -s release/AudioPriorityBar.zip
+          test -s release/AudioPriorityBar.zip.sha256
+          {
+            echo 'files<<ARTIFACTS'
+            sed 's|^|release/|' release/.audio-priority-bar-artifacts
+            echo 'ARTIFACTS'
+          } >> "$GITHUB_OUTPUT"
+
       - name: Create release draft
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
           tag_name: ${{ inputs.tag }}
           body_path: .github/release-notes/${{ inputs.tag }}.md
-          files: |
-            release/AudioPriorityBar.zip
-            release/AudioPriorityBar.zip.sha256
-            release/AudioPriorityBar-update.zip
-            release/AudioPriorityBar-from-*.delta
-            release/appcast.xml
-            release/appcast-app.xml
+          files: ${{ steps.artifacts.outputs.files }}
           draft: true
           prerelease: ${{ inputs.prerelease }}
           # Curated notes above are the complete release body.

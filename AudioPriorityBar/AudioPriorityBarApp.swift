@@ -52,7 +52,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 alert.messageText = "Audio monitoring unavailable"
                 alert.informativeText = """
                     Audio Priority Bar loaded the current devices but cannot monitor \
-                    audio changes. Quit and reopen the app to try again.
+                    audio changes yet. It will retry automatically.
                     """
                 alert.runModal()
             }
@@ -87,7 +87,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func application(_ application: NSApplication, open urls: [URL]) {
-        for url in urls { DebugLog.shared.write("opened \(url.absoluteString)") }
         let commands = urls.compactMap(URLCommand.init(url:))
         guard let model = runtime?.model else {
             pendingCommands += commands

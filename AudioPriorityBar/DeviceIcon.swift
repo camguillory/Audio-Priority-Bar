@@ -49,11 +49,6 @@ extension AudioDevice {
         return Self.genericSpeakerIcon
     }
 
-    var isBluetooth: Bool {
-        transportType == kAudioDeviceTransportTypeBluetooth
-            || transportType == kAudioDeviceTransportTypeBluetoothLE
-    }
-
     /// The menu bar shows the Mac's own mic and speakers by role, so the two
     /// stay apart when both are shown and the speaker keeps its volume level.
     func menuBarIcon(category: OutputCategory?) -> String {

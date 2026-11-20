@@ -1,20 +1,18 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+if [[ "${1:-}" == --unsigned ]]; then
+  shift
+  unset CODESIGN_IDENTITY SPARKLE_PUBLIC_KEY SPARKLE_PRIVATE_KEY SPARKLE_FEED_URL DOWNLOAD_BASE
+fi
 build_number="${2:-1}"
 root="$(cd "$(dirname "$0")/.." && pwd)"
 derived_data="${DERIVED_DATA:-$root/build}"
 output_dir="${OUTPUT_DIR:-$root/release}"
-app="$derived_data/Build/Products/Release/AudioPriorityBar.app"
-zip="$output_dir/AudioPriorityBar.zip"
-# Sparkle's copy of the archive; Homebrew and manual installs keep the plain zip.
-update_zip="$output_dir/AudioPriorityBar-update.zip"
-appcast="$output_dir/appcast.xml"
-# The copy UpdateChecker polls, so download counts leave out update checkers.
-app_appcast="$output_dir/appcast-app.xml"
 sparkle_bin="$derived_data/SourcePackages/artifacts/sparkle/Sparkle/bin"
-# Served from the newest non-prerelease, so prereleases never reach the feed.
-feed_url="${SPARKLE_FEED_URL:-https://github.com/camguillory/Audio-Priority-Bar/releases/latest/download/appcast.xml}"
+feed_url="${SPARKLE_FEED_URL:-}"
+public_key="${SPARKLE_PUBLIC_KEY:-}"
+download_base="${DOWNLOAD_BASE:-}"
 
 project_versions=$(awk '/MARKETING_VERSION = / {
   gsub(/;/, "", $3); print $3
@@ -29,14 +27,27 @@ if [[ "$version" != "$project_versions" ]]; then
   echo "Requested version $version does not match project version $project_versions." >&2
   exit 1
 fi
-# Sparkle compares build numbers, so the default of 1 would never be offered.
-if [[ -n "${SPARKLE_PRIVATE_KEY:-}" && -z "${2:-}" ]]; then
-  echo "Pass the build number when signing an update." >&2
-  exit 1
+# Update-enabled releases require the maintainer's own feed and signing keys.
+if [[ -n "$feed_url$public_key$download_base${SPARKLE_PRIVATE_KEY:-}" ]]; then
+  if [[ "$feed_url" != https://* || "$download_base" != https://* || -z "$public_key" ||
+        -z "${SPARKLE_PRIVATE_KEY:-}" || -z "${CODESIGN_IDENTITY:-}" || -z "${2:-}" ]]; then
+    echo "Updates require HTTPS SPARKLE_FEED_URL and DOWNLOAD_BASE, SPARKLE_PUBLIC_KEY, SPARKLE_PRIVATE_KEY, CODESIGN_IDENTITY and a build number." >&2
+    exit 1
+  fi
 fi
 
-rm -rf "$derived_data" "$output_dir"
+# Keep existing build caches and unrelated exports. Publish only artifacts
+# produced by this run after packaging and validation succeed.
 mkdir -p "$output_dir"
+staging=$(mktemp -d "$output_dir/.audio-priority-release.XXXXXXXX")
+trap 'rm -rf "$staging"' EXIT
+zip="$staging/AudioPriorityBar.zip"
+update_zip="$staging/AudioPriorityBar-update.zip"
+appcast="$staging/appcast.xml"
+app_appcast="$staging/appcast-app.xml"
+mkdir "$staging/.products"
+products="$(cd "$staging/.products" && pwd)"
+app="$products/AudioPriorityBar.app"
 
 xcodebuild \
   -project "$root/AudioPriorityBar.xcodeproj" \
@@ -45,13 +56,17 @@ xcodebuild \
   -derivedDataPath "$derived_data" \
   -arch arm64 -arch x86_64 \
   ONLY_ACTIVE_ARCH=NO \
+  CONFIGURATION_BUILD_DIR="$products" \
   CURRENT_PROJECT_VERSION="$build_number" \
   SPARKLE_FEED_URL="$feed_url" \
+  SPARKLE_PUBLIC_KEY="$public_key" \
   CODE_SIGNING_REQUIRED=NO \
   CODE_SIGNING_ALLOWED=NO \
   build
 
-"$root/scripts/sign-app.sh" "$app"
+if [[ -n "${CODESIGN_IDENTITY:-}" ]]; then
+  "$root/scripts/sign-app.sh" "$app"
+fi
 
 actual_version=$(/usr/libexec/PlistBuddy \
   -c "Print :CFBundleShortVersionString" "$app/Contents/Info.plist")
@@ -62,6 +77,8 @@ actual_build=$(/usr/libexec/PlistBuddy \
 actual_feed=$(/usr/libexec/PlistBuddy \
   -c "Print :SUFeedURL" "$app/Contents/Info.plist")
 [[ "$actual_feed" == "$feed_url" ]]
+actual_key=$(/usr/libexec/PlistBuddy -c "Print :SUPublicEDKey" "$app/Contents/Info.plist")
+[[ "$actual_key" == "$public_key" ]]
 
 architectures=$(/usr/bin/lipo -archs \
   "$app/Contents/MacOS/AudioPriorityBar")
@@ -71,7 +88,7 @@ test -s "$app/Contents/Resources/LICENSE"
 
 /usr/bin/ditto -c -k --sequesterRsrc --keepParent "$app" "$zip"
 (
-  cd "$output_dir"
+  cd "$staging"
   /usr/bin/shasum -a 256 AudioPriorityBar.zip > AudioPriorityBar.zip.sha256
 )
 
@@ -89,21 +106,24 @@ else
 fi
 
 if [[ -n "$signature" ]]; then
-  download_base="${DOWNLOAD_BASE:-https://github.com/camguillory/Audio-Priority-Bar/releases/download/v$version}"
   # Sparkle picks the delta matching the installed build and falls back to
   # the full archive when none applies.
   deltas=""
   for old_zip in ${PREVIOUS_RELEASES:+"$PREVIOUS_RELEASES"/*.zip}; do
     [[ -f "$old_zip" ]] || continue
-    old_dir=$(mktemp -d)
+    old_dir=$(mktemp -d "$staging/.previous.XXXXXXXX")
     /usr/bin/ditto -x -k "$old_zip" "$old_dir"
     old_plist="$old_dir/AudioPriorityBar.app/Contents/Info.plist"
+    old_feed=$(/usr/libexec/PlistBuddy -c "Print :SUFeedURL" "$old_plist" 2>/dev/null || true)
+    old_key=$(/usr/libexec/PlistBuddy -c "Print :SUPublicEDKey" "$old_plist" 2>/dev/null || true)
+    [[ "$old_feed" == "$feed_url" && "$old_key" == "$public_key" ]] || continue
     old_version=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$old_plist")
     old_build=$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$old_plist")
+    [[ "$old_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ && "$old_build" =~ ^[0-9]+$ ]] || continue
     delta="AudioPriorityBar-from-$old_version.delta"
-    "$sparkle_bin/BinaryDelta" create "$old_dir/AudioPriorityBar.app" "$app" "$output_dir/$delta"
+    "$sparkle_bin/BinaryDelta" create "$old_dir/AudioPriorityBar.app" "$app" "$staging/$delta"
     deltas+="
-        <enclosure url=\"$download_base/$delta\" sparkle:deltaFrom=\"$old_build\" type=\"application/octet-stream\" $(sign "$output_dir/$delta")/>"
+        <enclosure url=\"$download_base/$delta\" sparkle:deltaFrom=\"$old_build\" type=\"application/octet-stream\" $(sign "$staging/$delta")/>"
     rm -rf "$old_dir"
   done
   if [[ -n "$deltas" ]]; then
@@ -137,8 +157,41 @@ if [[ -n "$signature" ]]; then
 </rss>
 XML
   /usr/bin/xmllint --noout "$appcast"
+  # Verify the published archive against the key embedded in the app. This
+  # also catches a fork configured with another maintainer's public key.
+  archive_signature=$(/usr/bin/xmllint --xpath 'string(//item/enclosure/@*[local-name()="edSignature"])' "$appcast")
+  /usr/bin/swift - "$public_key" "$archive_signature" "$update_zip" <<'SWIFT'
+import CryptoKit
+import Foundation
+guard let keyData = Data(base64Encoded: CommandLine.arguments[1]),
+      let signature = Data(base64Encoded: CommandLine.arguments[2]),
+      let key = try? Curve25519.Signing.PublicKey(rawRepresentation: keyData),
+      key.isValidSignature(signature, for: try Data(contentsOf: URL(fileURLWithPath: CommandLine.arguments[3]), options: .mappedIfSafe))
+else {
+    FileHandle.standardError.write(Data("Update signature does not match SPARKLE_PUBLIC_KEY.\n".utf8))
+    exit(1)
+}
+SWIFT
   cp "$appcast" "$app_appcast"
 fi
+
+# A shared export directory can contain another project's appcast. Only
+# remove stale artifacts recorded by our own previous successful run.
+manifest=.audio-priority-bar-artifacts
+if [[ -f "$output_dir/$manifest" && ! -L "$output_dir/$manifest" ]]; then
+  while IFS= read -r name; do
+    case "$name" in
+      appcast.xml|appcast-app.xml|AudioPriorityBar-update.zip) ;;
+      *) [[ "$name" =~ ^AudioPriorityBar-from-[0-9]+\.[0-9]+\.[0-9]+\.delta$ ]] || continue ;;
+    esac
+    [[ -e "$staging/$name" ]] || rm -f "$output_dir/$name"
+  done < "$output_dir/$manifest"
+fi
+for asset in "$staging"/*; do
+  echo "${asset##*/}" >> "$staging/$manifest"
+  mv -f "$asset" "$output_dir/"
+done
+mv -f "$staging/$manifest" "$output_dir/"
 
 echo "Packaged AudioPriorityBar $version ($build_number)"
 echo "Architectures: $architectures"

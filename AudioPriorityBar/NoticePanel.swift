@@ -10,8 +10,7 @@ struct NoticeContent: Equatable {
     }
 
     let lines: [Line]
-    /// What VoiceOver reads, which names each device's role since the icons
-    /// only show it visually.
+    /// The notice read as a single announcement when the window appears.
     let announcement: String
 
     static let mutedWhileRecording = NoticeContent(
@@ -21,7 +20,9 @@ struct NoticeContent: Equatable {
 
     /// While muted, an app records from a microphone the mute does not hold.
     static func unmuted(_ recording: UncoveredRecording) -> NoticeContent {
-        let text = "\(recording.app ?? "An app") is using \(recording.microphone), which isn't muted"
+        let text = recording.isConfirmed
+            ? "\(recording.app ?? "An app") is using \(recording.microphone), which isn't muted"
+            : "\(recording.microphone) is active and may be recording unmuted"
         return NoticeContent(lines: [Line(icon: "mic.fill", text: text)], announcement: text)
     }
 
@@ -45,12 +46,14 @@ struct NoticeContent: Equatable {
     ) -> NoticeContent {
         if devices.count == 2, devices[0].name == devices[1].name {
             return NoticeContent(
-                lines: [Line(icon: icon(devices[0]), text: devices[0].name)],
+                lines: [Line(icon: icon(devices[0]), text: "Output and microphone · \(devices[0].name)")],
                 announcement: "Output and microphone: \(devices[0].name)"
             )
         }
         return NoticeContent(
-            lines: devices.map { Line(icon: icon($0), text: $0.name) },
+            lines: devices.map {
+                Line(icon: icon($0), text: "\($0.role == .input ? "Microphone" : "Output") · \($0.name)")
+            },
             announcement: devices.map {
                 "\($0.role == .input ? "Microphone" : "Output"): \($0.name)"
             }.joined(separator: ", ")
@@ -64,7 +67,7 @@ struct NoticeContent: Equatable {
         devices: [AudioDevice],
         icon: (AudioDevice) -> String
     ) -> NoticeContent {
-        let profileLine = Line(icon: "rectangle.stack", text: profile)
+        let profileLine = Line(icon: "rectangle.stack", text: "Profile · \(profile)")
         guard !devices.isEmpty else {
             return NoticeContent(lines: [profileLine], announcement: "Profile: \(profile)")
         }
@@ -209,42 +212,62 @@ private struct NoticeView: View {
 
     var body: some View {
         if let onDismiss {
-            bubble
-                .contentShape(shape)
-                .onTapGesture(perform: onDismiss)
-                .accessibilityElement(children: .combine)
-                .accessibilityAddTraits(.isButton)
-                .accessibilityHint("Hides the reminder until you next record while muted")
-                .accessibilityAction(named: "Dismiss", onDismiss)
+            Button(action: onDismiss) { bubble }
+                .buttonStyle(.plain)
+                .accessibilityLabel(content.announcement)
+                .accessibilityHint("Dismiss this reminder until the next recording")
         } else {
-            bubble
+            bubble.accessibilityLabel(content.announcement)
         }
     }
 
     private var bubble: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            ForEach(content.lines, id: \.text) { line in
-                HStack(spacing: 8) {
-                    // A shared width keeps the text of every line aligned.
-                    Image(systemName: line.icon)
-                        .frame(width: 18)
-                    Text(line.text)
-                        .font(.system(size: 13, weight: .medium))
-                        .lineLimit(1)
-                }
-            }
+        NoticeLayout {
+            message
         }
-        .padding(.horizontal, 14)
+        .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background(.regularMaterial, in: shape)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
         .fixedSize()
     }
 
-    /// A capsule for one line; two lines would make its ends look swollen.
-    private var shape: AnyShape {
-        content.lines.count > 1
-            ? AnyShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-            : AnyShape(Capsule())
+    private var message: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            VStack(alignment: .leading, spacing: 5) {
+                ForEach(content.lines.indices, id: \.self) { index in
+                    let line = content.lines[index]
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Image(systemName: line.icon)
+                            .frame(width: 18)
+                            .accessibilityHidden(true)
+                        Text(line.text)
+                            .font(.body.weight(.medium))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
+            if onDismiss != nil {
+                Image(systemName: "xmark")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
+            }
+        }
+    }
+}
+
+/// AppKit asks for the notice's ideal size before it assigns a window frame.
+/// Measure the height at the final wrapping width, including for long warnings.
+private struct NoticeLayout: Layout {
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        guard let message = subviews.first else { return .zero }
+        let width = min(320, message.sizeThatFits(.unspecified).width)
+        let size = message.sizeThatFits(ProposedViewSize(width: width, height: nil))
+        return CGSize(width: width, height: size.height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        subviews.first?.place(at: bounds.origin, anchor: .topLeading, proposal: ProposedViewSize(bounds.size))
     }
 }
 
@@ -304,74 +327,56 @@ private struct HoverPreviewView: View {
     @Bindable var model: AppModel
 
     var body: some View {
-        // In the panel's order: its header, then output, then microphone.
         VStack(alignment: .leading, spacing: 10) {
-            VStack(alignment: .leading, spacing: 2) {
-                HStack {
-                    Text("Automatic switching")
-                        .font(.system(size: 13, weight: .semibold))
-                    Spacer(minLength: 16)
-                    Text(model.isManualMode ? "Off" : "On")
-                        .font(.system(size: 13))
-                        .foregroundStyle(.secondary)
-                }
-                // What the tooltip used to explain behind the warning glyph.
-                if model.isActiveOutputLinkDown {
-                    Label("Headset off", systemImage: "exclamationmark.triangle.fill")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
+            row(model.currentOutputDevice, name: "Output", showsLevel: model.isVolumeControllable, level: model.volume)
+            row(model.currentInputDevice, name: "Microphone", showsLevel: model.isMicrophoneLevelControllable, level: model.microphoneLevel)
             Divider()
-            VStack(alignment: .leading, spacing: 14) {
-                row(
-                    model.currentOutputDevice,
-                    placeholder: "No output",
-                    showsLevel: model.isVolumeControllable,
-                    level: model.volume
-                )
-                row(
-                    model.currentInputDevice,
-                    placeholder: "No microphone",
-                    showsLevel: model.isMicrophoneLevelControllable,
-                    level: model.microphoneLevel
-                )
+            HStack {
+                Text("Automatic switching")
+                Spacer()
+                Text(model.isManualMode ? "Off" : "On")
+                    .fontWeight(.medium)
+            }
+            .font(.callout)
+            .foregroundStyle(.secondary)
+            if model.isActiveOutputLinkDown {
+                Label("Headset off", systemImage: "exclamationmark.triangle")
+                    .font(.callout)
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.top, 10)
-        .padding(.bottom, 12)
+        .padding(12)
+        .frame(width: 260)
         .modifier(PanelBackground())
-        .fixedSize()
+        .fixedSize(horizontal: false, vertical: true)
     }
 
-    /// Icon, name, and mute status styled as in the device list, with the
-    /// level underneath when the device reports one.
-    @ViewBuilder
-    private func row(
-        _ device: AudioDevice?,
-        placeholder: String,
-        showsLevel: Bool,
-        level: Float
-    ) -> some View {
+    private func row(_ device: AudioDevice?, name: String, showsLevel: Bool, level: Float) -> some View {
         let isMuted = device.map(model.isMuted) ?? false
-        HStack(spacing: 8) {
-            // No circle, unlike the panel's buttons, since nothing here can
-            // be clicked. Muted is red, like the panel's mute button.
-            Image(systemName: isMuted ? mutedIcon(device) : device.map(icon) ?? "questionmark")
-                .font(.system(size: 14))
-                .foregroundStyle(isMuted ? AnyShapeStyle(.red) : AnyShapeStyle(.secondary))
-                .frame(width: 20)
-            VStack(alignment: .leading, spacing: 4) {
-                Text(device?.name ?? placeholder)
-                    .font(.system(size: 13))
-                    .foregroundStyle(device == nil ? .secondary : .primary)
-                    .lineLimit(1)
-                if device != nil, showsLevel {
-                    LevelBar(level: level, isMuted: isMuted)
+        return HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Image(systemName: isMuted ? mutedIcon(device) : device.map(icon) ?? "minus")
+                .foregroundStyle(isMuted ? Color.red : .secondary)
+                .frame(width: 18)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 3) {
+                HStack {
+                    Text(name)
+                    Spacer()
+                    if isMuted {
+                        Text("Muted").fontWeight(.semibold)
+                    } else if device != nil && showsLevel {
+                        Text(level, format: .percent.precision(.fractionLength(0)))
+                            .monospacedDigit()
+                    }
                 }
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                Text(device?.name ?? "None selected")
+                    .font(.body.weight(.medium))
+                    .lineLimit(2)
+                    .truncationMode(.middle)
             }
         }
+        .accessibilityElement(children: .combine)
     }
 
     private func mutedIcon(_ device: AudioDevice?) -> String {
@@ -382,28 +387,5 @@ private struct HoverPreviewView: View {
         device.hardwareIcon(
             category: device.role == .output ? model.store.category(for: device) : nil
         )
-    }
-}
-
-/// A read-only volume meter, dimmed while muted like the panel's slider.
-/// Drawn in the text color with no thumb or value, so it does not read as a
-/// slider to drag.
-private struct LevelBar: View {
-    let level: Float
-    let isMuted: Bool
-
-    var body: some View {
-        Capsule()
-            .fill(Color.primary.opacity(0.1))
-            .overlay(alignment: .leading) {
-                GeometryReader { proxy in
-                    Capsule()
-                        .fill(.primary)
-                        .frame(width: proxy.size.width * CGFloat(level))
-                }
-            }
-            .clipShape(Capsule())
-            .frame(width: 120, height: 4)
-            .opacity(isMuted ? 0.5 : 1)
     }
 }

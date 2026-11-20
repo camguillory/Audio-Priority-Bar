@@ -78,8 +78,9 @@ final class AppRuntime {
                 canSetMute: { CoreAudioProperties.canSetMute($1, role: $0) },
                 inputVolume: CoreAudioProperties.inputVolume,
                 setInputVolume: CoreAudioProperties.setInputVolume,
-                isRunning: CoreAudioProperties.isRunningSomewhere,
-                appRecording: CoreAudioProperties.appRecording
+                isRunning: CoreAudioProperties.isRecording,
+                appRecording: CoreAudioProperties.appRecording,
+                inputActivity: CoreAudioProperties.inputActivity
             ),
             link: LinkOperations(
                 isUsable: { $0.isConnected && jabra.isUsable($0) },
@@ -96,7 +97,7 @@ final class AppRuntime {
             isUserPicking: SystemSoundPicker.isInUse
         )
         updates = UpdateChecker(isIdle: { [weak model] in
-            model.map { !$0.isMicrophoneMuted && !$0.isInputRecording } ?? true
+            model.map { !$0.isMicrophoneMuted && !$0.anyInputMayBeRecording } ?? true
         })
 
         audioObserver.onDevicesChanged = { [weak model] in
@@ -146,6 +147,8 @@ final class AppRuntime {
         model.releaseAutomaticBusylights()
         // Producers first: once they are down, no callback, timeout or debounce
         // can reach the model and restart work it just tore down.
+        for (center, token) in notificationObservers { center.removeObserver(token) }
+        notificationObservers = []
         jabra.stop()
         audioObserver.stopListening()
         model.stop()
@@ -156,10 +159,12 @@ final class AppRuntime {
     private static let quitMessage = "quit cleanly"
 
     private var loggedPermissions = Permissions.summary()
+    private var notificationObservers: [(NotificationCenter, NSObjectProtocol)] = []
 
     /// Sleep, wake, the screen and the user session, around which devices
     /// often come and go, and permissions changed in System Settings.
     private func observeSystem() {
+        guard notificationObservers.isEmpty else { return }
         let workspace = NSWorkspace.shared.notificationCenter
         for (name, message) in [
             (NSWorkspace.willSleepNotification, "the Mac is going to sleep"),
@@ -169,28 +174,33 @@ final class AppRuntime {
             (NSWorkspace.sessionDidResignActiveNotification, "switched to another user"),
             (NSWorkspace.sessionDidBecomeActiveNotification, "switched back to this user"),
         ] {
-            _ = workspace.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+            let token = workspace.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
                 MainActor.assumeIsolated {
                     DebugLog.shared.write(message)
+                    if name == NSWorkspace.didWakeNotification { self?.audioObserver.rebindListeners() }
                     self?.logPermissionChanges()
                 }
             }
+            notificationObservers.append((workspace, token))
         }
+        let distributed = DistributedNotificationCenter.default()
         for (name, message) in [
             ("com.apple.screenIsLocked", "the screen locked"),
             ("com.apple.screenIsUnlocked", "the screen unlocked"),
         ] {
-            _ = DistributedNotificationCenter.default().addObserver(
+            let token = distributed.addObserver(
                 forName: .init(name), object: nil, queue: .main
             ) { _ in
                 MainActor.assumeIsolated { DebugLog.shared.write(message) }
             }
+            notificationObservers.append((distributed, token))
         }
-        _ = NotificationCenter.default.addObserver(
+        let activated = NotificationCenter.default.addObserver(
             forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main
         ) { [weak self] _ in
             MainActor.assumeIsolated { self?.logPermissionChanges() }
         }
+        notificationObservers.append((.default, activated))
     }
 
     private func logPermissionChanges() {

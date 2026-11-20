@@ -1,5 +1,13 @@
+import CoreAudio
 import Foundation
 import Observation
+
+public extension AudioDevice {
+    var isBluetooth: Bool {
+        transportType == kAudioDeviceTransportTypeBluetooth
+            || transportType == kAudioDeviceTransportTypeBluetoothLE
+    }
+}
 
 /// Battery percentages one Bluetooth device reports, each `nil` while it
 /// reports nothing for that part, as for a pod sitting in a closed case.
@@ -134,18 +142,22 @@ public struct BluetoothBatteryReport: Equatable, Sendable {
     /// well as its output. The name is a fallback for a UID in some other
     /// shape, as in `levels(for:)`.
     public func bluetoothDevice(for device: AudioDevice) -> PairedBluetoothDevice? {
-        pairedAudio.first { device.uid.hasPrefix("\($0.address):") }
-            ?? pairedAudio.first { $0.name == device.name }
+        if let address = BluetoothBattery.address(of: device) {
+            return pairedAudio.first { $0.address == address }
+        }
+        guard device.isBluetooth else { return nil }
+        let candidates = pairedAudio.filter { $0.name == device.name }
+        return candidates.count == 1 ? candidates.first : nil
     }
 
     /// Levels for an audio device. CoreAudio gives a Bluetooth device a UID
     /// built from its address, such as `70-AE-2A-5E-21-CD:output`; the name is
     /// a fallback for a UID in some other shape.
     public func levels(for device: AudioDevice) -> BatteryLevels? {
-        let uid = BluetoothBattery.normalizedAddress(device.uid)
-        if let match = byAddress.first(where: { uid.hasPrefix($0.key) }) {
-            return match.value
+        if let address = BluetoothBattery.address(of: device) {
+            return byAddress[BluetoothBattery.normalizedAddress(address)]
         }
+        guard device.isBluetooth, pairedAudio.filter({ $0.name == device.name }).count <= 1 else { return nil }
         return byName[device.name]
     }
 }
@@ -162,13 +174,17 @@ public enum BluetoothBattery {
     /// `70-AE-2A-5E-21-CD` from `70-AE-2A-5E-21-CD:output`, or nil for a UID
     /// in any other shape.
     public static func address(of device: AudioDevice) -> String? {
-        let prefix = device.uid.prefix { $0 != ":" }
+        address(fromUID: device.uid)
+    }
+
+    static func address(fromUID uid: String) -> String? {
+        let prefix = uid.prefix { $0 != ":" }
         let parts = prefix.split(separator: "-", omittingEmptySubsequences: false)
         guard parts.count == 6,
               parts.allSatisfy({ $0.count == 2 && $0.allSatisfy(\.isHexDigit) }) else {
             return nil
         }
-        return String(prefix)
+        return prefix.uppercased()
     }
 
     /// The Bluetooth class of device names `system_profiler` reports for
@@ -191,6 +207,8 @@ public enum BluetoothBattery {
               let controllers = root["SPBluetoothDataType"] as? [[String: Any]] else {
             return report
         }
+        var pairedAddresses: Set<String> = []
+        var batteryNames: Set<String> = []
         for controller in controllers {
             for entry in controller["device_connected"] as? [[String: Any]] ?? [] {
                 for (name, value) in entry {
@@ -207,7 +225,7 @@ public enum BluetoothBattery {
                     if let address = info["device_address"] as? String {
                         report.byAddress[normalizedAddress(address)] = levels
                     }
-                    report.byName[name] = levels
+                    report.byName[name] = batteryNames.insert(name).inserted ? levels : nil
                 }
             }
             // Both lists, because right after a device drops the profiler can
@@ -220,9 +238,11 @@ public enum BluetoothBattery {
                           let address = info["device_address"] as? String,
                           let category = (info["device_minorType"] as? String)
                               .flatMap({ pairedCategories[$0] }) else { continue }
+                    let canonicalAddress = address.uppercased().replacingOccurrences(of: ":", with: "-")
+                    guard pairedAddresses.insert(canonicalAddress).inserted else { continue }
                     report.pairedAudio.append(PairedBluetoothDevice(
                         name: name,
-                        address: address.uppercased().replacingOccurrences(of: ":", with: "-"),
+                        address: canonicalAddress,
                         category: category
                     ))
                 }
@@ -252,8 +272,23 @@ public final class BluetoothBatteryMonitor {
     @ObservationIgnored private var isReadPending = false
     @ObservationIgnored private let read: @Sendable () async -> Data?
 
-    public init(read: @escaping @Sendable () async -> Data? = BluetoothBatteryMonitor.systemProfiler) {
+    @ObservationIgnored private var lastSuccessfulRead: TimeInterval?
+    @ObservationIgnored private let uptime: () -> TimeInterval
+
+    public init(
+        read: @escaping @Sendable () async -> Data? = BluetoothBatteryMonitor.systemProfiler,
+        uptime: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }
+    ) {
         self.read = read
+        self.uptime = uptime
+    }
+
+    /// Reopening the panel can reuse a recent report. A topology event still
+    /// calls refresh() directly and queues a second read if the first is in flight.
+    public func refreshIfNeeded() {
+        guard !isReading else { return }
+        if let lastSuccessfulRead, uptime() - lastSuccessfulRead < 30 { return }
+        refresh()
     }
 
     public func levels(for device: AudioDevice) -> BatteryLevels? {
@@ -271,6 +306,7 @@ public final class BluetoothBatteryMonitor {
         Task {
             let data = await read()
             if let data {
+                lastSuccessfulRead = uptime()
                 let report = BluetoothBattery.parse(data)
                 let pairedChanged = report.pairedAudio != self.report.pairedAudio
                 if report.byName != self.report.byName {

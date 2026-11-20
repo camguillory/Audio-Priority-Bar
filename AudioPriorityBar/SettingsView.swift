@@ -4,9 +4,8 @@ import KeyboardShortcuts
 import ServiceManagement
 import SwiftUI
 
-/// The tabs of the Settings window, in toolbar order.
 enum SettingsPane: CaseIterable {
-    case menuBar, devices, profiles, shortcuts, app
+    case devices, profiles, menuBar, shortcuts, activity, diagnostics, app
 
     var label: String {
         switch self {
@@ -14,7 +13,9 @@ enum SettingsPane: CaseIterable {
         case .devices: "Devices"
         case .profiles: "Profiles"
         case .shortcuts: "Shortcuts"
-        case .app: "App"
+        case .activity: "Switch History"
+        case .diagnostics: "Diagnostics"
+        case .app: "General"
         }
     }
 
@@ -24,7 +25,49 @@ enum SettingsPane: CaseIterable {
         case .devices: "hifispeaker.2"
         case .profiles: "rectangle.stack"
         case .shortcuts: "command"
+        case .activity: "clock.arrow.circlepath"
+        case .diagnostics: "stethoscope"
         case .app: "gearshape"
+        }
+    }
+}
+
+@MainActor
+@Observable
+private final class SettingsNavigation {
+    var pane: SettingsPane = .devices
+}
+
+private struct SettingsWindowContent: View {
+    @Bindable var navigation: SettingsNavigation
+    let model: AppModel
+    let launchAtLogin: LaunchAtLoginController
+    let updates: UpdateChecker
+
+    var body: some View {
+        HStack(spacing: 0) {
+            List(selection: $navigation.pane) {
+                Section("Audio") {
+                    destinations([.devices, .profiles, .activity])
+                }
+                Section("Preferences") {
+                    destinations([.menuBar, .shortcuts, .app, .diagnostics])
+                }
+            }
+            .listStyle(.sidebar)
+            .accessibilityLabel("Settings categories")
+            .frame(width: 166)
+
+            Divider()
+            SettingsView(model: model, launchAtLogin: launchAtLogin, updates: updates, pane: navigation.pane)
+                .id(navigation.pane)
+        }
+        .frame(minWidth: 638, minHeight: 340)
+    }
+
+    private func destinations(_ panes: [SettingsPane]) -> some View {
+        ForEach(panes, id: \.self) { pane in
+            Label(pane.label, systemImage: pane.symbol).tag(pane)
         }
     }
 }
@@ -49,6 +92,9 @@ struct SettingsView: View {
     let pane: SettingsPane
     @State private var isAccessibilityTrusted = false
     @State private var isConfirmingClear = false
+    @State private var copiedText: String?
+    @State private var isExporting = false
+    @State private var exportError: String?
     /// Bumped by Clear, so the size shows zero at once.
     @State private var logRevision = 0
 
@@ -63,30 +109,48 @@ struct SettingsView: View {
     }
 
     var body: some View {
-        Form {
-            switch pane {
-            case .menuBar: menuBar
-            case .devices: devices
-            case .profiles: profiles
-            case .shortcuts: shortcuts
-            case .app: app
+        VStack(alignment: .leading, spacing: 0) {
+            Text(pane.label)
+                .font(.title.bold())
+                .accessibilityAddTraits(.isHeader)
+                .padding(.horizontal, 22)
+                .padding(.top, 18)
+                .padding(.bottom, 4)
+
+            ScrollViewReader { proxy in
+                Form {
+                    switch pane {
+                    case .menuBar: menuBar
+                    case .devices: devices
+                    case .profiles: profiles
+                    case .shortcuts: shortcuts
+                    case .activity: activity
+                    case .diagnostics: diagnostics
+                    case .app: app
+                    }
+                }
+                .formStyle(.grouped)
+                .toggleStyle(.switch)
+                .onChange(of: model.renamingProfileID) { _, id in
+                    if pane == .profiles, let id { proxy.scrollTo(id, anchor: .center) }
+                }
             }
         }
-        .formStyle(.grouped)
-        .toggleStyle(.switch)
-        // The window grows to fit, so the scroller would only flash while it
-        // resizes.
-        .scrollIndicators(.never)
-        .frame(width: 460)
-        // Each tab is as tall as its content, so the window resizes to fit it.
-        .fixedSize(horizontal: false, vertical: true)
+        .background(Color(nsColor: .windowBackgroundColor))
+        .task(id: copiedText) {
+            guard copiedText != nil else { return }
+            do {
+                try await Task.sleep(for: .seconds(2))
+                copiedText = nil
+            } catch {}
+        }
     }
 
     @ViewBuilder private var menuBar: some View {
-        Section { menuBarPreview }
+        Section("Live preview") { menuBarPreview }
 
         Section("Icon") {
-            Picker("Shows", selection: Binding(
+            Picker("Devices shown", selection: Binding(
                 get: { model.menuBarDevices },
                 set: { model.setMenuBarDevices($0) }
             )) {
@@ -95,7 +159,7 @@ struct SettingsView: View {
                 Text("Output and microphone, labeled").tag(MenuBarDevices.bothLabeled)
             }
 
-            Toggle("Outline", isOn: Binding(
+            Toggle("Outline the menu bar icon", isOn: Binding(
                 get: { model.outlinesMenuBarIcon },
                 set: { model.setOutlinesMenuBarIcon($0) }
             ))
@@ -104,11 +168,11 @@ struct SettingsView: View {
                 get: { model.showsMenuBarVolume },
                 set: { model.setShowsMenuBarVolume($0) }
             )) {
-                Text("Volume level")
-                Text("Shown beside AirPods and other device icons.")
+                Text("Show volume beside the output icon")
+                Text("Available for device icons with adjustable volume.")
             }
 
-            Toggle("Pulse muted microphone", isOn: Binding(
+            Toggle("Pulse the microphone icon when muted", isOn: Binding(
                 get: { model.pulsesMutedMicrophone },
                 set: { model.setPulsesMutedMicrophone($0) }
             ))
@@ -117,12 +181,11 @@ struct SettingsView: View {
                 get: { model.redIconWhenManual },
                 set: { model.setRedIconWhenManual($0) }
             )) {
-                Text("Red while automatic switching is off")
-                Text("A reminder to turn it back on.")
+                Text("Use a red background in manual mode")
             }
         }
 
-        Section("Notices") {
+        Section("Notifications") {
             Toggle("Show a notice when switching automatically", isOn: Binding(
                 get: { model.showsSwitchNotice },
                 set: { model.setShowsSwitchNotice($0) }
@@ -134,12 +197,12 @@ struct SettingsView: View {
             ))
         }
 
-        Section("Hover preview") {
+        Section("Hover behavior") {
             LabeledContent {
                 if isAccessibilityTrusted {
-                    Text("Allowed").foregroundStyle(.secondary)
+                    Label("Allowed", systemImage: "checkmark").foregroundStyle(.secondary)
                 } else {
-                    Button("Allow…") {
+                    Button("Allow Access…") {
                         DebugLog.shared.write("clicked Allow for Accessibility")
                         AXIsProcessTrustedWithOptions(
                             ["AXTrustedCheckOptionPrompt": true] as CFDictionary
@@ -147,8 +210,8 @@ struct SettingsView: View {
                     }
                 }
             } label: {
-                Text("Show only over the icon")
-                Text("Needs Accessibility. Without it, the preview also opens over \(Image(systemName: "chevron.left.2")) when macOS hides the icon.")
+                Text("Limit preview to the audio icon")
+                Text("Allow Accessibility access to keep the preview closed when you hover over the menu bar overflow button.")
             }
         }
         .onAppear { isAccessibilityTrusted = AXIsProcessTrusted() }
@@ -163,7 +226,7 @@ struct SettingsView: View {
     private var menuBarPreview: some View {
         HStack(spacing: 14) {
             Image(systemName: "wifi")
-            Image(systemName: "speaker.wave.2.fill")
+            Image(systemName: "switch.2")
             StatusLabel(model: model)
                 .foregroundStyle(model.showsRedIconBackground ? Color.white : Color.primary)
                 .background {
@@ -175,11 +238,9 @@ struct SettingsView: View {
         }
         .font(.system(size: 14))
         .foregroundStyle(.secondary)
-        .padding(.horizontal, 14)
-        .frame(height: 30)
-        .background(.quaternary, in: RoundedRectangle(cornerRadius: 7))
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 4)
+        .frame(maxWidth: .infinity, alignment: .trailing)
+        .padding(.trailing, 8)
+        .frame(height: 32)
         .accessibilityHidden(true)
     }
 
@@ -196,35 +257,41 @@ struct SettingsView: View {
                     isActive: profile.id == model.activeProfileID,
                     canDelete: model.profiles.count > 1
                 )
+                .id(profile.id)
             }
-            Button("Add Profile") { model.addProfile() }
+            Button("Add Profile", systemImage: "plus") { model.addProfile() }
                 .keyboardShortcut("n", modifiers: .command)
                 .help("Add a copy of the profile in use (⌘N)")
+        } header: {
+            Text("Your profiles")
         } footer: {
-            Text("Each profile keeps its own device and microphone orders and whether automatic switching is on. Rearranging the panel changes the profile in use. Click a name to rename it.")
+            Text("A new profile starts with a copy of the current one. Changing device priorities or switching mode in the panel updates the profile in use.")
                 .foregroundStyle(.secondary)
         }
 
         Section {
             LabeledContent {
-                Button("Open Focus Settings…") {
+                Button("Focus Settings…") {
                     DebugLog.shared.write("clicked Open Focus Settings")
                     NSWorkspace.shared.open(Self.focusSettingsURL)
                 }
             } label: {
-                Text("Switch profiles with a Focus")
-                Text("In System Settings › Focus, choose a Focus such as Work, click Add Filter, choose Audio Priority Bar, and pick a profile. That profile is used while the Focus is on, and your previous one comes back when it ends.")
+                Text("Use a profile during a Focus")
+                Text("Choose a Focus, add the Audio Priority Bar filter and pick a profile. Your previous profile returns when the Focus ends.")
             }
+        } header: {
+            Text("Automation")
         } footer: {
-            Text("Or apply a profile from Shortcuts with the Apply Profile action.")
+            Text("In Shortcuts, use the Apply Profile action to switch profiles.")
                 .foregroundStyle(.secondary)
         }
     }
 
     @ViewBuilder private var shortcuts: some View {
-        Section {
-            LabeledContent("Mute microphone") {
+        Section("Keyboard shortcut") {
+            LabeledContent("Toggle microphone mute") {
                 KeyboardShortcuts.Recorder(for: .toggleMicrophoneMute)
+                    .accessibilityLabel("Shortcut to toggle microphone mute")
             }
         }
 
@@ -232,12 +299,11 @@ struct SettingsView: View {
             ForEach(URLCommand.allCases, id: \.self) { command in
                 let url = "\(URLCommand.scheme)://\(command.rawValue)"
                 LabeledContent {
-                    Button("Copy") {
+                    Button(copiedText == url ? "Copied" : "Copy") {
                         DebugLog.shared.write("copied \(url)")
-                        NSPasteboard.general.clearContents()
-                        NSPasteboard.general.setString(url, forType: .string)
+                        copy(url, identifier: url)
                     }
-                    .accessibilityLabel("Copy \(url)")
+                    .accessibilityLabel(copiedText == url ? "Copied \(command.title)" : "Copy URL to \(command.title.lowercased())")
                 } label: {
                     Text(command.title)
                     Text(url)
@@ -246,7 +312,7 @@ struct SettingsView: View {
                 }
             }
         } header: {
-            Text("URLs")
+            Text("Command URLs")
         } footer: {
             Text("Open them from Shortcuts, Raycast, a Stream Deck or Terminal. Shortcuts also has actions to set the output or microphone.")
                 .foregroundStyle(.secondary)
@@ -254,8 +320,8 @@ struct SettingsView: View {
     }
 
     @ViewBuilder private var app: some View {
-        Section {
-            Toggle("Open at Login", isOn: Binding(
+        Section("Startup") {
+            Toggle("Open at login", isOn: Binding(
                 get: { launchAtLogin.isEnabled },
                 set: {
                     DebugLog.shared.write("setting Open at Login = \($0)")
@@ -299,129 +365,168 @@ struct SettingsView: View {
                     updates.checkForUpdates()
                 }
             } else {
-                Text("Updates are off in development builds.")
+                LabeledContent("Update method", value: "Manual")
+                Text("Install a new build to update this copy of Audio Priority Bar.")
+                    .font(.callout)
                     .foregroundStyle(.secondary)
             }
         }
 
-        Section("Troubleshooting") {
+        Section("About") {
+            HStack(spacing: 10) {
+                Image(nsImage: NSApp.applicationIconImage)
+                    .resizable()
+                    .frame(width: 36, height: 36)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Audio Priority Bar").fontWeight(.medium)
+                    Text("Version \(version)").foregroundStyle(.secondary)
+                }
+                Spacer()
+                Link("Project on GitHub", destination: Self.homePageURL)
+            }
+            Button("Quit Audio Priority Bar") { NSApp.terminate(nil) }
+        }
+    }
+
+    @ViewBuilder private var activity: some View {
+        if model.recentSwitches.isEmpty {
+            ContentUnavailableView(
+                "No switches yet",
+                systemImage: "clock.arrow.circlepath",
+                description: Text("When the output or microphone changes, its new device and the reason appear here.")
+            )
+            .frame(maxWidth: .infinity, minHeight: 230)
+        } else {
+            Section {
+                ForEach(Array(model.recentSwitches.enumerated()), id: \.offset) { _, record in
+                    HStack(alignment: .top, spacing: 10) {
+                        Image(systemName: record.role == .input ? "mic" : "speaker.wave.2")
+                            .foregroundStyle(.secondary)
+                            .frame(width: 20)
+                            .accessibilityHidden(true)
+                        VStack(alignment: .leading, spacing: 3) {
+                            HStack(alignment: .firstTextBaseline) {
+                                Text(record.role == .input ? "Microphone" : "Output")
+                                    .font(.subheadline)
+                                Spacer(minLength: 4)
+                                Text(record.date.formatted(
+                                    date: Calendar.current.isDateInToday(record.date) ? .omitted : .abbreviated,
+                                    time: .standard
+                                ))
+                                .font(.subheadline.monospacedDigit())
+                            }
+                            .foregroundStyle(.secondary)
+                            Text(record.device).fontWeight(.semibold)
+                            Text(record.reason)
+                                .foregroundStyle(.secondary)
+                        }
+                        .textSelection(.enabled)
+                    }
+                    .padding(.vertical, 2)
+                    .accessibilityElement(children: .combine)
+                }
+            } header: {
+                Text("Recent changes")
+            } footer: {
+                Text("The most recent 20 switches since launch appear here, newest first.")
+            }
+        }
+    }
+
+    @ViewBuilder private var diagnostics: some View {
+        Section {
+            LabeledContent {
+                Button(copiedText == "diagnostics" ? "Copied" : "Copy Diagnostics") {
+                    DebugLog.shared.write("clicked Copy Diagnostics")
+                    copy(model.diagnostics, identifier: "diagnostics")
+                }
+            } label: {
+                Text("Diagnostic summary")
+                Text("Copy the version, settings, devices and recent switches for a bug report. Names and identifiers are replaced with short tags.")
+            }
+        }
+        Section("Debug log") {
             Toggle(isOn: Binding(
                 get: { model.keepsDebugLog },
                 set: { model.setKeepsDebugLog($0) }
             )) {
-                Text("Keep a debug log")
-                Text("Records device changes, switches and clicks on this Mac, to attach to a bug report.")
+                Text("Keep a debug log on this Mac")
+                Text("Records device changes, switches and clicks.")
             }
 
-            // Rereads the folder every few seconds, since lines keep landing
-            // while Settings is open.
             TimelineView(.periodic(from: .now, by: 5)) { _ in
                 let _ = logRevision
                 let log = DebugLog.shared
                 let size = log.totalSize
-                LabeledContent {
+                VStack(alignment: .leading, spacing: 8) {
+                    LabeledContent("Saved logs", value: size == 0 ? "None yet" : size.formatted(.byteCount(style: .file)))
+                    Text("Logs are kept for \(log.keptDays) days. A redacted export replaces names and identifiers with short tags and is saved to Downloads.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
                     HStack {
+                        Button(isExporting ? "Exporting…" : "Export Redacted Log") { exportLog() }
+                            .disabled(isExporting)
                         Button("Show in Finder") {
                             NSWorkspace.shared.activateFileViewerSelecting([log.files.last ?? log.directory])
                         }
-                        Button("Export Redacted Log") {
-                            log.write("clicked Export Redacted Log")
-                            let files = log.files
-                            let names = model.knownDeviceNames
-                            Task.detached {
-                                do {
-                                    let url = try DebugLog.exportRedacted(
-                                        files: files, deviceNames: names, to: .downloadsDirectory
-                                    )
-                                    await MainActor.run { NSWorkspace.shared.activateFileViewerSelecting([url]) }
-                                } catch {
-                                    await MainActor.run { DebugLog.shared.write("could not export the redacted log: \(error)") }
-                                }
-                            }
-                        }
-                        Button("Clear…") { isConfirmingClear = true }
+                        Spacer()
+                        Button("Clear…", role: .destructive) { isConfirmingClear = true }
+                            .disabled(isExporting)
                     }
                     .disabled(size == 0)
-                } label: {
-                    Text("Log files")
-                    Text(size == 0
-                        ? "None yet. One file per day, the last \(log.keptDays) days kept."
-                        : "\(size.formatted(.byteCount(style: .file))), one file per day, the last \(log.keptDays) days kept. The export, saved to Downloads, replaces names and identifiers with short tags.")
                 }
-            }
-
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Recent switches")
-                if model.recentSwitches.isEmpty {
-                    Text("None since the app started.")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                } else {
-                    // ponytail: the newest 5 only, so the window barely grows;
-                    // Copy Diagnostics carries all 20.
-                    Grid(alignment: .leading, horizontalSpacing: 8, verticalSpacing: 4) {
-                        ForEach(Array(model.recentSwitches.prefix(5).enumerated()), id: \.offset) { _, record in
-                            GridRow {
-                                Text(record.date, format: .dateTime.hour().minute().second())
-                                    .monospacedDigit()
-                                    .foregroundStyle(.secondary)
-                                Image(systemName: record.role == .input ? "mic" : "speaker.wave.2")
-                                    .foregroundStyle(.secondary)
-                                    .accessibilityLabel(record.role == .input ? "Microphone" : "Output")
-                                Text(record.device)
-                                    .lineLimit(1)
-                                    .truncationMode(.middle)
-                                Text(record.reason)
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(1)
-                            }
-                        }
-                    }
-                    .font(.callout)
-                    .textSelection(.enabled)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-
-            LabeledContent {
-                Button("Copy Diagnostics") {
-                    DebugLog.shared.write("clicked Copy Diagnostics")
-                    NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(model.diagnostics, forType: .string)
-                }
-            } label: {
-                Text("Diagnostics")
-                Text("Copies the version, settings, device lists and recent switches, with names and identifiers replaced by short tags, to paste into a bug report.")
+                .padding(.vertical, 2)
             }
         }
-        .confirmationDialog("Delete the debug log?", isPresented: $isConfirmingClear) {
-            Button("Delete") {
+        .alert("Delete all saved logs?", isPresented: $isConfirmingClear) {
+            Button("Delete Logs", role: .destructive) {
                 model.clearDebugLog()
                 logRevision += 1
             }
-            .keyboardShortcut(.defaultAction)
             Button("Cancel", role: .cancel) {}
-                .keyboardShortcut(.cancelAction)
         } message: {
-            Text("Every saved day is removed from this Mac.")
+            Text("This removes every saved log file from this Mac.")
         }
+        .alert("Couldn't export the log", isPresented: Binding(
+            get: { exportError != nil },
+            set: { if !$0 { exportError = nil } }
+        )) {
+            Button("OK") {}
+        } message: {
+            Text(exportError ?? "")
+        }
+    }
 
-        Section {
-            HStack(spacing: 8) {
-                Image(nsImage: NSApp.applicationIconImage)
-                    .resizable()
-                    .frame(width: 22, height: 22)
-                    .accessibilityHidden(true)
-                Text("Version \(version)").foregroundStyle(.secondary)
-                Link("Home Page", destination: Self.homePageURL)
-                Spacer()
-                Button("Quit Audio Priority Bar") { NSApp.terminate(nil) }
+    private func copy(_ text: String, identifier: String) {
+        NSPasteboard.general.clearContents()
+        if NSPasteboard.general.setString(text, forType: .string) {
+            copiedText = identifier
+        }
+    }
+
+    private func exportLog() {
+        let log = DebugLog.shared
+        log.write("clicked Export Redacted Log")
+        let files = log.files
+        let names = model.knownDeviceNames
+        isExporting = true
+        Task {
+            defer { isExporting = false }
+            do {
+                let url = try await Task.detached {
+                    try DebugLog.exportRedacted(files: files, deviceNames: names, to: .downloadsDirectory)
+                }.value
+                NSWorkspace.shared.activateFileViewerSelecting([url])
+            } catch {
+                log.write("could not export the redacted log: \(error)")
+                exportError = error.localizedDescription
             }
         }
     }
 
     @ViewBuilder private var devices: some View {
-        Section {
+        Section("Microphone selection") {
             Toggle("Select headset input and output together", isOn: Binding(
                 get: { model.selectsPairedDevice },
                 set: { model.setSelectsPairedDevice($0) }
@@ -434,13 +539,15 @@ struct SettingsView: View {
                 Text("Microphones follow the output")
                 Text("Speakers and headphones each keep their own microphone order.")
             }
+        }
 
+        Section("Speakers and displays") {
             Toggle(isOn: Binding(
                 get: { model.hideNewDisplayOutputs },
                 set: { model.setHideNewDisplayOutputs($0) }
             )) {
                 Text("Hide new HDMI and DisplayPort outputs")
-                Text("Find them under “Show hidden and disconnected devices” in the panel.")
+                Text("To show one again, reveal hidden devices in the menu bar panel.")
             }
 
             Toggle(isOn: Binding(
@@ -448,15 +555,17 @@ struct SettingsView: View {
                 set: { model.setMutesSpeakersWhenHeadphonesDisconnect($0) }
             )) {
                 Text("Mute speakers when headphones disconnect")
-                Text("Including when they're turned off or run out of battery.")
+                Text("Also applies when headphones power off or run out of battery.")
             }
+        }
 
+        Section("Jabra headsets") {
             Toggle(isOn: Binding(
                 get: { model.lightsBusylightWhileRecording },
                 set: { model.setLightsBusylightWhileRecording($0) }
             )) {
-                Text("Light a Jabra headset's busylight while an app uses its microphone")
-                Text("For calls in apps that don't signal one, such as Meet or Teams in a browser.")
+                Text("Turn on the busy light when the headset mic is in use")
+                Text("Works with browser calls in apps such as Meet and Teams.")
             }
         }
     }
@@ -480,27 +589,6 @@ enum SettingsPlacement {
     }
 }
 
-private extension View {
-    /// The shape a profile name sits in: a tint under the pointer, an
-    /// outline while it is being renamed, and the same size in both so the
-    /// row never moves.
-    func nameFrame(isHovering: Bool, isRenaming: Bool) -> some View {
-        padding(.horizontal, 6)
-            .padding(.vertical, 3)
-            .background(
-                Color.primary.opacity(isHovering ? 0.1 : 0),
-                in: RoundedRectangle(cornerRadius: 5)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 5)
-                    .strokeBorder(Color.accentColor.opacity(isRenaming ? 0.8 : 0), lineWidth: 2)
-            )
-            // Keeps the text where it sits in the rows around it.
-            .padding(.leading, -6)
-            .contentShape(Rectangle())
-    }
-}
-
 /// One profile: its name, renamed in place, and the buttons to use or delete it.
 private struct ProfileRow: View {
     @Bindable var model: AppModel
@@ -508,7 +596,6 @@ private struct ProfileRow: View {
     let isActive: Bool
     let canDelete: Bool
     @State private var name = ""
-    @State private var isHovering = false
     @State private var isRenaming = false
     @State private var clickMonitor: Any?
     @State private var isConfirmingDelete = false
@@ -516,37 +603,34 @@ private struct ProfileRow: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            Image(systemName: "checkmark")
-                .opacity(isActive ? 1 : 0)
-                .accessibilityHidden(true)
             nameField
-            Spacer(minLength: 8)
+            Spacer(minLength: 6)
             if isActive {
-                Text("In Use").foregroundStyle(.secondary)
+                Label("In use", systemImage: "checkmark")
+                    .font(.callout.weight(.medium))
+                    .foregroundStyle(.secondary)
             } else {
                 Button("Use") { model.applyProfile(id: profile.id) }
                     .accessibilityLabel("Use \(profile.name)")
             }
-            Button("Delete", role: .destructive) {
-                DebugLog.shared.write("clicked Delete on the profile \"\(profile.name)\"")
-                isConfirmingDelete = true
+            Menu {
+                Button("Rename…") { beginRenaming() }
+                Button("Delete…", role: .destructive) { isConfirmingDelete = true }
+                    .disabled(!canDelete)
+            } label: {
+                Image(systemName: "ellipsis.circle")
             }
-                .disabled(!canDelete)
-                .help(canDelete ? "Delete this profile" : "The last profile can't be deleted")
-                .accessibilityLabel("Delete \(profile.name)")
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .help("Actions for \(profile.name)")
+            .accessibilityLabel("Actions for \(profile.name)")
         }
-        .confirmationDialog(
-            "Delete \(profile.name)?",
-            isPresented: $isConfirmingDelete
-        ) {
-            // Return deletes and Escape cancels. A destructive role would draw
-            // the default button blue at rest and red while pressed.
-            Button("Delete") { model.deleteProfile(profile.id) }
-                .keyboardShortcut(.defaultAction)
+        .alert("Delete \(profile.name)?", isPresented: $isConfirmingDelete) {
+            Button("Delete Profile", role: .destructive) { model.deleteProfile(profile.id) }
             Button("Cancel", role: .cancel) {}
-                .keyboardShortcut(.cancelAction)
         } message: {
-            Text("Its device and microphone orders are removed. Devices stay as they are in the other profiles.")
+            Text("This removes its device priorities. Other profiles keep their settings.")
         }
         .onAppear {
             if model.renamingProfileID == profile.id { startRenaming() }
@@ -567,19 +651,12 @@ private struct ProfileRow: View {
         }
     }
 
-    /// Plain text at rest, so the list reads cleanly and nothing takes focus
-    /// when Settings opens. Under the pointer it shows a field and a pencil;
-    /// a click, or Space once Tab has reached it, swaps in a text field with
-    /// the name selected, as renaming in place works in Finder. Return or a
-    /// click elsewhere saves, Escape cancels.
     @ViewBuilder private var nameField: some View {
         if isRenaming {
-            // A grouped form would show a label and push the name right.
             TextField("Profile name", text: $name)
                 .labelsHidden()
-                .textFieldStyle(.plain)
-                .fixedSize()
-                .frame(minWidth: 80, alignment: .leading)
+                .textFieldStyle(.roundedBorder)
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .focused($isEditing)
                 .onSubmit(finishRenaming)
                 .onExitCommand(perform: cancelRenaming)
@@ -587,27 +664,18 @@ private struct ProfileRow: View {
                     if !editing { finishRenaming() }
                 }
                 .onAppear(perform: focusField)
-                .nameFrame(isHovering: false, isRenaming: true)
                 .help("Press Return to save or Escape to cancel")
         } else {
             Button(action: beginRenaming) {
-                HStack(spacing: 4) {
-                    Text(profile.name)
-                        .frame(minWidth: 80, alignment: .leading)
-                    Image(systemName: "pencil")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(.secondary)
-                        .opacity(isHovering ? 1 : 0)
-                        .accessibilityHidden(true)
-                }
-                .nameFrame(isHovering: isHovering, isRenaming: false)
+                Text(profile.name)
+                    .fontWeight(isActive ? .semibold : .regular)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .onHover { isHovering = $0 }
-            .animation(.easeInOut(duration: 0.12), value: isHovering)
-            .help("Click to rename")
-            .accessibilityLabel(isActive ? "\(profile.name), in use" : profile.name)
-            .accessibilityHint("Renames the profile.")
+            .help("Rename \(profile.name)")
+            .accessibilityLabel("Rename \(profile.name)")
         }
     }
 
@@ -670,42 +738,26 @@ private struct ProfileRow: View {
 
 @MainActor
 final class SettingsWindowController: NSWindowController {
+    private let navigation = SettingsNavigation()
+
     init(
         model: AppModel,
         launchAtLogin: LaunchAtLoginController,
         updates: UpdateChecker
     ) {
         let window = NSWindow(
-            contentRect: .zero,
-            styleMask: [.titled, .closable],
+            contentRect: NSRect(x: 0, y: 0, width: 742, height: 510),
+            styleMask: [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered,
             defer: false
         )
         window.title = "\(appDisplayName) Settings"
-        let tabs = NSTabViewController()
-        tabs.tabStyle = .toolbar
-        for pane in SettingsPane.allCases {
-            let hostingController = NSHostingController(
-                rootView: SettingsView(
-                    model: model,
-                    launchAtLogin: launchAtLogin,
-                    updates: updates,
-                    pane: pane
-                )
-            )
-            // Gives the window its real size before it is ever placed, so the
-            // first open on another screen is centered on the actual height.
-            hostingController.sizingOptions = [.preferredContentSize]
-            let item = NSTabViewItem(viewController: hostingController)
-            item.label = pane.label
-            item.image = NSImage(
-                systemSymbolName: pane.symbol,
-                accessibilityDescription: nil
-            )
-            tabs.addTabViewItem(item)
-        }
-        window.contentViewController = tabs
-        window.toolbarStyle = .preference
+        let hosting = NSHostingController(rootView: SettingsWindowContent(
+            navigation: navigation, model: model, launchAtLogin: launchAtLogin, updates: updates
+        ))
+        hosting.sizingOptions = [.minSize]
+        window.contentViewController = hosting
+        window.setContentSize(NSSize(width: 742, height: 510))
         window.isReleasedWhenClosed = false
         window.center()
         super.init(window: window)
@@ -722,18 +774,16 @@ final class SettingsWindowController: NSWindowController {
     func showSettings(on screen: NSScreen? = nil, pane: SettingsPane? = nil) {
         DebugLog.shared.write("Settings opened\(pane.map { " on \($0.label)" } ?? "")")
         NSApp.activate(ignoringOtherApps: true)
-        if let pane,
-           let tabs = window?.contentViewController as? NSTabViewController,
-           let index = SettingsPane.allCases.firstIndex(of: pane) {
-            tabs.selectedTabViewItemIndex = index
-        }
+        if let pane { navigation.pane = pane }
         if let window, let screen = screen ?? NSScreen.main,
            let origin = SettingsPlacement.origin(
                forWindow: window.frame,
                screenFrame: screen.frame,
                visibleFrame: screen.visibleFrame
            ) {
-            window.setFrameOrigin(origin)
+            // A window enlarged on an external monitor must still fit the laptop display.
+            let centered = NSRect(origin: origin, size: window.frame.size)
+            window.setFrame(centered.intersection(screen.visibleFrame), display: false)
         }
         showWindow(nil)
     }

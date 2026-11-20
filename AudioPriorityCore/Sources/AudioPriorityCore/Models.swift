@@ -45,6 +45,13 @@ public struct AudioDevice: Identifiable, Equatable, Hashable, Sendable {
     /// CoreAudio's `kAudioDeviceTransportType*` value, used to pick an icon.
     /// Zero when unknown, as it is for a disconnected device.
     public var transportType: UInt32 = 0
+    /// True for a confirmed serial-less USB port identity, nil when its
+    /// hardware descriptor is still unavailable, false for a stable UID.
+    public var usesUSBLocation: Bool? = false
+
+    public var hasUnresolvedUSBIdentity: Bool { usesUSBLocation == nil }
+
+    public var possibleUSBLocation: UInt32? { PortIdentity(uid)?.usbLocation }
 
     public var id: String { roleIdentifier }
     public var roleIdentifier: String { "\(role.rawValue):\(uid)" }
@@ -113,6 +120,12 @@ public struct StoredDevice: Codable, Equatable, Sendable {
     /// decode.
     public var declaredCategory: OutputCategory?
 
+    /// Nil in preferences written before port-dependent UIDs were recognized.
+    var followsPortChanges: Bool?
+    /// Previous UIDs still used by saved Shortcuts.
+    var previousUIDs: [String]?
+    var portHistory: PortHistory?
+
     public var role: DeviceRole { isInput ? .input : .output }
 
     public init(
@@ -137,6 +150,7 @@ public struct StoredDevice: Codable, Equatable, Sendable {
             lastSeen: lastSeen,
             declaredCategory: device.declaredCategory
         )
+        followsPortChanges = device.isDisplayOutput ? true : device.usesUSBLocation
     }
 
     public func disconnectedDevice() -> AudioDevice {

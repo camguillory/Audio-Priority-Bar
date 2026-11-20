@@ -7,6 +7,7 @@ extension AppModel {
         DebugLog.shared.write("automatic switching \(enabled ? "off" : "on")")
         isManualMode = enabled
         store.isManualMode = enabled
+        externalInputUID = nil
         keptPicks = [:]
         switchedBackAt = [:]
         takeoverUIDs = [:]
@@ -73,6 +74,7 @@ extension AppModel {
     func setMutesSpeakersWhenHeadphonesDisconnect(_ enabled: Bool) {
         DebugLog.shared.write("setting mutesSpeakersWhenHeadphonesDisconnect = \(enabled)")
         mutesSpeakersWhenHeadphonesDisconnect = enabled
+        if !enabled { speakerMuteFailure = nil }
         store.mutesSpeakersWhenHeadphonesDisconnect = enabled
     }
 
@@ -282,6 +284,7 @@ extension AppModel {
         }
     }
     func setMicrophoneMuted(_ muted: Bool) {
+        guard hasCurrentDeviceSnapshot || refreshDevices() else { return }
         DebugLog.shared.write("microphone \(muted ? "mute" : "unmute") asked for")
         isMicrophoneMuted = muted
         refreshMute()
@@ -302,6 +305,7 @@ extension AppModel {
 
     /// Moving the level while muted unmutes, as the macOS volume keys do.
     func setMicrophoneLevel(_ value: Float) {
+        guard hasCurrentDeviceSnapshot || refreshDevices() else { return }
         guard let id = currentInputID else { return }
         if isMicrophoneMuted { setMicrophoneMuted(false) }
         guard audio.setInputVolume(id, value) else { return }
@@ -322,6 +326,7 @@ extension AppModel {
     }
 
     func setOutputMuted(_ muted: Bool) {
+        guard hasCurrentDeviceSnapshot || refreshDevices() else { return }
         DebugLog.shared.write("clicked output \(muted ? "mute" : "unmute")")
         guard let id = currentOutputID, audio.setMute(.output, id, muted) else {
             DebugLog.shared.write("could not \(muted ? "mute" : "unmute") the output")
@@ -334,13 +339,15 @@ extension AppModel {
     /// does, until it leaves or the list would use a device that connects
     /// later. Every role the pick moved is kept, or automatic switching would
     /// move a paired half back.
-    func selectManually(_ device: AudioDevice) {
+    @discardableResult
+    func selectManually(_ device: AudioDevice) -> Bool {
         DebugLog.shared.write("picked \(device.logName)")
+        let before = currentUIDs
+        guard device.isConnected, linkState(for: device) != .down, select(device) else { return false }
         switchedBackAt = [:]
         takeoverUIDs = [:]
-        let before = currentUIDs
-        guard select(device) else { return }
         keepPicks(DeviceRole.allCases.filter { $0 == device.role || before[$0] != currentUIDs[$0] })
+        return true
     }
 
     /// Keeps `roles` on their current devices while automatic switching is
@@ -386,7 +393,7 @@ extension AppModel {
             refreshDevices()
         case .device(let id):
             if let device = listedDevices.first(where: { $0.id == id }) { activate(device) }
-        case .settings, .takeoverFix: break
+        case .settings, .activity, .takeoverFix: break
         }
     }
 
@@ -419,11 +426,12 @@ extension AppModel {
     /// A Shortcuts action's pick, which acts like a click on the device's row.
     func selectManually(uid: String, role: DeviceRole) throws(ShortcutError) {
         let known = role == .input ? inputDevices : speakerDevices + headphoneDevices
-        guard let device = known.first(where: { $0.uid == uid }) else {
+        let currentUID = store.currentUID(for: uid, role: role)
+        guard let device = known.first(where: { $0.uid == currentUID }) else {
             throw .unknownDevice
         }
         guard device.isConnected else { throw .notConnected(device.name) }
-        selectManually(device)
+        guard selectManually(device) else { throw .selectionFailed(device.name) }
     }
 
     /// Selects a device with its paired counterpart, regardless of
@@ -457,6 +465,7 @@ extension AppModel {
     }
 
     func setVolume(_ value: Float) {
+        guard hasCurrentDeviceSnapshot || refreshDevices() else { return }
         guard audio.setOutputVolume(value) else { return }
         volume = value
         logSettledLevel(.output, value)
@@ -713,6 +722,7 @@ extension AppModel {
     /// when the profile keeps automatic switching off.
     private func useLoadedProfile(announces: Bool) {
         let before = currentUIDs
+        externalInputUID = nil
         keptPicks = [:]
         switchedBackAt = [:]
         takeoverUIDs = [:]

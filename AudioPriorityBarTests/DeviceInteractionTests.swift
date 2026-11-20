@@ -1,4 +1,5 @@
 import AudioPriorityCore
+import CoreAudio
 import CoreGraphics
 import Foundation
 import Testing
@@ -663,4 +664,27 @@ func unrelatedConnectionDoesNotMaskSoundSettingsChoice() {
 
     #expect(!model.isManualMode)
     #expect(model.currentOutputID == speaker.platformID)
+}
+
+@Test
+@MainActor
+func connectingOneOfTwoSameNamedBluetoothSpeakersLeavesTheOtherAvailable() async throws {
+    let devices = Data("""
+    {"SPBluetoothDataType":[{"device_connected":[{"Studio":{"device_address":"AA:BB:CC:DD:EE:01","device_minorType":"Speaker"}}],
+    "device_not_connected":[{"Studio":{"device_address":"AA:BB:CC:DD:EE:02","device_minorType":"Speaker"}}]}]}
+    """.utf8)
+    let battery = BluetoothBatteryMonitor(read: { devices })
+    let audio = FakeAudio()
+    var speaker = output(1, "AA-BB-CC-DD-EE-01:output", "Studio")
+    speaker.transportType = kAudioDeviceTransportTypeBluetooth
+    audio.catalog = [speaker]
+    let model = AppModel(store: PriorityStore(defaults: isolatedDefaults()), audio: audio.operations,
+                         link: LinkOperations(isUsable: { _ in true }, state: { _ in nil }), battery: battery)
+    model.start()
+    defer { model.stop() }
+    for _ in 0..<1000 where battery.report.pairedAudio.isEmpty { await Task.yield() }
+    let other = try #require(model.speakerDevices.first { $0.uid == "AA-BB-CC-DD-EE-02:output" })
+    #expect(!other.isConnected)
+    #expect(model.canConnect(other))
+    #expect(model.speakerDevices.count == 2)
 }

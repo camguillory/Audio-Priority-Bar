@@ -19,12 +19,22 @@ enum IntentTarget {
             : model.speakerDevices + model.headphoneDevices
         return devices.filter { !model.isHidden($0) }
     }
+
+    static func devices(for identifiers: [String], role: DeviceRole) -> [(String, AudioDevice)] {
+        guard let model else { return [] }
+        let available = devices(role)
+        return identifiers.compactMap { id in
+            let current = model.store.currentUID(for: id, role: role)
+            return available.first { $0.uid == current }.map { (id, $0) }
+        }
+    }
 }
 
 enum ShortcutError: Error, CustomLocalizedStringResourceConvertible {
     case starting
     case unknownDevice
     case notConnected(String)
+    case selectionFailed(String)
     case unknownProfile
 
     var localizedStringResource: LocalizedStringResource {
@@ -32,6 +42,7 @@ enum ShortcutError: Error, CustomLocalizedStringResourceConvertible {
         case .starting: "Audio Priority Bar is still starting. Try again in a moment."
         case .unknownDevice: "Audio Priority Bar doesn't know this device. Choose it again in the action."
         case .notConnected(let name): "\(name) isn't connected."
+        case .selectionFailed(let name): "The Mac could not switch to \(name). Check that the device is ready."
         case .unknownProfile: "This profile no longer exists. Choose another in the action."
         }
     }
@@ -54,7 +65,7 @@ struct OutputDeviceEntity: AppEntity {
 struct OutputDeviceQuery: EntityQuery {
     @MainActor
     func entities(for identifiers: [String]) async throws -> [OutputDeviceEntity] {
-        try await suggestedEntities().filter { identifiers.contains($0.id) }
+        IntentTarget.devices(for: identifiers, role: .output).map { OutputDeviceEntity(id: $0, name: $1.name) }
     }
 
     @MainActor
@@ -76,7 +87,7 @@ struct MicrophoneEntity: AppEntity {
 struct MicrophoneQuery: EntityQuery {
     @MainActor
     func entities(for identifiers: [String]) async throws -> [MicrophoneEntity] {
-        try await suggestedEntities().filter { identifiers.contains($0.id) }
+        IntentTarget.devices(for: identifiers, role: .input).map { MicrophoneEntity(id: $0, name: $1.name) }
     }
 
     @MainActor

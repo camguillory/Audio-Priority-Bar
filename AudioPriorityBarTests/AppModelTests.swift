@@ -7,12 +7,14 @@ import Testing
 @MainActor
 final class FakeAudio {
     var catalog: [AudioDevice] = []
+    var inventoryUnavailable = false
     var defaults: [DeviceRole: UInt32] = [:]
     var volume: Float?
     var muted: Set<String> = []
     var selections: [(DeviceRole, UInt32)] = []
     var selectionSucceeds = true
     var failedSelectionRoles: Set<DeviceRole> = []
+    var failedSelectionIDs: Set<UInt32> = []
     var volumeReadCount = 0
     var muteReadCount = 0
     /// Devices without a settable mute property, like ZoomAudioDevice or a
@@ -23,11 +25,12 @@ final class FakeAudio {
 
     var operations: AudioOperations {
         AudioOperations(
-            devices: { self.catalog },
+            devices: { self.inventoryUnavailable ? nil : self.catalog },
             defaultDevice: { self.defaults[$0] },
             setDefault: {
                 guard self.selectionSucceeds,
-                      !self.failedSelectionRoles.contains($0) else {
+                      !self.failedSelectionRoles.contains($0),
+                      !self.failedSelectionIDs.contains($1) else {
                     return false
                 }
                 self.defaults[$0] = $1
@@ -632,7 +635,7 @@ func aJabraHeadsetEndsAPickOnlyOnceItsCheckSaysItIsOn() {
 
 @Test
 @MainActor
-func airPodsTakingTheMicrophoneOnEarDetectionIsSwitchedBack() {
+func alreadyConnectedAirPodsCanBecomeTheSystemMicrophone() {
     let defaults = isolatedDefaults()
     let store = PriorityStore(defaults: defaults)
     let airPods = output(1, "airpods-out", "AirPods Pro")
@@ -650,13 +653,14 @@ func airPodsTakingTheMicrophoneOnEarDetectionIsSwitchedBack() {
     model.handleDefaultChanged(.input)
 
     #expect(!model.isManualMode)
-    #expect(model.currentInputID == scarlett.platformID)
+    #expect(model.currentInputID == airPodsMic.platformID)
+    #expect(model.externalInputUID == airPodsMic.uid)
     #expect(model.currentOutputID == airPods.platformID)
 }
 
 @Test
 @MainActor
-func airPodsTakingTheOutputBackInManualModeIsSwitchedBack() {
+func airPodsTakingTheOutputBackInManualModePreservesTheExternalMicChange() {
     let defaults = isolatedDefaults()
     let store = PriorityStore(defaults: defaults)
     store.isManualMode = true
@@ -683,8 +687,8 @@ func airPodsTakingTheOutputBackInManualModeIsSwitchedBack() {
 
     #expect(model.isManualMode)
     #expect(model.currentOutputID == speaker.platformID)
-    #expect(model.currentInputID == scarlett.platformID)
-    #expect(audio.selections.map(\.1) == [speaker.platformID, scarlett.platformID])
+    #expect(model.currentInputID == airPodsMic.platformID)
+    #expect(audio.selections.map(\.1) == [speaker.platformID])
 }
 
 @Test
@@ -710,7 +714,7 @@ func airPodsTakingTheOutputAfterAPickAreSwitchedBackWithAutomaticOn() {
 
 @Test
 @MainActor
-func airPodsTakingBothDevicesAtOnceInManualModeAreBothSwitchedBack() {
+func anOutputCallbackThatSeesBothDefaultsChangeKeepsTheNewSystemMicrophone() {
     let defaults = isolatedDefaults()
     let store = PriorityStore(defaults: defaults)
     store.isManualMode = true
@@ -733,9 +737,9 @@ func airPodsTakingBothDevicesAtOnceInManualModeAreBothSwitchedBack() {
     model.handleDefaultChanged(.input)
 
     #expect(model.currentOutputID == speaker.platformID)
-    #expect(model.currentInputID == scarlett.platformID)
+    #expect(model.currentInputID == airPodsMic.platformID)
     #expect(audio.defaults[.output] == speaker.platformID)
-    #expect(audio.defaults[.input] == scarlett.platformID)
+    #expect(audio.defaults[.input] == airPodsMic.platformID)
 }
 
 @Test
@@ -926,7 +930,7 @@ func aSlowAirPodsHandoverIsNotTakenForAPickWithAutomaticOn() {
 
 @Test
 @MainActor
-func aMicrophonePickedInControlCenterIsHeldInManualMode() {
+func aSecondExternalMicChoiceReplacesTheFirstEvenOutsideControlCenter() {
     let defaults = isolatedDefaults()
     let store = PriorityStore(defaults: defaults)
     store.isManualMode = true
@@ -946,8 +950,8 @@ func aMicrophonePickedInControlCenterIsHeldInManualMode() {
     audio.defaults[.input] = airPodsMic.platformID
     model.handleDefaultChanged(.input)
 
-    #expect(model.currentInputID == builtIn.platformID)
-    #expect(audio.selections.map(\.1) == [builtIn.platformID])
+    #expect(model.currentInputID == airPodsMic.platformID)
+    #expect(audio.selections.isEmpty)
 }
 
 @Test
@@ -1025,7 +1029,7 @@ func macOSTakingTheOutputAgainAfterASwitchBackIsLeftAndNamed() {
 
 @Test
 @MainActor
-func theMicrophoneIsHeldThroughSmartRoutingRetakes() {
+func repeatedAirPodsInputNotificationsDoNotFightTheSystemChoice() {
     let defaults = isolatedDefaults()
     let store = PriorityStore(defaults: defaults)
     let airPods = output(1, "airpods-out", "AirPods Pro")
@@ -1039,6 +1043,7 @@ func theMicrophoneIsHeldThroughSmartRoutingRetakes() {
     model.uptime = { clock }
     model.start()
 
+    audio.selections.removeAll()
     // The 4.4 s cadence measured on AirPods Pro, macOS 26.6.2.
     for _ in 0..<10 {
         clock += 4.4
@@ -1047,8 +1052,9 @@ func theMicrophoneIsHeldThroughSmartRoutingRetakes() {
     }
 
     #expect(!model.isManualMode)
-    #expect(model.currentInputID == scarlett.platformID)
+    #expect(model.currentInputID == airPodsMic.platformID)
     #expect(model.takeoverDevice == nil)
+    #expect(audio.selections.isEmpty)
 }
 
 @Test
@@ -1060,12 +1066,14 @@ func aFastFightOverTheMicrophonePausesTheHoldThenResumes() {
     let airPodsMic = input(2, "airpods-in", "AirPods Pro")
     let scarlett = input(3, "scarlett", "Scarlett Solo USB")
     let audio = FakeAudio()
-    audio.catalog = [airPodsMic, scarlett]
+    audio.catalog = [scarlett]
     audio.defaults[.input] = scarlett.platformID
     let model = testModel(audio: audio, defaults: defaults)
     var clock: TimeInterval = 100
     model.uptime = { clock }
     model.start()
+    audio.catalog.append(airPodsMic)
+    model.handleDevicesChanged()
 
     // Another app taking it back within a fraction of a second, every time.
     for _ in 0..<4 {
@@ -1083,19 +1091,22 @@ func aFastFightOverTheMicrophonePausesTheHoldThenResumes() {
     #expect(model.isManualMode)
 }
 
-@Test
+@Test(arguments: [true, false])
 @MainActor
-func aPickDuringAPausedHoldEndsIt() {
+func aPausedHardwareHandoverResumesUnlessSomeonePicksTheMicrophone(makePick: Bool) {
     let defaults = isolatedDefaults()
     let airPodsMic = input(2, "airpods-in", "AirPods Pro")
     let scarlett = input(3, "scarlett", "Scarlett Solo USB")
     PriorityStore(defaults: defaults).savePriorities([scarlett, airPodsMic], role: .input)
     let audio = FakeAudio()
-    audio.catalog = [airPodsMic, scarlett]
+    audio.catalog = [scarlett]
     let model = testModel(audio: audio, defaults: defaults)
     var clock: TimeInterval = 100
     model.uptime = { clock }
     model.start()
+    audio.catalog.append(airPodsMic)
+    model.handleDevicesChanged()
+    clock += 2.5 // A delayed handover, after the initial topology notifications.
     for _ in 0..<4 {
         clock += 0.1
         audio.defaults[.input] = airPodsMic.platformID
@@ -1103,10 +1114,11 @@ func aPickDuringAPausedHoldEndsIt() {
     }
     #expect(model.takeoverDevice?.uid == airPodsMic.uid)
 
-    model.selectManually(airPodsMic)
+    if makePick { model.selectManually(airPodsMic) }
+    clock += 30
     model.resumeMicrophoneHold()
 
-    #expect(model.currentInputID == airPodsMic.platformID)
+    #expect(model.currentInputID == (makePick ? airPodsMic.platformID : scarlett.platformID))
 }
 
 @Test
@@ -2010,13 +2022,15 @@ func recentSwitchesSayWhyNewestFirstAndKeepTwenty() {
     let headphones = output(2, "headphones", "AirPods Pro")
     let audio = FakeAudio()
     audio.catalog = [speaker]
+    audio.defaults[.output] = speaker.platformID
     let model = testModel(audio: audio, defaults: defaults)
     model.start()
+    #expect(model.recentSwitches.isEmpty)
 
     audio.catalog = [speaker, headphones]
     model.handleDevicesChanged()
     #expect(model.recentSwitches.first?.device == "AirPods Pro")
-    #expect(model.recentSwitches.first?.reason == "automatic")
+    #expect(model.recentSwitches.first?.reason == "selected by priority")
 
     model.selectManually(speaker)
     #expect(model.recentSwitches.first?.device == "MacBook Air Speakers")
@@ -2062,7 +2076,135 @@ func diagnosticsTagTheOwnerAndTheBluetoothAddress() {
 
     let diagnostics = model.diagnostics
     #expect(diagnostics.contains("\"owner1’s AirPods Pro\" [bt1:output]"))
-    #expect(diagnostics.contains("Output: owner1’s AirPods Pro, automatic"))
+    #expect(diagnostics.contains("Output: owner1’s AirPods Pro, selected by priority"))
     #expect(!diagnostics.contains("Alex"))
     #expect(!diagnostics.contains("AA-11"))
+}
+
+@Test
+@MainActor
+func hiddenSecondaryMicrophonesStayCoveredRegardlessOfPanelVisibility() {
+    let audio = FakeAudio()
+    let primary = input(1, "main")
+    let secondary = input(2, "usb")
+    audio.catalog = [primary, secondary]
+    audio.defaults[.input] = primary.platformID
+    let defaults = isolatedDefaults()
+    let store = PriorityStore(defaults: defaults)
+    store.hide(secondary)
+    let model = testModel(audio: audio, defaults: defaults)
+    model.start()
+    model.setMicrophoneMuted(true)
+    #expect(model.inputDevices.map(\.uid) == ["main"])
+    #expect(audio.muted == ["input:1", "input:2"])
+
+    audio.muted.remove("input:2")
+    audio.running = [2]
+    model.refreshMute()
+    #expect(audio.muted.contains("input:2"))
+
+    audio.muted.remove("input:2")
+    audio.noMuteProperty = [2]
+    model.refreshMute()
+    #expect(model.uncoveredRecording?.microphone == secondary.name)
+}
+
+@Test
+@MainActor
+func failedMicrophoneRestorationKeepsUndoRecordUntilHardwareRecovers() {
+    let audio = FakeAudio()
+    audio.catalog = [input(1, "main"), input(2, "usb")]
+    let defaults = isolatedDefaults()
+    let store = PriorityStore(defaults: defaults)
+    let model = testModel(audio: audio, defaults: defaults)
+    model.start()
+    model.setMicrophoneMuted(true)
+    audio.noMuteProperty = [2]
+    model.setMicrophoneMuted(false)
+    #expect(audio.muted.contains("input:2"))
+    #expect(store.appliedMicrophoneMutes["usb"] == PriorityStore.mutedByProperty)
+    #expect(model.microphonesAwaitingRestore == ["Microphone"])
+
+    audio.noMuteProperty = []
+    model.refreshMute()
+    #expect(!audio.muted.contains("input:2"))
+    #expect(store.appliedMicrophoneMutes["usb"] == nil)
+}
+
+@Test
+@MainActor
+func monitorWithoutMuteShowsFailedHeadphoneDisconnectProtection() {
+    let audio = FakeAudio()
+    let monitor = output(1, "monitor", "Monitor")
+    var headphones = output(2, "headphones", "Headphones")
+    headphones.declaredCategory = .headphone
+    audio.catalog = [monitor, headphones]
+    audio.noMuteProperty = [1]
+    let model = testModel(audio: audio, defaults: isolatedDefaults())
+    model.start()
+    audio.catalog = [monitor]
+    model.handleDevicesChanged()
+    #expect(model.currentOutputID == monitor.platformID)
+    #expect(model.speakerMuteFailure?.uid == monitor.uid)
+    #expect(!model.isActiveOutputMuted)
+}
+
+@Test
+@MainActor
+func uncertainDuplexActivityDefersUpdatesAndWarnsWithoutClaimingRecording() {
+    let primary = input(1, "mic")
+    var duplex = input(2, "duplex", "Headset")
+    duplex.transportType = kAudioDeviceTransportTypeBluetooth
+    let audio = FakeAudio()
+    audio.catalog = [primary, duplex]
+    audio.defaults[.input] = 1
+    let defaults = isolatedDefaults()
+    let store = PriorityStore(defaults: defaults)
+    store.savePriorities([primary, duplex], role: .input)
+    var operations = audio.operations
+    var uncertain: Set<UInt32> = [2]
+    operations.inputActivity = { _ in InputActivity(uncertain: uncertain) }
+    let model = AppModel(store: store, audio: operations, link: LinkOperations(isUsable: { _ in true }, state: { _ in nil }))
+    model.start()
+    model.setMicrophoneMuted(true)
+    #expect(model.anyInputMayBeRecording)
+    #expect(!model.isInputRecording)
+    #expect(!model.currentInputMayBeRecording)
+    #expect(model.uncoveredRecording == UncoveredRecording(app: nil, microphone: "Headset", isConfirmed: false))
+    uncertain = [1]
+    model.refreshMute()
+    #expect(model.currentInputMayBeRecording)
+    #expect(model.uncoveredRecording == nil)
+    uncertain = []
+    model.refreshMute()
+    #expect(!model.anyInputMayBeRecording)
+}
+
+@Test
+@MainActor
+func failedDeviceInventoryPreservesTheListAndRejectsStaleHardwareIDs() {
+    let audio = FakeAudio()
+    let mic = input(1, "usb")
+    audio.catalog = [mic]
+    let model = testModel(audio: audio, defaults: isolatedDefaults())
+    model.start()
+    audio.selections = []
+    audio.inventoryUnavailable = true
+    model.handleDevicesChanged()
+    #expect(model.inputDevices.map(\.uid) == ["usb"])
+    #expect(model.anyInputMayBeRecording)
+    #expect(!model.selectManually(mic))
+    model.setMicrophoneMuted(true)
+    #expect(audio.muted.isEmpty)
+    #expect(audio.selections.isEmpty)
+
+    audio.catalog = [input(1, "replacement")]
+    audio.inventoryUnavailable = false
+    #expect(!model.selectManually(mic))
+    #expect(model.inputDevices.map(\.uid) == ["replacement"])
+    #expect(audio.selections.isEmpty)
+    audio.catalog = []
+    model.handleDevicesChanged()
+    #expect(model.inputDevices.isEmpty)
+    model.stop()
 }

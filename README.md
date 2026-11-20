@@ -10,17 +10,15 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/camguillory/Audio-Priority-Bar/releases/latest/download/AudioPriorityBar.zip"><img src="https://img.shields.io/badge/Download_for_macOS-000000?style=for-the-badge&logo=apple&logoColor=white" alt="Download for macOS"></a>
-</p>
-
-<p align="center">
-  <a href="https://github.com/camguillory/Audio-Priority-Bar/releases/latest"><img src="https://img.shields.io/github/v/release/camguillory/Audio-Priority-Bar?label=release" alt="Latest release"></a>
   <img src="https://img.shields.io/badge/macOS-14%2B-blue" alt="macOS 14+">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0-blue" alt="GPL-3.0 License"></a>
 </p>
 
 <p align="center">
-  <img src="demo.gif" width="800" alt="A tour of Audio Priority Bar in the menu bar. A Jabra headset and then AirPods connect and the Mac switches to each with a notice. The panel shows the AirPods buds and case battery and the Jabra battery, the Jabra's busylight and sidetone turn on from its row, dragging the Jabra above the AirPods switches the sound at once, and the app switches back when macOS takes over. Picking Studio Display Speakers keeps automatic switching on, the Meeting profile puts the Jabra first, and turning automatic switching off turns the icon red. Option-Shift-M mutes the microphone, a reminder appears when an app records while muted, and a URL unmutes it">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="screenshot-dark.png">
+    <img src="screenshot-light.png" width="416" alt="Audio devices panel with Settings at the top right, the current output and microphone beside their level controls, ranked devices, and the reason for the latest switch">
+  </picture>
 </p>
 
 ## Why
@@ -41,47 +39,19 @@
 - **Bluetooth in one click.** Connect and disconnect paired speakers and headphones from the panel.
 - **Battery at a glance.** AirPods buds and case, and Jabra headsets on a Link dongle.
 - **Jabra headset settings.** Switch noise cancellation, HearThrough, sidetone and the busylight on a Jabra headset on a Link dongle, from its row, or light the busylight while an app uses its microphone. Tested on an Evolve2 85.
-- **Native.** Laid out like the macOS Sound menu, with Liquid Glass on macOS 26, VoiceOver support, and automatic updates.
+- **Native.** Laid out like the macOS Sound menu, with Liquid Glass on macOS 26, VoiceOver support, and automatic updates in builds configured with a release feed.
 
 ## Install
+
+Audio Priority Bar runs on macOS 14 Sonoma or later on Apple silicon and Intel.
 
 ```bash
 brew install --cask camguillory/tap/audio-priority-bar
 ```
 
-Or [download the app](https://github.com/camguillory/Audio-Priority-Bar/releases/latest/download/AudioPriorityBar.zip),
-unzip it, and move `AudioPriorityBar.app` to `/Applications`. Requires macOS 14
-Sonoma or later, on Apple silicon or Intel.
+You can also download the ZIP, unzip it, and move `AudioPriorityBar.app` to `/Applications`. To verify the download, save the accompanying `.sha256` file in the same folder and run `shasum -a 256 -c AudioPriorityBar.zip.sha256` before unzipping. [Latest release](https://github.com/camguillory/Audio-Priority-Bar/releases/latest)
 
-> [!NOTE]
-> Audio Priority Bar is signed with its own certificate, not an Apple Developer
-> ID, and it isn't notarized. If macOS blocks the first launch, open
-> **System Settings > Privacy & Security** and click **Open Anyway**.
-
-<details>
-<summary>Verify the download</summary>
-
-Download `AudioPriorityBar.zip.sha256` from the
-[latest release](https://github.com/camguillory/Audio-Priority-Bar/releases/latest)
-into the same folder as the archive, and check it before unzipping:
-
-```bash
-cd ~/Downloads
-shasum -a 256 -c AudioPriorityBar.zip.sha256
-```
-
-</details>
-
-<details>
-<summary>Remove the quarantine attribute instead</summary>
-
-Advanced users may instead remove only this app's quarantine attribute:
-
-```bash
-xattr -d com.apple.quarantine /Applications/AudioPriorityBar.app
-```
-
-</details>
+Local builds are unsigned and use manual upgrades. When macOS requests first-launch approval, open **System Settings > Privacy & Security** and choose **Open Anyway**.
 
 <details>
 <summary>Upgrading from V1</summary>
@@ -93,27 +63,24 @@ bundle identifier may require re-approving Input Monitoring or Open at Login.
 
 ## Use
 
-Click the icon in the menu bar to open the panel. Drag devices to rank them;
-the active one is highlighted. A device you pick by hand stays until it
-disconnects or a device your list would pick connects. Turn automatic
-switching off to keep it.
+Click the menu bar icon to see the current output and microphone at the top of
+the panel. A checkmark marks each one in its priority list. Click a device to
+use it or drag it to change its priority. Click **Settings…** in the upper-right
+corner, or press **⌘,** while the panel is open, to configure the app.
+After a switch, the panel shows the device, time, and reason. Click **History**
+to see the last 20 switches since launch.
 
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="screenshot-dark.png">
-    <img src="screenshot-light.png" width="380" alt="Audio Priority Bar panel showing automatic switching on with the Desk profile, output and microphone levels, and the Speakers, Headphones and Microphones priority lists, with AirPods and a Jabra headset showing their battery, the Jabra's noise control, sidetone and busylight buttons, and paired Bluetooth devices dimmed while they are off">
-  </picture>
-</p>
+[Watch the audio switching demo (earlier interface).](demo.gif)
 
 <details>
 <summary>How switching works</summary>
 
 - Automatic switching uses the first available headphone, then the first speaker.
-- A device you pick in the panel, Control Center or Sound Settings stays
+- An output you pick in the panel, Control Center or Sound Settings stays
   until it disconnects or a device your list would pick connects, and
   automatic switching stays on. Other devices coming and going leave it
   alone. With automatic switching off, it stays until you turn it back on.
-- When macOS or another app changes the device on its own, as AirPods do when
+- When macOS or another app changes the output on its own, as AirPods do when
   you put them in, Audio Priority Bar switches back to the device you picked,
   or to your list. A device you connect still takes over if your list would
   pick it.
@@ -122,13 +89,16 @@ switching off to keep it.
   each round trip is a gap in the sound. **Fix in Settings** opens the AirPods
   settings, where choosing **When Last Connected to This Mac** under **Connect
   to This Mac** stops them switching on their own.
-- The microphone is held instead: each time macOS takes it, Audio Priority Bar
-  takes it back, so a call never ends up on the AirPods microphone. With
-  automatic switching off, this includes a device you connect: it takes the
-  output, and a USB headset brings its microphone too with **Select headset
-  input and output together**. Only if
-  another app takes it back within a second, three times in a row, does it
-  pause for 30 seconds, say so in the panel, and then try again.
+- Changing the system microphone to another connected input keeps that input
+  until it disconnects or you choose again. This works in either mode, including
+  when an app changes the input to already-connected AirPods. Connecting other
+  devices leaves that choice in place. Applying a profile or switching modes
+  starts a new choice. A microphone selected only inside a call app remains
+  under that app's control.
+- When a microphone first connects, automatic mode uses the saved priorities.
+  With automatic switching off, a newly connected headset can take the output
+  while the existing microphone stays selected. A USB headset can bring its
+  microphone too when its halves are linked and there is no external mic choice.
 - With **Select headset input and output together** enabled, choosing
   either half of a physical USB headset selects the other too. For a dock or
   an audio interface whose microphone you'd rather rank yourself, uncheck
@@ -136,18 +106,16 @@ switching off to keep it.
 - With **Microphones follow the output** enabled, speakers and headphones
   each keep their own microphone order, so moving from headphones to
   speakers can also move to the desk microphone. A microphone you pick in
-  Control Center or Sound Settings still stays until it disconnects or a
-  microphone your list would pick connects.
-- With **Mute speakers when headphones disconnect**, on by default, the
-  speakers start muted when the headphones playing disconnect, are turned off
-  or run out of battery.
-- The microphone mute covers every connected microphone, not only the one in
-  use, so a call app or browser tab set to another one hears silence too. It
-  holds through automatic switching and replugs, leaves virtual inputs alone,
-  and quitting the app restores each microphone. A microphone you had muted
-  yourself stays muted.
+  another app as the system input stays selected across output changes.
+- With **Mute speakers when headphones disconnect** enabled, the app asks the
+  speaker that takes over to mute. Some monitors only allow muting through their
+  own controls. The panel identifies the speaker if macOS cannot mute it.
+- Microphone mute covers the current input and connected physical wired inputs
+  that the app can silence, including hidden inputs. It follows device changes
+  and restores the original mute or input level on unmute or quit. If a device
+  is unavailable, restoration retries when it reconnects.
 
-Speakers, Headphones, and Microphones remain visible in both modes.
+Both modes use the same Speakers, Headphones, and Microphones lists.
 
 </details>
 
@@ -163,7 +131,7 @@ Speakers, Headphones, and Microphones remain visible in both modes.
   opens Settings. Left and Right change the highlighted volume, profile, or
   microphone order, Right opens a device's actions menu, and Escape closes
   the panel.
-- Use each row's actions menu for keyboard-accessible Move Up, Move Down, and
+- Open a row’s ellipsis menu for keyboard-accessible Move Up, Move Down, and
   Move to commands. Right-click a row to open the same menu.
 - Hide a device to remove it from Speakers, Headphones, or Microphones, or
   keep it visible while blocking automatic selection with **Never
@@ -182,13 +150,18 @@ Speakers, Headphones, and Microphones remain visible in both modes.
   or **Use both** while it's off. It appears only when picking it would
   change something, and the actions menu offers it too.
 - Set the output volume and microphone level by slider or scroll wheel. Click
-  the round icon beside a slider to mute; it turns red while muted.
+  the device icon beside a slider to mute. The channel shows **Muted**.
 - Speakers and headphones are sorted by what each device reports, in any
   system language.
 
 New HDMI and DisplayPort outputs start hidden; showing one is permanent, and
 **Hide new HDMI and DisplayPort outputs** turns this off for future devices.
 The active device always stays listed, even when hidden.
+
+If a monitor reconnects with the same display UUID and a different port suffix,
+or a USB audio device without a serial number moves to another port, the app
+keeps its priority and visibility. When it sees two matching devices connected
+at once, it remembers to keep their settings separate.
 
 </details>
 
@@ -210,7 +183,10 @@ The active device always stays listed, even when hidden.
   microphone, or for Settings, Check for Updates, and Quit.
 - A **Microphone muted** reminder appears when an app starts recording while
   you are muted. Click it to hide it until you next record while muted. It
-  and the switch notices can each be turned off in Settings.
+  and the switch notices can each be turned off in Settings. On macOS 14.2
+  and later the app checks which devices processes use for input. On 14.0–14.1
+  activity on a device that supports both playback and recording triggers a
+  precautionary mute reminder and defers updates until the device is idle.
 - While muted, a Bluetooth headset microphone that isn't the one in use stays
   live, since muting it could drop its sound to call quality. If an app records
   from it, the reminder names both, for example "Google Chrome is using AirPods
@@ -236,10 +212,10 @@ noise control (Off, Noise Cancellation or HearThrough), sidetone to hear your
 own voice in calls, and the busylight. While a call or an app uses the
 microphone, HearThrough isn't available, and sidetone replaces noise control
 when it's on. A call keeps the busylight on until it ends. A call started with
-the headset's call button ends from the red button on the row. **Light a Jabra
-headset's busylight while an app uses its microphone** in Settings, off by
-default, covers calls in apps that don't signal one, such as Meet or Teams in a
-browser. Tested on an Evolve2 85 behind a Link 380.
+the headset's call button ends from the red button on the row. In **Settings >
+Devices**, enable **Turn on the busy light when the headset mic is in use** to
+cover calls in apps that don't signal one, such as Meet or Teams in a browser.
+This option is off by default. Tested on an Evolve2 85 behind a Link 380.
 
 </details>
 
@@ -287,8 +263,8 @@ open "audioprioritybar://disable-automatic"
 ```
 
 In Shortcuts, add an **Open URLs** action with one of them. The app opens if it
-isn't running. Any other form of the URL is ignored. The Shortcuts tab in
-Settings lists them with a Copy button.
+isn't running. Any other form of the URL is ignored. **Settings > Shortcuts**
+lists the supported URLs with a Copy button next to each one.
 
 ### Permissions
 
@@ -307,13 +283,11 @@ Issues and pull requests are welcome. Open an issue first for anything
 substantial, then branch from `develop` and open the pull request against
 `develop`. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
-To report a switching problem, turn on **Keep a debug log** in **Settings >
-App**, make it happen again, click **Export Redacted Log**, and attach the
-file it selects in Downloads. For a quick report, **Recent switches** there
-lists the last 20 switches and why each happened, and **Copy Diagnostics**
-copies them with your settings and device lists. Both replace owner names,
-Bluetooth addresses, serial numbers and display IDs with short tags, and keep
-the vendor and model.
+**Settings > Switch History** shows the last 20 switches and why each happened.
+For a bug report, use **Copy Diagnostics** in **Settings > Diagnostics**. For a
+detailed log, turn on **Keep a debug log on this Mac**, reproduce the issue,
+and click **Export Redacted Log**. Both exports replace owner names,
+Bluetooth addresses, serial numbers and display IDs with short tags.
 
 ### Build from source
 
@@ -323,13 +297,12 @@ cd Audio-Priority-Bar
 ./build.sh
 ```
 
-The universal app is written to `dist/AudioPriorityBar.app`, signed with the
-release certificate when it is in your keychain and ad-hoc otherwise.
+The universal app is written to `dist/AudioPriorityBar.app`. The build script disables app signing and leaves the update feed empty.
 You can also open `AudioPriorityBar.xcodeproj` in Xcode and build with Command-R.
 
 For local development, `./build.sh --dev` builds only your machine's
 architecture in the Debug configuration, which is much faster, and writes
-`dist/AudioPriorityBar-dev.app`, signed the same way.
+`dist/AudioPriorityBar-dev.app`. To create a universal distribution ZIP with the same defaults, run `scripts/package-release.sh --unsigned`. It writes the ZIP and checksum to `release/` and preserves other files in your output and build directories.
 
 ## License
 

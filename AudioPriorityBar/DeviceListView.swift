@@ -32,10 +32,10 @@ struct HeadingMenu<Items: View>: View {
 }
 
 enum DeviceRowMetrics {
-    static let height: CGFloat = 30
-    static let spacing: CGFloat = 3
+    static let height: CGFloat = 38
+    static let spacing: CGFloat = 2
     static let pitch = height + spacing
-    static let sectionHeader: CGFloat = 18
+    static let sectionHeader: CGFloat = 21
 }
 
 struct DeviceSectionView: View {
@@ -84,8 +84,8 @@ struct DeviceSectionView: View {
         VStack(alignment: .leading, spacing: DeviceRowMetrics.spacing) {
             HStack {
                 Text(title)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(.secondary)
+                    .font(.headline)
+                    .foregroundStyle(.primary)
                     .accessibilityAddTraits(.isHeader)
                 Spacer()
                 if section == .input, model.microphonesFollowOutput {
@@ -97,8 +97,7 @@ struct DeviceSectionView: View {
             if devices.isEmpty {
                 Text(emptyText)
                     .font(.callout)
-                    .italic()
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(.secondary)
                     .frame(height: DeviceRowMetrics.height, alignment: .leading)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     // Overhangs the text like a row's highlight does.

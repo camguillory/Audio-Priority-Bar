@@ -6,6 +6,8 @@ enum SystemListener: CaseIterable, Equatable {
     case devices
     case defaultInput
     case defaultOutput
+    case serviceRestarted
+    case processList
 }
 
 enum DeviceListener: Hashable {
@@ -17,13 +19,15 @@ enum DeviceListener: Hashable {
     case volume(id: AudioObjectID)
     case inputVolume(id: AudioObjectID)
     case running(id: AudioObjectID)
+    case processInputRunning(id: AudioObjectID)
+    case processInputDevices(id: AudioObjectID)
 }
 
 @MainActor
 final class CoreAudioListenerLifecycle {
     typealias AddSystem = (SystemListener) -> Bool
     typealias RemoveSystem = (SystemListener) -> Void
-    typealias DeviceIDs = () -> [AudioObjectID]
+    typealias DeviceIDs = () -> [AudioObjectID]?
     typealias AddDevice = (DeviceListener) -> Bool
     typealias RemoveDevice = (DeviceListener) -> Void
 
@@ -32,7 +36,12 @@ final class CoreAudioListenerLifecycle {
     private let deviceIDs: DeviceIDs
     private let addDevice: AddDevice
     private let removeDevice: RemoveDevice
-    private var deviceListeners: Set<DeviceListener> = []
+    private let deviceUID: (AudioObjectID) -> String?
+    private let processIDs: (() -> [AudioObjectID])?
+    private var systemListeners: [SystemListener] = []
+    private var deviceListeners: [AudioObjectID: [DeviceListener]] = [:]
+    private var knownUIDs: [AudioObjectID: String] = [:]
+    private var processListeners: [AudioObjectID: [DeviceListener]] = [:]
 
     private(set) var isListening = false
 
@@ -40,12 +49,16 @@ final class CoreAudioListenerLifecycle {
         addSystem: @escaping AddSystem,
         removeSystem: @escaping RemoveSystem,
         deviceIDs: @escaping DeviceIDs,
+        deviceUID: @escaping (AudioObjectID) -> String?,
+        processIDs: (() -> [AudioObjectID])? = nil,
         addDevice: @escaping AddDevice,
         removeDevice: @escaping RemoveDevice
     ) {
         self.addSystem = addSystem
         self.removeSystem = removeSystem
         self.deviceIDs = deviceIDs
+        self.deviceUID = deviceUID
+        self.processIDs = processIDs
         self.addDevice = addDevice
         self.removeDevice = removeDevice
     }
@@ -53,67 +66,86 @@ final class CoreAudioListenerLifecycle {
     @discardableResult
     func start() -> Bool {
         guard !isListening else { return true }
-        guard addSystem(.devices) else { return false }
-        guard addSystem(.defaultInput) else {
-            removeSystem(.devices)
-            return false
+        for listener in [SystemListener.devices, .defaultInput, .defaultOutput, .serviceRestarted] {
+            guard addSystem(listener) else {
+                systemListeners.reversed().forEach(removeSystem)
+                systemListeners = []
+                return false
+            }
+            systemListeners.append(listener)
         }
-        guard addSystem(.defaultOutput) else {
-            removeSystem(.defaultInput)
-            removeSystem(.devices)
-            return false
-        }
+        if processIDs != nil, addSystem(.processList) { systemListeners.append(.processList) }
         isListening = true
         rebuildDeviceListeners()
+        rebuildProcessListeners()
         return true
     }
 
     func rebuildDeviceListeners() {
-        guard isListening else { return }
-        clearDeviceListeners()
-        let desired = Set(deviceIDs().flatMap { id in
-            [
-                DeviceListener.mute(
-                    id: id,
-                    role: .output,
-                    element: kAudioObjectPropertyElementMain
-                ),
-                DeviceListener.mute(id: id, role: .output, element: 1),
-                DeviceListener.mute(
-                    id: id,
-                    role: .input,
-                    element: kAudioObjectPropertyElementMain
-                ),
-                DeviceListener.mute(id: id, role: .input, element: 1),
-                DeviceListener.volume(id: id),
-                DeviceListener.inputVolume(id: id),
-                DeviceListener.running(id: id),
-            ]
-        })
-        for listener in desired where addDevice(listener) {
-            deviceListeners.insert(listener)
+        guard isListening, let ids = deviceIDs() else { return }
+        let connected = Set(ids)
+        for id in deviceListeners.keys where !connected.contains(id) {
+            deviceListeners.removeValue(forKey: id)?.forEach(removeDevice)
+            knownUIDs[id] = nil
         }
+        for id in connected {
+            let uid = deviceUID(id)
+            // A recycled AudioObjectID belongs to different hardware. When
+            // its identity is unavailable, conservatively bind it again.
+            if uid == nil || uid != knownUIDs[id] {
+                deviceListeners.removeValue(forKey: id)?.forEach(removeDevice)
+                knownUIDs[id] = uid
+            }
+            let desired: [DeviceListener] = [
+                .mute(id: id, role: .output, element: kAudioObjectPropertyElementMain),
+                .mute(id: id, role: .output, element: 1),
+                .mute(id: id, role: .input, element: kAudioObjectPropertyElementMain),
+                .mute(id: id, role: .input, element: 1),
+                .volume(id: id), .inputVolume(id: id), .running(id: id),
+            ]
+            // A driver's controls can appear after its device. Keep existing
+            // subscriptions and retry only those still missing.
+            let attached = deviceListeners[id] ?? []
+            deviceListeners[id] = attached + desired.filter { !attached.contains($0) && addDevice($0) }
+        }
+    }
+
+    func rebuildProcessListeners() {
+        guard isListening, let processIDs else { return }
+        let current = Set(processIDs())
+        for id in processListeners.keys where !current.contains(id) {
+            processListeners.removeValue(forKey: id)?.forEach(removeDevice)
+        }
+        for id in current {
+            let attached = processListeners[id] ?? []
+            let desired: [DeviceListener] = [.processInputRunning(id: id), .processInputDevices(id: id)]
+            processListeners[id] = attached + desired.filter { !attached.contains($0) && addDevice($0) }
+        }
+    }
+
+    func restart() -> Bool {
+        stop()
+        return start()
     }
 
     func stop() {
         guard isListening else { return }
-        clearDeviceListeners()
-        for listener in SystemListener.allCases {
-            removeSystem(listener)
-        }
         isListening = false
+        deviceListeners.values.forEach { $0.forEach(removeDevice) }
+        processListeners.values.forEach { $0.forEach(removeDevice) }
+        deviceListeners = [:]
+        processListeners = [:]
+        knownUIDs = [:]
+        systemListeners.forEach(removeSystem)
+        systemListeners = []
     }
 
-    private func clearDeviceListeners() {
-        for listener in deviceListeners {
-            removeDevice(listener)
-        }
-        deviceListeners.removeAll()
-    }
 }
 
 enum CoreAudioEvent: Sendable {
     case devicesChanged
+    case serviceRestarted
+    case processesChanged
     case defaultChanged(DeviceRole)
     case muteOrVolumeChanged
 }

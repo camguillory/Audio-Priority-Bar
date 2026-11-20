@@ -76,14 +76,14 @@ func aProfileNoticeNamesTheProfileFirst() {
     let notice = NoticeContent.applied(profile: "Desk", devices: [speakers]) { _ in "hifispeaker" }
     #expect(notice == NoticeContent(
         lines: [
-            .init(icon: "rectangle.stack", text: "Desk"),
-            .init(icon: "hifispeaker", text: "Desk Speakers"),
+            .init(icon: "rectangle.stack", text: "Profile · Desk"),
+            .init(icon: "hifispeaker", text: "Output · Desk Speakers"),
         ],
         announcement: "Profile: Desk, Output: Desk Speakers"
     ))
     // Devices already in place still show which profile is now in use.
     #expect(NoticeContent.applied(profile: "Desk", devices: []) { _ in "" }.lines
-        == [.init(icon: "rectangle.stack", text: "Desk")])
+        == [.init(icon: "rectangle.stack", text: "Profile · Desk")])
 }
 
 @Test
@@ -95,18 +95,18 @@ func aHeadsetSwitchingBothHalvesReadsAsOneDevice() {
         NoticeContent.switched(to: devices) { $0.role == .input ? "mic" : "headphones" }
     }
     #expect(notice([jabraOut]) == NoticeContent(
-        lines: [.init(icon: "headphones", text: "Jabra Link 380")],
+        lines: [.init(icon: "headphones", text: "Output · Jabra Link 380")],
         announcement: "Output: Jabra Link 380"
     ))
     #expect(notice([jabraOut, jabraIn]) == NoticeContent(
-        lines: [.init(icon: "headphones", text: "Jabra Link 380")],
+        lines: [.init(icon: "headphones", text: "Output and microphone · Jabra Link 380")],
         announcement: "Output and microphone: Jabra Link 380"
     ))
     // The icons carry the role on screen; VoiceOver still hears it spoken.
     #expect(notice([jabraOut, mic]) == NoticeContent(
         lines: [
-            .init(icon: "headphones", text: "Jabra Link 380"),
-            .init(icon: "mic", text: "MacBook Pro Microphone"),
+            .init(icon: "headphones", text: "Output · Jabra Link 380"),
+            .init(icon: "mic", text: "Microphone · MacBook Pro Microphone"),
         ],
         announcement: "Output: Jabra Link 380, Microphone: MacBook Pro Microphone"
     ))

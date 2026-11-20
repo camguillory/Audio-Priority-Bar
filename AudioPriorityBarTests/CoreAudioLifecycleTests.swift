@@ -9,13 +9,16 @@ private final class ListenerLog {
     var systemRemoves: [SystemListener] = []
     var deviceAdds: [DeviceListener] = []
     var deviceRemoves: [DeviceListener] = []
+    var failingDevice: DeviceListener?
     var failingSystem: SystemListener?
 }
 
 @MainActor
 private func lifecycle(
     log: ListenerLog,
-    deviceIDs: @escaping () -> [AudioObjectID]
+    deviceUID: @escaping (AudioObjectID) -> String? = { String($0) },
+    processIDs: (() -> [AudioObjectID])? = nil,
+    deviceIDs: @escaping () -> [AudioObjectID]?
 ) -> CoreAudioListenerLifecycle {
     CoreAudioListenerLifecycle(
         addSystem: {
@@ -24,9 +27,11 @@ private func lifecycle(
         },
         removeSystem: { log.systemRemoves.append($0) },
         deviceIDs: deviceIDs,
+        deviceUID: deviceUID,
+        processIDs: processIDs,
         addDevice: {
             log.deviceAdds.append($0)
-            return true
+            return $0 != log.failingDevice
         },
         removeDevice: { log.deviceRemoves.append($0) }
     )
@@ -128,7 +133,7 @@ func listenerStartRegistersMuteVolumeAndActivityPerDevice() {
     let sut = lifecycle(log: log, deviceIDs: { [10, 20] })
 
     #expect(sut.start())
-    #expect(log.systemAdds == [.devices, .defaultInput, .defaultOutput])
+    #expect(log.systemAdds == [.devices, .defaultInput, .defaultOutput, .serviceRestarted])
     let expected: Set<DeviceListener> = [
         .mute(id: 10, role: .output, element: kAudioObjectPropertyElementMain),
         .mute(id: 10, role: .output, element: 1),
@@ -152,10 +157,16 @@ func listenerStartRegistersMuteVolumeAndActivityPerDevice() {
 @MainActor
 func recycledDeviceIDStillForcesRemoveThenReadd() {
     let log = ListenerLog()
-    let sut = lifecycle(log: log, deviceIDs: { [42] })
+    var uid = "old device"
+    let sut = lifecycle(log: log, deviceUID: { _ in uid }, deviceIDs: { [42] })
     #expect(sut.start())
     log.deviceAdds.removeAll()
 
+    sut.rebuildDeviceListeners()
+    #expect(log.deviceAdds.isEmpty)
+    #expect(log.deviceRemoves.isEmpty)
+
+    uid = "replacement device"
     sut.rebuildDeviceListeners()
 
     #expect(log.deviceRemoves.count == 7)
@@ -174,7 +185,7 @@ func stopIsIdempotentAndAllowsRestart() {
     sut.stop()
 
     #expect(log.deviceRemoves.count == 7)
-    #expect(log.systemRemoves == [.devices, .defaultInput, .defaultOutput])
+    #expect(log.systemRemoves == [.devices, .defaultInput, .defaultOutput, .serviceRestarted])
     #expect(!sut.isListening)
     #expect(sut.start())
 }
@@ -196,4 +207,69 @@ func callbackGateDropsEventsAfterStop() {
     gate.send(.muteOrVolumeChanged)
 
     #expect(counter.read() == 1)
+}
+
+@Test
+@MainActor
+func processChangesUpdateOnlyAffectedRecordingListeners() {
+    let log = ListenerLog()
+    var processes: [AudioObjectID] = [10]
+    let sut = lifecycle(log: log, processIDs: { processes }, deviceIDs: { [42] })
+    #expect(sut.start())
+    #expect(log.systemAdds.contains(.processList))
+    log.deviceAdds = []
+    processes = [20]
+    sut.rebuildProcessListeners()
+    #expect(Set(log.deviceRemoves) == [.processInputRunning(id: 10), .processInputDevices(id: 10)])
+    #expect(Set(log.deviceAdds) == [.processInputRunning(id: 20), .processInputDevices(id: 20)])
+    sut.stop()
+    log.deviceAdds = []
+    #expect(sut.start())
+    #expect(log.deviceAdds.count == 9)
+}
+
+@Test
+@MainActor
+func restartRebindsSystemAndDeviceRegistrationsEvenWithIdenticalIDs() {
+    let log = ListenerLog()
+    let sut = lifecycle(log: log, deviceIDs: { [42] })
+    #expect(sut.start())
+    let expectedSystem = log.systemAdds
+    let expectedDevices = log.deviceAdds
+    log.systemAdds = []
+    log.deviceAdds = []
+    #expect(sut.restart())
+    #expect(log.systemAdds == expectedSystem)
+    #expect(log.systemRemoves == expectedSystem)
+    #expect(log.deviceAdds == expectedDevices)
+    #expect(log.deviceRemoves == expectedDevices)
+}
+
+@Test
+@MainActor
+func stableDevicesRetryOnlyMissingListenerRegistrations() {
+    let log = ListenerLog()
+    log.failingDevice = .volume(id: 42)
+    let sut = lifecycle(log: log, deviceIDs: { [42] })
+    #expect(sut.start())
+    log.failingDevice = nil
+    log.deviceAdds = []
+    sut.rebuildDeviceListeners()
+    #expect(log.deviceAdds == [.volume(id: 42)])
+    #expect(log.deviceRemoves.isEmpty)
+}
+
+@Test
+@MainActor
+func unavailableHALInventoryKeepsListenersUntilDevicesActuallyDisconnect() {
+    let log = ListenerLog()
+    var ids: [AudioObjectID]? = [42]
+    let sut = lifecycle(log: log, deviceIDs: { ids })
+    #expect(sut.start())
+    ids = nil
+    sut.rebuildDeviceListeners()
+    #expect(log.deviceRemoves.isEmpty)
+    ids = []
+    sut.rebuildDeviceListeners()
+    #expect(log.deviceRemoves.count == 7)
 }

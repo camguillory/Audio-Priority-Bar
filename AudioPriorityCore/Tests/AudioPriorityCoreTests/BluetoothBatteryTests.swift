@@ -1,3 +1,4 @@
+import CoreAudio
 import Foundation
 import Testing
 @testable import AudioPriorityCore
@@ -63,7 +64,7 @@ func batteryLevelsMatchCoreAudioBluetoothUIDs() {
 @Test
 func batteryLevelsFallBackToNameAndIgnoreOtherDevices() {
     let report = BluetoothBattery.parse(sample)
-    let byName = AudioDevice(platformID: 1, uid: "odd-uid", name: "AirPods Max", role: .output)
+    let byName = AudioDevice(platformID: 1, uid: "odd-uid", name: "AirPods Max", role: .output, transportType: kAudioDeviceTransportTypeBluetoothLE)
     let builtIn = AudioDevice(
         platformID: 2, uid: "BuiltInSpeakerDevice", name: "MacBook Pro Speakers", role: .output
     )
@@ -140,7 +141,7 @@ func pairedSpeakersAndHeadphonesBecomeOutputsWithCoreAudioUIDs() throws {
 
     let budsMic = AudioDevice(platformID: 0, uid: "AC-80-FB-D0-0C-82:input", name: "Buds", role: .input)
     #expect(try #require(report.bluetoothDevice(for: budsMic)).name == "Galaxy Buds FE")
-    let oddUID = AudioDevice(platformID: 0, uid: "le-audio-1", name: "Galaxy Buds FE", role: .output)
+    let oddUID = AudioDevice(platformID: 0, uid: "le-audio-1", name: "Galaxy Buds FE", role: .output, transportType: kAudioDeviceTransportTypeBluetoothLE)
     #expect(report.bluetoothDevice(for: oddUID)?.address == "AC-80-FB-D0-0C-82")
     let echo = AudioDevice(platformID: 1, uid: "AC-41-6A-C5-C3-F1:output", name: "Echo", role: .output)
     #expect(BluetoothBattery.address(of: echo) == "AC-41-6A-C5-C3-F1")
@@ -152,4 +153,58 @@ func pairedSpeakersAndHeadphonesBecomeOutputsWithCoreAudioUIDs() throws {
         role: .output
     )
     #expect(BluetoothBattery.address(of: usb) == nil)
+}
+
+@Test
+func bluetoothIdentityNeedsAnExactAddressOrUniqueBluetoothName() {
+    let first = PairedBluetoothDevice(name: "Studio", address: "AA-BB-CC-DD-EE-01", category: .speaker)
+    let second = PairedBluetoothDevice(name: "Studio", address: "AA-BB-CC-DD-EE-02", category: .speaker)
+    let report = BluetoothBatteryReport(byName: ["Studio": BatteryLevels(main: 50)], pairedAudio: [first, second])
+    let usb = AudioDevice(platformID: 2, uid: "usb-mic", name: "Studio", role: .input,
+                          transportType: kAudioDeviceTransportTypeUSB)
+    let unknown = AudioDevice(platformID: 3, uid: "le-audio", name: "Studio", role: .output,
+                              transportType: kAudioDeviceTransportTypeBluetoothLE)
+    let unpaired = AudioDevice(platformID: 4, uid: "aa-bb-cc-dd-ee-03:output", name: "Studio", role: .output,
+                               transportType: kAudioDeviceTransportTypeBluetooth)
+    #expect(report.bluetoothDevice(for: first.device) == first)
+    #expect(report.bluetoothDevice(for: unpaired) == nil)
+    #expect(report.bluetoothDevice(for: unknown) == nil)
+    #expect(report.levels(for: unknown) == nil)
+    #expect(report.levels(for: unpaired) == nil)
+    let unique = BluetoothBatteryReport(byName: report.byName, pairedAudio: [first])
+    #expect(unique.bluetoothDevice(for: usb) == nil)
+    #expect(unique.levels(for: usb) == nil)
+    #expect(unique.bluetoothDevice(for: unknown) == first)
+}
+
+@Test
+@MainActor
+func panelRefreshReusesRecentBluetoothReportAndTopologyForcesARead() async {
+    actor Reads {
+        var count = 0
+        func next() -> Data {
+            count += 1
+            return Data("""
+            {"SPBluetoothDataType":[{"device_connected":[{"AirPods":{"device_vendorID":"0x004C","device_batteryLevelMain":"\(count)%"}}]}]}
+            """.utf8)
+        }
+    }
+    let reads = Reads()
+    var now: TimeInterval = 100
+    let battery = BluetoothBatteryMonitor(read: { await reads.next() }, uptime: { now })
+    func waitForReport(_ expected: Int) async {
+        for _ in 0..<1000 where battery.report.byName["AirPods"]?.main != expected { await Task.yield() }
+        #expect(battery.report.byName["AirPods"]?.main == expected)
+    }
+    battery.refreshIfNeeded()
+    battery.refreshIfNeeded()
+    await waitForReport(1)
+    now += 10
+    battery.refreshIfNeeded()
+    battery.refresh()
+    await waitForReport(2)
+    now += 30
+    battery.refreshIfNeeded()
+    await waitForReport(3)
+    #expect(await reads.count == 3)
 }

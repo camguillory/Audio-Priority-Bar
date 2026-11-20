@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, develop]
+    branches: ['**']
   pull_request:
     branches: [main, develop]
 
@@ -32,4 +32,15 @@ jobs:
             CODE_SIGNING_ALLOWED=NO
 
       - name: Package release build
-        run: scripts/package-release.sh
+        env:
+          DERIVED_DATA: ${{ runner.temp }}/audio-priority-build
+          OUTPUT_DIR: ${{ runner.temp }}/audio-priority-release
+        run: |
+          mkdir -p "$DERIVED_DATA" "$OUTPUT_DIR"
+          touch "$DERIVED_DATA/keep" "$OUTPUT_DIR/keep"
+          scripts/package-release.sh --unsigned
+          test -f "$DERIVED_DATA/keep" && test -f "$OUTPUT_DIR/keep"
+          test -s "$OUTPUT_DIR/AudioPriorityBar.zip"
+          test ! -e "$OUTPUT_DIR/appcast.xml"
+          test "$(wc -l < "$OUTPUT_DIR/.audio-priority-bar-artifacts")" -eq 2
+          (cd "$OUTPUT_DIR" && shasum -a 256 -c AudioPriorityBar.zip.sha256)
