@@ -168,7 +168,7 @@ func listenerStartRegistersMuteVolumeAndActivityPerDevice() {
     let sut = lifecycle(log: log, deviceIDs: { [10, 20] })
 
     #expect(sut.start())
-    #expect(log.systemAdds == [.devices, .defaultInput, .defaultOutput])
+    #expect(log.systemAdds == [.devices, .defaultInput, .defaultOutput, .serviceRestarted])
     let expected: Set<DeviceListener> = [
         .mute(id: 10, role: .output, element: kAudioObjectPropertyElementMain),
         .mute(id: 10, role: .output, element: 1),
@@ -214,7 +214,7 @@ func stopIsIdempotentAndAllowsRestart() {
     sut.stop()
 
     #expect(log.deviceRemoves.count == 7)
-    #expect(log.systemRemoves == [.devices, .defaultInput, .defaultOutput])
+    #expect(log.systemRemoves == [.devices, .defaultInput, .defaultOutput, .serviceRestarted])
     #expect(!sut.isListening)
     #expect(sut.start())
 }
@@ -236,4 +236,21 @@ func callbackGateDropsEventsAfterStop() {
     gate.send(.muteOrVolumeChanged)
 
     #expect(counter.read() == 1)
+}
+
+@Test
+@MainActor
+func restartRebindsSystemAndDeviceRegistrationsEvenWithIdenticalIDs() {
+    let log = ListenerLog()
+    let sut = lifecycle(log: log, deviceIDs: { [42] })
+    #expect(sut.start())
+    let expectedSystem = log.systemAdds
+    let expectedDevices = log.deviceAdds
+    log.systemAdds = []
+    log.deviceAdds = []
+    #expect(sut.restart())
+    #expect(log.systemAdds == expectedSystem)
+    #expect(log.systemRemoves == expectedSystem)
+    #expect(Set(log.deviceAdds) == Set(expectedDevices))
+    #expect(Set(log.deviceRemoves) == Set(expectedDevices))
 }

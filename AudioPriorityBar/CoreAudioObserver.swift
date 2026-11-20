@@ -8,6 +8,9 @@ final class CoreAudioObserver {
     var onDefaultChanged: ((DeviceRole) -> Void)?
     var onMuteOrVolumeChanged: (() -> Void)?
 
+    private var retryTask: Task<Void, Never>?
+    private var shouldListen = false
+
     private lazy var callbackGate = CoreAudioCallbackGate { [weak self] event in
         Task { @MainActor [weak self] in
             self?.handle(event)
@@ -24,15 +27,52 @@ final class CoreAudioObserver {
 
     @discardableResult
     func startListening() -> Bool {
+        shouldListen = true
         callbackGate.setActive(true)
         let started = listeners.start()
-        if !started { callbackGate.setActive(false) }
+        if started {
+            retryTask?.cancel()
+            retryTask = nil
+        } else {
+            scheduleRetry()
+        }
         return started
     }
 
     func stopListening() {
-        listeners.stop()
+        shouldListen = false
+        retryTask?.cancel()
+        retryTask = nil
         callbackGate.setActive(false)
+        listeners.stop()
+    }
+
+    private func rebindListeners() {
+        guard shouldListen else { return }
+        if listeners.restart() {
+            retryTask?.cancel()
+            retryTask = nil
+            onDevicesChanged?()
+        } else {
+            scheduleRetry()
+        }
+    }
+
+    private func scheduleRetry() {
+        guard retryTask == nil else { return }
+        retryTask = Task { @MainActor [weak self] in
+            for seconds in [1, 2, 4, 8, 16] {
+                do { try await Task.sleep(for: .seconds(seconds)) } catch { return }
+                guard let self, shouldListen else { return }
+                if listeners.start() {
+                    retryTask = nil
+                    onDevicesChanged?()
+                    return
+                }
+            }
+            self?.retryTask = nil
+            DebugLog.shared.write("CoreAudio monitoring is unavailable after retrying")
+        }
     }
 
     private func handle(_ event: CoreAudioEvent) {
@@ -41,6 +81,8 @@ final class CoreAudioObserver {
         case .devicesChanged:
             onDevicesChanged?()
             listeners.rebuildDeviceListeners()
+        case .serviceRestarted:
+            rebindListeners()
         case let .defaultChanged(role):
             onDefaultChanged?(role)
         case .muteOrVolumeChanged:
@@ -100,6 +142,7 @@ final class CoreAudioObserver {
         let selector: AudioObjectPropertySelector = switch listener {
         case .devices: kAudioHardwarePropertyDevices
         case .defaultInput: kAudioHardwarePropertyDefaultInputDevice
+        case .serviceRestarted: kAudioHardwarePropertyServiceRestarted
         case .defaultOutput: kAudioHardwarePropertyDefaultOutputDevice
         }
         return AudioObjectPropertyAddress(
@@ -113,6 +156,7 @@ final class CoreAudioObserver {
         for listener: SystemListener
     ) -> AudioObjectPropertyListenerProc {
         switch listener {
+        case .serviceRestarted: Self.serviceRestartProc
         case .devices: Self.devicesProc
         case .defaultInput: Self.defaultInputProc
         case .defaultOutput: Self.defaultOutputProc
@@ -163,6 +207,12 @@ final class CoreAudioObserver {
         context.map {
             Unmanaged<CoreAudioCallbackGate>.fromOpaque($0).takeUnretainedValue()
         }
+    }
+
+    private static let serviceRestartProc: AudioObjectPropertyListenerProc = {
+        _, _, _, context in
+        gate(context)?.send(.serviceRestarted)
+        return noErr
     }
 
     private static let devicesProc: AudioObjectPropertyListenerProc = {
