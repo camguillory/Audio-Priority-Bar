@@ -49,6 +49,8 @@ struct DeviceDrag {
 /// opening a gap would move the rows the target is calculated from.
 struct PanelLayout {
     static let space = "deviceLists"
+    static let panelWidth: CGFloat = 380
+    static let rowOverhang: CGFloat = 8
     /// Room above a section for its separator, which sits `separatorInset`
     /// below the previous section, leaving the rest as padding under it.
     static let sectionGap: CGFloat = 16
@@ -178,6 +180,38 @@ struct PanelLayout {
             + sectionOffset(for: target.section, drag: drag)
             + CGFloat(targetIndex) * DeviceRowMetrics.pitch
         return CGSize(width: 0, height: targetY - sourceY)
+    }
+
+    /// Whether `point` in `PanelLayout.space` lies inside row `index` of
+    /// `section` at rest, ignoring any in-flight spring offset.
+    func containsRow(
+        at index: Int,
+        in section: DeviceSection,
+        point: CGPoint
+    ) -> Bool {
+        let inset = Self.horizontalPadding - Self.rowOverhang
+        guard (inset...(Self.panelWidth - inset)).contains(point.x),
+              let entry = sections.first(where: { $0.section == section }),
+              index >= 0, index < entry.count,
+              let top = contentTop(of: section) else {
+            return false
+        }
+        let rowTop = top + CGFloat(index) * DeviceRowMetrics.pitch
+        return (rowTop...(rowTop + DeviceRowMetrics.height)).contains(point.y)
+    }
+
+    /// The resting row under `point` in `PanelLayout.space`, if any.
+    func row(at point: CGPoint) -> DropTarget? {
+        for entry in sections {
+            for index in 0..<entry.count where containsRow(
+                at: index,
+                in: entry.section,
+                point: point
+            ) {
+                return DropTarget(section: entry.section, index: index)
+            }
+        }
+        return nil
     }
 
     /// The list and row gap under `point`, before applying device-role rules.

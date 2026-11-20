@@ -17,6 +17,9 @@ struct PanelView: View {
 
     /// Held here rather than per section so a row can be dragged between lists.
     @State private var drag: DeviceDrag?
+    /// Held once for the whole panel so at most one row can be hovered at a time.
+    @State private var hoveredDeviceID: String?
+    @State private var listFrame: CGRect = .zero
     /// The id of the device whose row should show a highlight because the
     /// selection override on its paired device's row is hovered, held here
     /// since the two rows can be in different sections.
@@ -153,7 +156,9 @@ struct PanelView: View {
                             currentID: model.currentOutputID,
                             layout: layout,
                             drag: $drag,
-                            highlightedPairedDeviceID: $highlightedPairedDeviceID
+                            hoveredDeviceID: $hoveredDeviceID,
+                            highlightedPairedDeviceID: $highlightedPairedDeviceID,
+                            onDropFinished: finishDrag
                         )
                         .zIndex(drag?.section == .speaker ? 1 : 0)
                         DeviceSectionView(
@@ -166,7 +171,9 @@ struct PanelView: View {
                             currentID: model.currentOutputID,
                             layout: layout,
                             drag: $drag,
-                            highlightedPairedDeviceID: $highlightedPairedDeviceID
+                            hoveredDeviceID: $hoveredDeviceID,
+                            highlightedPairedDeviceID: $highlightedPairedDeviceID,
+                            onDropFinished: finishDrag
                         )
                         .zIndex(drag?.section == .headphone ? 1 : 0)
                         DeviceSectionView(
@@ -179,7 +186,9 @@ struct PanelView: View {
                             currentID: model.currentInputID,
                             layout: layout,
                             drag: $drag,
-                            highlightedPairedDeviceID: $highlightedPairedDeviceID
+                            hoveredDeviceID: $hoveredDeviceID,
+                            highlightedPairedDeviceID: $highlightedPairedDeviceID,
+                            onDropFinished: finishDrag
                         )
                         .zIndex(drag?.section == .input ? 1 : 0)
                     }
@@ -189,6 +198,9 @@ struct PanelView: View {
                     .coordinateSpace(name: PanelLayout.space)
                 }
                 .frame(height: listHeight)
+                .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: {
+                    listFrame = $0
+                }
                 .onChange(of: model.keyboardItem) { _, item in
                     if case .device(let id)? = item { proxy.scrollTo(id) }
                 }
@@ -197,10 +209,13 @@ struct PanelView: View {
             Divider().padding(.horizontal, 12)
             Footer(model: model, showSettings: showSettings)
         }
-        .frame(width: 380)
+        .frame(width: PanelLayout.panelWidth)
         .onChange(of: renderedDeviceIDs) { _, ids in
             if let drag, !ids.contains(drag.device.id) {
                 self.drag = nil
+            }
+            if let hoveredDeviceID, !ids.contains(hoveredDeviceID) {
+                self.hoveredDeviceID = nil
             }
             // A row removed while hovered never reports the pointer leaving, so
             // its partner's highlight would outlive both rows.
@@ -222,6 +237,7 @@ struct PanelView: View {
                 return
             }
             drag = nil
+            hoveredDeviceID = nil
         }
         .modifier(PanelBackground())
         .fixedSize(horizontal: false, vertical: true)
@@ -299,6 +315,32 @@ struct PanelView: View {
         case .neverAutoSelect: "never auto-selected"
         }
         return "Skipping \(skipped.device.name): \(reason)"
+    }
+
+    private func finishDrag(at point: CGPoint) {
+        guard let window = NSApp.keyWindow,
+              let content = window.contentView else {
+            hoveredDeviceID = nil
+            return
+        }
+        let raw = content.convert(window.mouseLocationOutsideOfEventStream, from: nil)
+        let inPanel = CGPoint(
+            x: raw.x,
+            y: content.isFlipped ? raw.y : content.bounds.height - raw.y
+        )
+        guard listFrame.contains(inPanel),
+              let hit = layout.row(at: point) else {
+            hoveredDeviceID = nil
+            return
+        }
+        let devices = switch hit.section {
+        case .speaker: model.speakerDevices
+        case .headphone: model.headphoneDevices
+        case .input: model.inputDevices
+        }
+        hoveredDeviceID = devices.indices.contains(hit.index)
+            ? devices[hit.index].id
+            : nil
     }
 }
 

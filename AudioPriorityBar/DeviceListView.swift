@@ -50,7 +50,9 @@ struct DeviceSectionView: View {
     let currentID: UInt32?
     let layout: PanelLayout
     @Binding var drag: DeviceDrag?
+    @Binding var hoveredDeviceID: String?
     @Binding var highlightedPairedDeviceID: String?
+    var onDropFinished: (CGPoint) -> Void = { _ in }
 
     private var category: OutputCategory? { section.category }
 
@@ -115,23 +117,27 @@ struct DeviceSectionView: View {
                     DeviceRow(
                         model: model,
                         device: device,
+                        section: section,
                         index: index,
                         count: devices.count,
+                        layout: layout,
                         isSelected: device.isConnected
                             && currentID == device.platformID,
                         category: category,
                         isLifted: lifted,
+                        isDragging: drag != nil,
                         select: { select(device) },
                         move: { target in move(index, target) },
+                        hoveredDeviceID: $hoveredDeviceID,
                         highlightedPairedDeviceID: $highlightedPairedDeviceID
                     )
                     .overlay(alignment: .topTrailing) {
                         if lifted, drag?.isForbidden == true {
                             Image(systemName: "nosign")
-                                .font(.system(size: 16, weight: .semibold))
-                                .foregroundStyle(.red)
-                                .padding(2)
-                                .background(.regularMaterial, in: Circle())
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(.white)
+                                .padding(3)
+                                .background(.red, in: Circle())
                                 .offset(x: 5, y: -5)
                                 .accessibilityHidden(true)
                                 .transition(.scale.combined(with: .opacity))
@@ -188,6 +194,7 @@ struct DeviceSectionView: View {
             coordinateSpace: .named(PanelLayout.space)
         )
         .onChanged { value in
+            if drag == nil { hoveredDeviceID = nil }
             var session = drag ?? DeviceDrag(
                 device: device,
                 section: section,
@@ -199,7 +206,7 @@ struct DeviceSectionView: View {
             )
             drag = session
         }
-        .onEnded { _ in
+        .onEnded { value in
             if let session = drag, let target = session.target {
                 DebugLog.shared.write("dropped \(session.device.logName) at position \(target.index + 1) in \(target.section)")
                 _ = model.dropDevice(
@@ -211,6 +218,7 @@ struct DeviceSectionView: View {
                 DebugLog.shared.write("dragged \(session.device.logName) with no drop\(session.isForbidden ? ", over a list it cannot join" : "")")
             }
             drag = nil
+            onDropFinished(value.location)
         }
     }
 
