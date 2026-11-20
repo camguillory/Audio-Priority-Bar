@@ -3,6 +3,7 @@ import AudioPriorityCore
 import AudioToolbox
 import CoreAudio
 import Foundation
+import IOKit
 
 enum CoreAudioProperties {
     private static let system = AudioObjectID(kAudioObjectSystemObject)
@@ -252,7 +253,7 @@ enum CoreAudioProperties {
             return nil
         }
         let transport = transport(id)
-        return AudioDevice(
+        var device = AudioDevice(
             platformID: id,
             uid: uid,
             name: name,
@@ -266,6 +267,24 @@ enum CoreAudioProperties {
             isDisplayOutput: role == .output && Self.isDisplayTransport(transport),
             transportType: transport
         )
+        if transport == kAudioDeviceTransportTypeUSB, let location = device.possibleUSBLocation {
+            device.usesUSBLocation = isSeriallessUSBDevice(uid: uid, at: location)
+        }
+        return device
+    }
+
+    private static func isSeriallessUSBDevice(uid: String, at location: UInt32) -> Bool {
+        let parts = uid.components(separatedBy: ":")
+        guard parts.count == 5, let match = IOServiceMatching("IOUSBHostDevice") as NSMutableDictionary?
+        else { return false }
+        match[kIOPropertyMatchKey] = [
+            "locationID": location, "iSerialNumber": 0,
+            "USB Vendor Name": parts[1], "USB Product Name": parts[2],
+        ] as [String: Any]
+        let service = IOServiceGetMatchingService(kIOMainPortDefault, match)
+        guard service != IO_OBJECT_NULL else { return false }
+        IOObjectRelease(service)
+        return true
     }
 
     /// The category a device claims for itself, or nil when it claims nothing
