@@ -99,7 +99,7 @@ struct SettingsView: View {
     @State private var logRevision = 0
 
     private static let homePageURL = URL(
-        string: "https://github.com/anazaryan-krisp/Audio-Priority-Bar/"
+        string: "https://github.com/camguillory/Audio-Priority-Bar/"
     )!
 
     private var version: String {

@@ -43,9 +43,13 @@
 
 ## Install
 
-This fork runs on macOS 14 Sonoma or later on Apple silicon and Intel. Build the branch you want using the instructions below, then copy `dist/AudioPriorityBar.app` to `/Applications`. [Build from source](#build-from-source)
+Audio Priority Bar runs on macOS 14 Sonoma or later on Apple silicon and Intel.
 
-When this fork publishes a release, you can download `AudioPriorityBar.zip` and its `.sha256` file together. Verify the archive with `shasum -a 256 -c AudioPriorityBar.zip.sha256` in the download directory before unzipping it. [Fork releases](https://github.com/anazaryan-krisp/Audio-Priority-Bar/releases)
+```bash
+brew install --cask camguillory/tap/audio-priority-bar
+```
+
+You can also download the ZIP, unzip it, and move `AudioPriorityBar.app` to `/Applications`. To verify the download, save the accompanying `.sha256` file in the same folder and run `shasum -a 256 -c AudioPriorityBar.zip.sha256` before unzipping. [Latest release](https://github.com/camguillory/Audio-Priority-Bar/releases/latest)
 
 Local builds are unsigned and use manual upgrades. When macOS requests first-launch approval, open **System Settings > Privacy & Security** and choose **Open Anyway**.
 
@@ -288,7 +292,7 @@ Bluetooth addresses, serial numbers and display IDs with short tags.
 ### Build from source
 
 ```bash
-git clone https://github.com/anazaryan-krisp/Audio-Priority-Bar.git
+git clone https://github.com/camguillory/Audio-Priority-Bar.git
 cd Audio-Priority-Bar
 ./build.sh
 ```

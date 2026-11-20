@@ -28,4 +28,4 @@ names in device names, Bluetooth addresses, serial numbers and display IDs
 with short tags. A device you renamed without a possessive, such as "Alex
 Headphones", keeps its name.
 
-Questions: [open an issue](https://github.com/anazaryan-krisp/Audio-Priority-Bar/issues).
+Questions: [open an issue](https://github.com/camguillory/Audio-Priority-Bar/issues).
