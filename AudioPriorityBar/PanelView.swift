@@ -96,6 +96,22 @@ struct PanelView: View {
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
                 }
+                if let latest = model.recentSwitches.first {
+                    VStack(alignment: .leading, spacing: 1) {
+                        HStack(spacing: 6) {
+                            Text(latest.role == .input ? "Last microphone switch" : "Last output switch")
+                                .fontWeight(.semibold)
+                            Text(latest.date, format: .dateTime.hour().minute())
+                        }
+                        .foregroundStyle(.secondary)
+                        Text("\(latest.device) · \(latest.reason)")
+                            .lineLimit(3)
+                    }
+                    .font(.caption)
+                    .padding(.top, 4)
+                    .help(latest.description)
+                    .accessibilityElement(children: .combine)
+                }
             }
             .padding(.horizontal, 12)
             .padding(.top, 10)
@@ -294,11 +310,7 @@ struct PanelView: View {
               skipped.device.id != current.id else {
             return nil
         }
-        let reason = switch skipped.reason {
-        case .off: "headset off"
-        case .neverAutoSelect: "never auto-selected"
-        }
-        return "Skipping \(skipped.device.name): \(reason)"
+        return "Skipping \(skipped.device.name): \(skipped.reason.label)"
     }
 }
 

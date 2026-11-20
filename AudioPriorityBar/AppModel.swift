@@ -37,6 +37,13 @@ struct LinkOperations {
 enum OutputSkipReason: Equatable {
     case off
     case neverAutoSelect
+
+    var label: String {
+        switch self {
+        case .off: "headset off"
+        case .neverAutoSelect: "never auto-selected"
+        }
+    }
 }
 
 struct SkippedOutput: Equatable {
@@ -1250,19 +1257,22 @@ final class AppModel {
         let category = activeOutputCategory
         if let first = automaticTarget(for: role) {
             if first.platformID != (role == .input ? currentInputID : currentOutputID) {
-                DebugLog.shared.write("automatic \(role.rawValue): \(first.logName)\(logReason(first))")
+                DebugLog.shared.write("automatic \(role.rawValue): \(first.logName), \(automaticReason(for: first, forDebugLog: true))")
             }
             select(first, automatically: true)
         }
         if role == .output { followOutputCategory(from: category) }
     }
 
-    /// Why the list chose `device`, when it was not simply the first one.
-    private func logReason(_ device: AudioDevice) -> String {
-        if keptPicks[device.role] == device.uid { return ", the kept pick" }
+    private func automaticReason(for device: AudioDevice, forDebugLog: Bool = false) -> String {
+        if keptPicks[device.role] == device.uid { return "kept your selection" }
+        if device.role == .input, preferredPairedMicrophone?.id == device.id {
+            return "paired with the selected output"
+        }
         guard device.role == .output,
-              let skipped = automaticOutputDecision.skipped else { return "" }
-        return ", skipping \(skipped.device.logName) (\(skipped.reason))"
+              let skipped = automaticOutputDecision.skipped else { return "selected by priority" }
+        let name = forDebugLog ? skipped.device.logName : "\"\(skipped.device.name)\""
+        return "skipped \(name) (\(skipped.reason.label))"
     }
 
     /// Once the output has moved to the other category, moves the microphone
@@ -1284,14 +1294,7 @@ final class AppModel {
                let kept = inputDevices.first(where: { $0.uid == uid && $0.isConnected }) {
                 return kept
             }
-            if let output = currentOutputDevice,
-               automaticOutputDecision.target?.id == output.id,
-               selectsHalvesTogether(output),
-               let paired = pairedDevice(for: output),
-               !store.isNeverUse(paired),
-               link.isUsable(paired) {
-                return paired
-            }
+            if let paired = preferredPairedMicrophone { return paired }
             // The panel may be showing the other category's order.
             return store.firstSelectable(
                 in: store.sorted(inputDevices, microphonesFor: activeOutputCategory),
@@ -1299,6 +1302,16 @@ final class AppModel {
             )
         }
         return outputDecision(honoringPicks: honoringPicks).target
+    }
+
+    private var preferredPairedMicrophone: AudioDevice? {
+        guard let output = currentOutputDevice,
+              automaticOutputDecision.target?.id == output.id,
+              selectsHalvesTogether(output),
+              let paired = pairedDevice(for: output),
+              !store.isNeverUse(paired),
+              link.isUsable(paired) else { return nil }
+        return paired
     }
 
     @discardableResult
@@ -1315,7 +1328,7 @@ final class AppModel {
             }
             DebugLog.shared.write("set the \(device.role.rawValue) to \(device.logName)")
             recordSwitch(device.role, device.name, switchReason
-                ?? (automatically ? "automatic\(logReason(device))" : "picked"))
+                ?? (automatically ? automaticReason(for: device) : "picked"))
             if device.role == .input {
                 currentInputID = device.platformID
             } else {
@@ -1347,7 +1360,8 @@ final class AppModel {
         guard partner.platformID != partnerCurrentID else { return }
         guard !automatically
             || (!store.isNeverUse(partner) && link.isUsable(partner)) else { return }
-        withSwitchReason("with its other half") { select(partner) }
+        let reason = device.role == .output ? "paired with the selected output" : "paired with the selected microphone"
+        withSwitchReason(reason) { select(partner) }
     }
 
     func withSwitchReason(_ reason: String, _ body: () -> Void) {

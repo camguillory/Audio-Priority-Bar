@@ -2010,13 +2010,15 @@ func recentSwitchesSayWhyNewestFirstAndKeepTwenty() {
     let headphones = output(2, "headphones", "AirPods Pro")
     let audio = FakeAudio()
     audio.catalog = [speaker]
+    audio.defaults[.output] = speaker.platformID
     let model = testModel(audio: audio, defaults: defaults)
     model.start()
+    #expect(model.recentSwitches.isEmpty)
 
     audio.catalog = [speaker, headphones]
     model.handleDevicesChanged()
     #expect(model.recentSwitches.first?.device == "AirPods Pro")
-    #expect(model.recentSwitches.first?.reason == "automatic")
+    #expect(model.recentSwitches.first?.reason == "selected by priority")
 
     model.selectManually(speaker)
     #expect(model.recentSwitches.first?.device == "MacBook Air Speakers")
@@ -2062,7 +2064,7 @@ func diagnosticsTagTheOwnerAndTheBluetoothAddress() {
 
     let diagnostics = model.diagnostics
     #expect(diagnostics.contains("\"owner1’s AirPods Pro\" [bt1:output]"))
-    #expect(diagnostics.contains("Output: owner1’s AirPods Pro, automatic"))
+    #expect(diagnostics.contains("Output: owner1’s AirPods Pro, selected by priority"))
     #expect(!diagnostics.contains("Alex"))
     #expect(!diagnostics.contains("AA-11"))
 }

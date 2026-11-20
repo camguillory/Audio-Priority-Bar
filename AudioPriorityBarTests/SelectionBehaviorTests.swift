@@ -64,6 +64,7 @@ func automaticDecisionExplainsPoweredOffHeadphone() {
         device: jabra,
         reason: .off
     ))
+    #expect(model.recentSwitches.first?.reason == "skipped \"Jabra Link 380\" (headset off)")
 }
 
 @Test
@@ -383,6 +384,8 @@ func manualSelectionPairsPhysicalOutputAndInput() {
     #expect(model.currentOutputID == paired.output.platformID)
     #expect(model.currentInputID == paired.input.platformID)
     #expect(audio.selections.map(\.0) == [.output, .input])
+    #expect(model.recentSwitches.first?.role == .input)
+    #expect(model.recentSwitches.first?.reason == "paired with the selected output")
 }
 
 @Test

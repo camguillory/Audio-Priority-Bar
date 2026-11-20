@@ -94,9 +94,10 @@ bundle identifier may require re-approving Input Monitoring or Open at Login.
 ## Use
 
 Click the icon in the menu bar to open the panel. Drag devices to rank them;
-the active one is highlighted. A device you pick by hand stays until it
-disconnects or a device your list would pick connects. Turn automatic
-switching off to keep it.
+the active one is highlighted. After an output or microphone switch, the panel
+shows which device was selected, when, and why. A device you pick by hand
+stays until it disconnects or a device your list would pick connects. Turn
+automatic switching off to keep it.
 
 <p align="center">
   <picture>
