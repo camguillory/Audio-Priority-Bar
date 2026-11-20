@@ -3,6 +3,7 @@ import AudioPriorityCore
 import AudioToolbox
 import CoreAudio
 import Foundation
+import IOKit
 
 enum CoreAudioProperties {
     private static let system = AudioObjectID(kAudioObjectSystemObject)
@@ -252,7 +253,7 @@ enum CoreAudioProperties {
             return nil
         }
         let transport = transport(id)
-        return AudioDevice(
+        var device = AudioDevice(
             platformID: id,
             uid: uid,
             name: name,
@@ -266,6 +267,31 @@ enum CoreAudioProperties {
             isDisplayOutput: role == .output && Self.isDisplayTransport(transport),
             transportType: transport
         )
+        if transport == kAudioDeviceTransportTypeUSB, let location = device.possibleUSBLocation {
+            device.usesUSBLocation = isSeriallessUSBDevice(uid: uid, at: location)
+        }
+        return device
+    }
+
+    /// The registry can lag behind the audio driver. An absent descriptor
+    /// leaves identity unresolved until a later enumeration.
+    private static func isSeriallessUSBDevice(uid: String, at location: UInt32) -> Bool? {
+        let parts = uid.components(separatedBy: ":")
+        guard parts.count == 5 else { return nil }
+        func matches(_ properties: [String: Any]) -> Bool {
+            guard let request = IOServiceMatching("IOUSBHostDevice") as NSMutableDictionary? else { return false }
+            var fields = properties
+            fields["USB Vendor Name"] = parts[1]
+            fields["USB Product Name"] = parts[2]
+            request[kIOPropertyMatchKey] = fields
+            let service = IOServiceGetMatchingService(kIOMainPortDefault, request)
+            guard service != IO_OBJECT_NULL else { return false }
+            IOObjectRelease(service)
+            return true
+        }
+        if matches(["USB Serial Number": parts[3]]) { return false }
+        if matches(["locationID": location, "iSerialNumber": 0]) { return true }
+        return nil
     }
 
     /// The category a device claims for itself, or nil when it claims nothing

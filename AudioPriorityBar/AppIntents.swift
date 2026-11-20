@@ -19,6 +19,15 @@ enum IntentTarget {
             : model.speakerDevices + model.headphoneDevices
         return devices.filter { !model.isHidden($0) }
     }
+
+    static func devices(for identifiers: [String], role: DeviceRole) -> [(String, AudioDevice)] {
+        guard let model else { return [] }
+        let available = devices(role)
+        return identifiers.compactMap { id in
+            let current = model.store.currentUID(for: id, role: role)
+            return available.first { $0.uid == current }.map { (id, $0) }
+        }
+    }
 }
 
 enum ShortcutError: Error, CustomLocalizedStringResourceConvertible {
@@ -54,7 +63,7 @@ struct OutputDeviceEntity: AppEntity {
 struct OutputDeviceQuery: EntityQuery {
     @MainActor
     func entities(for identifiers: [String]) async throws -> [OutputDeviceEntity] {
-        try await suggestedEntities().filter { identifiers.contains($0.id) }
+        IntentTarget.devices(for: identifiers, role: .output).map { OutputDeviceEntity(id: $0, name: $1.name) }
     }
 
     @MainActor
@@ -76,7 +85,7 @@ struct MicrophoneEntity: AppEntity {
 struct MicrophoneQuery: EntityQuery {
     @MainActor
     func entities(for identifiers: [String]) async throws -> [MicrophoneEntity] {
-        try await suggestedEntities().filter { identifiers.contains($0.id) }
+        IntentTarget.devices(for: identifiers, role: .input).map { MicrophoneEntity(id: $0, name: $1.name) }
     }
 
     @MainActor
