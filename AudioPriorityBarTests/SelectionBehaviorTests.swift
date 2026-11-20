@@ -52,6 +52,39 @@ func reconnectingADisplayAndUSBMicrophoneRestoresTheRankedLiveDevices() throws {
     }
 }
 
+@Test
+@MainActor
+func aLateUSBDescriptorAppliesTheRestoredPriorityAndMute() async {
+    let defaults = isolatedDefaults()
+    let store = PriorityStore(defaults: defaults)
+    let builtin = input(1, "builtin-mic")
+    var original = input(2, "AppleUSBAudioEngine:Vendor:Microphone:114000:2", "USB Microphone")
+    original.usesUSBLocation = true
+    store.remember([original, builtin])
+    store.savePriorities([original, builtin], role: .input)
+    let audio = FakeAudio()
+    audio.catalog = [builtin]
+    let model = testModel(audio: audio, defaults: defaults)
+    model.start()
+    defer { model.stop() }
+    model.setMicrophoneMuted(true)
+
+    var unresolved = input(12, "AppleUSBAudioEngine:Vendor:Microphone:1114000:2", "USB Microphone")
+    unresolved.usesUSBLocation = nil
+    audio.catalog = [builtin, unresolved]
+    model.handleDevicesChanged()
+    #expect(model.currentInputID == builtin.platformID)
+
+    var resolved = unresolved
+    resolved.usesUSBLocation = true
+    audio.catalog = [builtin, resolved]
+    for _ in 0..<40 where model.currentInputID != resolved.platformID {
+        try? await Task.sleep(for: .milliseconds(25))
+    }
+    #expect(model.currentInputID == resolved.platformID)
+    #expect(audio.muted.contains("input:\(resolved.platformID)"))
+}
+
 private func dualRole(
     isVirtual: Bool = false,
     serial: String = "serial",

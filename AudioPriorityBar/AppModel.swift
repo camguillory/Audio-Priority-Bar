@@ -611,8 +611,8 @@ final class AppModel {
     }
 
     /// The audio driver may announce a device before its USB descriptors.
-    /// Give each newly unresolved set one follow-up read, without polling or
-    /// treating the identity refresh as another automatic route change.
+    /// Give each newly unresolved set one follow-up read, without polling, so
+    /// a late port match still applies its saved rank, visibility and mute.
     private func retryUnresolvedUSBDevices(_ devices: [AudioDevice]) {
         let unresolved = Set(devices.lazy.filter(\.hasUnresolvedUSBIdentity).map(\.uid))
         guard unresolved != unresolvedUSBUIDs else { return }
@@ -623,7 +623,7 @@ final class AppModel {
         usbIdentityRetry = Task { @MainActor [weak self] in
             try? await Task.sleep(for: .milliseconds(500))
             guard !Task.isCancelled else { return }
-            self?.refreshDevices()
+            self?.handleDevicesChanged()
         }
     }
 
