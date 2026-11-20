@@ -15,6 +15,7 @@ public final class PriorityStore {
         static let hideNewDisplayOutputs = "hideNewDisplayOutputs"
         static let displayDefaultsApplied = "displayDefaultsApplied"
         static let knownDevices = "knownDevices"
+        static let ambiguousPortFamilies = "ambiguousPortFamilies"
         static let forgottenPairedDevices = "forgottenPairedDevices"
         static let legacyNeverUse = "neverUseDevices"
         static let neverUseInputs = "neverUseInputs"
@@ -98,6 +99,7 @@ public final class PriorityStore {
 
     public func remember(_ devices: [AudioDevice]) {
         var known = knownDevices
+        reconcilePortChanges(devices, known: &known)
         // Devices present before this shipped never passed through the
         // first-sight branch, so seed them once too.
         let seedsExisting = !defaults.bool(forKey: Key.virtualDefaults)
@@ -105,8 +107,12 @@ public final class PriorityStore {
             let existing = known.firstIndex {
                 $0.uid == device.uid && $0.role == device.role
             }
-            let stored = StoredDevice(device: device, lastSeen: now())
+            var stored = StoredDevice(device: device, lastSeen: now())
             if let existing {
+                stored.previousUIDs = known[existing].previousUIDs
+                if stored.followsPortChanges == nil {
+                    stored.followsPortChanges = known[existing].followsPortChanges
+                }
                 known[existing] = stored
             } else {
                 known.append(stored)
@@ -128,6 +134,113 @@ public final class PriorityStore {
         let seen = Set(devices.map(\.uid))
         let forgotten = defaults.stringArray(forKey: Key.forgottenPairedDevices) ?? []
         defaults.set(forgotten.filter { !seen.contains($0) }, forKey: Key.forgottenPairedDevices)
+    }
+
+    /// Old Shortcuts may refer to the port where a device was first selected.
+    public func currentUID(for uid: String, role: DeviceRole) -> String {
+        guard PortIdentity(uid) != nil else { return uid }
+        let known = knownDevices.filter { $0.role == role }
+        if known.contains(where: { $0.uid == uid }) { return uid }
+        return known.first { $0.previousUIDs?.contains(uid) == true }?.uid ?? uid
+    }
+
+    private func reconcilePortChanges(_ devices: [AudioDevice], known: inout [StoredDevice]) {
+        let candidates = devices.compactMap { device -> (AudioDevice, PortIdentity)? in
+            guard device.isConnected, device.isDisplayOutput || device.usesUSBLocation == true,
+                  let identity = PortIdentity(device.uid),
+                  (identity.usbLocation != nil) == (device.usesUSBLocation == true) else { return nil }
+            return (device, identity)
+        }
+        guard !candidates.isEmpty else { return }
+        let connected = Set(devices.filter(\.isConnected).map(\.uid))
+        var ambiguous = Set(defaults.stringArray(forKey: Key.ambiguousPortFamilies) ?? [])
+        for (family, group) in Dictionary(grouping: candidates, by: { $0.1.family }) {
+            if Set(group.map { $0.1.port }).count > 1, ambiguous.insert(family).inserted {
+                // Once two copies have appeared together, a future lone copy
+                // cannot prove which one moved. Keep using their exact UIDs.
+                defaults.set(ambiguous.sorted(), forKey: Key.ambiguousPortFamilies)
+                for i in known.indices where PortIdentity(known[i].uid)?.family == family {
+                    known[i].previousUIDs = nil
+                }
+            }
+            guard !ambiguous.contains(family) else { continue }
+            for (device, identity) in group {
+                let matches = known.filter { stored in
+                    guard stored.role == device.role, !connected.contains(stored.uid),
+                          let old = PortIdentity(stored.uid), old.family == family,
+                          old.endpoint == identity.endpoint else { return false }
+                    if let verified = stored.followsPortChanges { return verified }
+                    // Legacy displays have a separate record of their transport.
+                    // USB serials can look exactly like port locations.
+                    guard old.usbLocation == nil else { return false }
+                    return defaults.stringArray(forKey: Key.displayDefaultsApplied)?
+                        .contains(stored.uid) == true
+                }
+                guard !matches.isEmpty else { continue }
+                let previous = matches.sorted { $0.lastSeen > $1.lastSeen }
+                let existing = known.first { $0.uid == device.uid && $0.role == device.role }
+                let records = [existing].compactMap { $0 } + previous
+                mergePreferences(of: records, into: device)
+                let aliases = Set(records.flatMap { [$0.uid] + ($0.previousUIDs ?? []) })
+                let mergedUIDs = Set(records.map(\.uid))
+                known.removeAll { $0.role == device.role && mergedUIDs.contains($0.uid) }
+                var merged = StoredDevice(device: device, lastSeen: now())
+                merged.previousUIDs = aliases.subtracting([device.uid]).sorted()
+                known.append(merged)
+            }
+        }
+    }
+
+    private func mergePreferences(of records: [StoredDevice], into device: AudioDevice) {
+        migrateLegacyNeverUseIfNeeded()
+        let ids = records.map(\.uid)
+        let aliases = Set(ids)
+        let uid = device.uid
+        let isInput = device.role == .input
+        let pairKeys = Set(ids.map(AudioDevice.pairingKey(of:)))
+        func remap(_ values: [String]) -> [String] {
+            values.map { aliases.contains($0) ? uid : $0 }.uniqued()
+        }
+
+        // Inactive profiles have their own orders. The active orders also live
+        // in defaults so that changes made since the last profile switch survive.
+        let saved = storedProfiles
+        var profiles = saved
+        for i in profiles.indices {
+            if isInput {
+                profiles[i].microphones = remap(profiles[i].microphones)
+                profiles[i].microphonesWithHeadphones = profiles[i].microphonesWithHeadphones.map(remap)
+            } else {
+                profiles[i].speakers = remap(profiles[i].speakers)
+                profiles[i].headphones = remap(profiles[i].headphones)
+            }
+        }
+        if profiles != saved { saveProfiles(profiles, active: activeProfileID) }
+        let lists = isInput
+            ? [Key.inputPriorities, Key.headphoneMicrophonePriorities, Key.hiddenInputs]
+            : [Key.speakerPriorities, Key.headphonePriorities, Key.hiddenSpeakers,
+               Key.hiddenHeadphones, Key.displayDefaultsApplied]
+        for key in lists + [neverUseKey(for: device.role), Key.separatelySelectedDevices] {
+            guard let values = defaults.stringArray(forKey: key) else { continue }
+            let updated: [String]
+            if key == Key.separatelySelectedDevices {
+                updated = values.map { pairKeys.contains($0) ? device.pairingKey : $0 }.uniqued()
+            } else if device.isDisplayOutput, key == Key.hiddenSpeakers || key == Key.hiddenHeadphones,
+                      !aliases.isSubset(of: values) {
+                // An explicitly visible display should stay visible after a port change.
+                updated = values.filter { !aliases.contains($0) && $0 != uid }
+            } else {
+                updated = remap(values)
+            }
+            if updated != values { defaults.set(updated, forKey: key) }
+        }
+        let key = isInput ? Key.appliedMicrophoneMutes : Key.categories
+        if var values = defaults.dictionary(forKey: key),
+           let chosen = ([uid] + ids).compactMap({ values[$0] }).first {
+            for old in ids { values.removeValue(forKey: old) }
+            values[uid] = chosen
+            defaults.set(values, forKey: key)
+        }
     }
 
     /// A Bluetooth device forgotten while off stays out of the panel, though

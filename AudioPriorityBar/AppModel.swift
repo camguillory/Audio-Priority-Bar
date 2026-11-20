@@ -181,6 +181,8 @@ final class AppModel {
     private var mutedInputUIDs: Set<String> = []
     /// The headphones last seen as the current output, by UID.
     private var playingHeadphonesUID: String?
+    private var unresolvedUSBUIDs = Set<String>()
+    private var usbIdentityRetry: Task<Void, Never>?
     private var connectedInputUIDs: Set<String> = []
     private var connectedOutputUIDs: Set<String> = []
     private var connectedUIDsByID: [DeviceRole: [UInt32: String]] = [:]
@@ -288,6 +290,9 @@ final class AppModel {
     }
 
     func stop() {
+        usbIdentityRetry?.cancel()
+        usbIdentityRetry = nil
+        unresolvedUSBUIDs.removeAll()
         muteVolumeRefreshTask?.cancel()
         muteVolumeRefreshTask = nil
         microphoneHoldResume?.cancel()
@@ -606,8 +611,26 @@ final class AppModel {
         }
     }
 
+    /// The audio driver may announce a device before its USB descriptors.
+    /// Give each newly unresolved set one follow-up read, without polling, so
+    /// a late port match still applies its saved rank, visibility and mute.
+    private func retryUnresolvedUSBDevices(_ devices: [AudioDevice]) {
+        let unresolved = Set(devices.lazy.filter(\.hasUnresolvedUSBIdentity).map(\.uid))
+        guard unresolved != unresolvedUSBUIDs else { return }
+        unresolvedUSBUIDs = unresolved
+        usbIdentityRetry?.cancel()
+        usbIdentityRetry = nil
+        guard !unresolved.isEmpty else { return }
+        usbIdentityRetry = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(500))
+            guard !Task.isCancelled else { return }
+            self?.handleDevicesChanged()
+        }
+    }
+
     func refreshDevices() {
         let connected = audio.devices()
+        retryUnresolvedUSBDevices(connected)
         if !connectingBluetoothAttempts.isEmpty {
             for address in connected.compactMap(bluetoothAddress(of:)) {
                 connectingBluetoothAttempts[address] = nil
