@@ -6,6 +6,7 @@ enum SystemListener: CaseIterable, Equatable {
     case devices
     case defaultInput
     case defaultOutput
+    case serviceRestarted
 }
 
 enum DeviceListener: Hashable {
@@ -53,15 +54,13 @@ final class CoreAudioListenerLifecycle {
     @discardableResult
     func start() -> Bool {
         guard !isListening else { return true }
-        guard addSystem(.devices) else { return false }
-        guard addSystem(.defaultInput) else {
-            removeSystem(.devices)
-            return false
-        }
-        guard addSystem(.defaultOutput) else {
-            removeSystem(.defaultInput)
-            removeSystem(.devices)
-            return false
+        var registered: [SystemListener] = []
+        for listener in SystemListener.allCases {
+            guard addSystem(listener) else {
+                registered.reversed().forEach(removeSystem)
+                return false
+            }
+            registered.append(listener)
         }
         isListening = true
         rebuildDeviceListeners()
@@ -95,6 +94,11 @@ final class CoreAudioListenerLifecycle {
         }
     }
 
+    func restart() -> Bool {
+        stop()
+        return start()
+    }
+
     func stop() {
         guard isListening else { return }
         clearDeviceListeners()
@@ -114,6 +118,7 @@ final class CoreAudioListenerLifecycle {
 
 enum CoreAudioEvent: Sendable {
     case devicesChanged
+    case serviceRestarted
     case defaultChanged(DeviceRole)
     case muteOrVolumeChanged
 }
