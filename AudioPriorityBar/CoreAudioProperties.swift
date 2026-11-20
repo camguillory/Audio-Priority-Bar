@@ -95,30 +95,16 @@ enum CoreAudioProperties {
         let scope = role == .input
             ? kAudioDevicePropertyScopeInput
             : kAudioDevicePropertyScopeOutput
-        var muted: UInt32 = 0
-        if read(
-            id,
-            selector: kAudioDevicePropertyMute,
-            scope: scope,
-            element: kAudioObjectPropertyElementMain,
-            into: &muted
-        ) == noErr, muted != 0 {
-            return true
+        let muted = wholeDeviceMute(hasSingleChannel: { hasSingleChannel(id, scope: scope) }) { element in
+            var value: UInt32 = 0
+            return read(id, selector: kAudioDevicePropertyMute, scope: scope,
+                        element: element, into: &value) == noErr && value != 0
         }
-        muted = 0
-        if read(
-            id,
-            selector: kAudioDevicePropertyMute,
-            scope: scope,
-            element: 1,
-            into: &muted
-        ) == noErr, muted != 0 {
-            return true
-        }
+        if muted { return true }
         return role == .output && deviceVolume(id) < 0.01
     }
 
-    /// Sets the mute property, trying the main element before channel 1.
+    /// Sets the mute property, trying channel 1 only on a mono device.
     /// False when the device has no settable mute, so the caller can fall back
     /// to zero input volume.
     static func setMute(
@@ -130,18 +116,10 @@ enum CoreAudioProperties {
             ? kAudioDevicePropertyScopeInput
             : kAudioDevicePropertyScopeOutput
         var value: UInt32 = muted ? 1 : 0
-        for element in [kAudioObjectPropertyElementMain, 1] {
-            if write(
-                id,
-                selector: kAudioDevicePropertyMute,
-                scope: scope,
-                element: element,
-                value: &value
-            ) == noErr {
-                return true
-            }
+        return wholeDeviceMute(hasSingleChannel: { hasSingleChannel(id, scope: scope) }) { element in
+            write(id, selector: kAudioDevicePropertyMute, scope: scope,
+                  element: element, value: &value) == noErr
         }
-        return false
     }
 
     static func inputVolume(_ id: AudioObjectID) -> Float? {
@@ -171,7 +149,7 @@ enum CoreAudioProperties {
         let scope = role == .input
             ? kAudioDevicePropertyScopeInput
             : kAudioDevicePropertyScopeOutput
-        return [kAudioObjectPropertyElementMain, 1].contains { element in
+        return wholeDeviceMute(hasSingleChannel: { hasSingleChannel(id, scope: scope) }) { element in
             var address = property(
                 kAudioDevicePropertyMute, scope: scope, element: element
             )
@@ -179,6 +157,23 @@ enum CoreAudioProperties {
             return AudioObjectIsPropertySettable(id, &address, &settable) == noErr
                 && settable.boolValue
         }
+    }
+
+    /// A successful operation on channel 1 covers the device only when the
+    /// role has exactly one channel. Read the topology only if the master fails.
+    static func wholeDeviceMute(
+        hasSingleChannel: () -> Bool,
+        operation: (AudioObjectPropertyElement) -> Bool
+    ) -> Bool {
+        operation(kAudioObjectPropertyElementMain) || (hasSingleChannel() && operation(1))
+    }
+
+    private static func hasSingleChannel(_ id: AudioObjectID, scope: AudioObjectPropertyScope) -> Bool {
+        let ids = streams(id, scope: scope)
+        guard ids.count == 1, let stream = ids.first else { return false }
+        var format = AudioStreamBasicDescription()
+        return read(stream, selector: kAudioStreamPropertyVirtualFormat, into: &format) == noErr
+            && format.mChannelsPerFrame == 1
     }
 
     /// Whether any process is using the device, which for a microphone means

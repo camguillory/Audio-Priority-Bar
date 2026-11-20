@@ -108,6 +108,24 @@ func onlyVideoCableTransportsCountAsDisplayOutputs() {
 }
 
 @Test
+func onlyAMonoDeviceCanUseChannelOneAsItsMasterMute() {
+    for mono in [false, true] {
+        var attempted: [AudioObjectPropertyElement] = []
+        let success = CoreAudioProperties.wholeDeviceMute(hasSingleChannel: { mono }) {
+            attempted.append($0)
+            return $0 == 1
+        }
+        #expect(success == mono)
+        #expect(attempted == (mono ? [kAudioObjectPropertyElementMain, 1] : [kAudioObjectPropertyElementMain]))
+    }
+    let hasMaster = CoreAudioProperties.wholeDeviceMute(hasSingleChannel: {
+        Issue.record("A working master mute should skip the channel lookup")
+        return false
+    }) { $0 == kAudioObjectPropertyElementMain }
+    #expect(hasMaster)
+}
+
+@Test
 @MainActor
 func listenerStartRollsBackPartialRegistration() {
     let log = ListenerLog()
