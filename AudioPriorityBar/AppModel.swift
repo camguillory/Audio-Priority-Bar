@@ -176,10 +176,13 @@ final class AppModel {
     let battery: BluetoothBatteryMonitor
     private let reduceMotion: () -> Bool
     private var mutedRoles: Set<String> = []
+    private var connectedInputs: [AudioDevice] = []
     /// The microphones carrying `isMicrophoneMuted`, by UID.
     private var mutedInputUIDs: Set<String> = []
     /// The headphones last seen as the current output, by UID.
     private var playingHeadphonesUID: String?
+    private var unresolvedUSBUIDs = Set<String>()
+    private var usbIdentityRetry: Task<Void, Never>?
     private var connectedInputUIDs: Set<String> = []
     private var connectedOutputUIDs: Set<String> = []
     private var connectedUIDsByID: [DeviceRole: [UInt32: String]] = [:]
@@ -287,6 +290,9 @@ final class AppModel {
     }
 
     func stop() {
+        usbIdentityRetry?.cancel()
+        usbIdentityRetry = nil
+        unresolvedUSBUIDs.removeAll()
         muteVolumeRefreshTask?.cancel()
         muteVolumeRefreshTask = nil
         microphoneHoldResume?.cancel()
@@ -605,14 +611,33 @@ final class AppModel {
         }
     }
 
+    /// The audio driver may announce a device before its USB descriptors.
+    /// Give each newly unresolved set one follow-up read, without polling, so
+    /// a late port match still applies its saved rank, visibility and mute.
+    private func retryUnresolvedUSBDevices(_ devices: [AudioDevice]) {
+        let unresolved = Set(devices.lazy.filter(\.hasUnresolvedUSBIdentity).map(\.uid))
+        guard unresolved != unresolvedUSBUIDs else { return }
+        unresolvedUSBUIDs = unresolved
+        usbIdentityRetry?.cancel()
+        usbIdentityRetry = nil
+        guard !unresolved.isEmpty else { return }
+        usbIdentityRetry = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(500))
+            guard !Task.isCancelled else { return }
+            self?.handleDevicesChanged()
+        }
+    }
+
     func refreshDevices() {
         let connected = audio.devices()
+        retryUnresolvedUSBDevices(connected)
         if !connectingBluetoothAttempts.isEmpty {
             for address in connected.compactMap(bluetoothAddress(of:)) {
                 connectingBluetoothAttempts[address] = nil
             }
         }
-        let inputUIDs = Set(connected.lazy.filter { $0.role == .input }.map(\.uid))
+        connectedInputs = connected.filter { $0.role == .input }
+        let inputUIDs = Set(connectedInputs.map(\.uid))
         let outputUIDs = Set(connected.lazy.filter { $0.role == .output }.map(\.uid))
         if inputUIDs != connectedInputUIDs || outputUIDs != connectedOutputUIDs {
             switchedBackAt = [:]
@@ -646,7 +671,7 @@ final class AppModel {
         currentInputID = audio.defaultDevice(.input)
         currentOutputID = audio.defaultDevice(.output)
 
-        var inputs = connected.filter { $0.role == .input }
+        var inputs = connectedInputs
         var outputs = connected.filter { $0.role == .output }
         // Every paired Bluetooth speaker and headphones that is off is listed
         // at its rank, dimmed, so it can be connected where it stands. A
@@ -815,7 +840,7 @@ final class AppModel {
     func refreshMute() {
         muteSpeakersIfHeadphonesLeft()
         reconcileMicrophoneMute()
-        let connected = inputDevices + speakerDevices + headphoneDevices
+        let connected = connectedInputs + speakerDevices + headphoneDevices
         mutedRoles = Set(connected.lazy.filter {
             $0.isConnected && self.isHardwareMuted($0)
         }.map(\.roleIdentifier))
@@ -881,7 +906,7 @@ final class AppModel {
         }
         if isMicrophoneMuted {
             for uid in mutedInputUIDs {
-                guard let device = inputDevices.first(where: { $0.uid == uid && $0.isConnected }) else {
+                guard let device = connectedInputs.first(where: { $0.uid == uid }) else {
                     // Its saved state brings the mute back on reconnect, below.
                     mutedInputUIDs.remove(uid)
                     continue
@@ -901,7 +926,7 @@ final class AppModel {
             restoreMicrophone(uid)
         }
         guard isMicrophoneMuted else { return }
-        for device in inputDevices
+        for device in connectedInputs
         where isCoveredByMute(device) && !mutedInputUIDs.contains(device.uid) && !isHardwareMuted(device) {
             if applyMicrophoneMute(device) { mutedInputUIDs.insert(device.uid) }
         }
@@ -928,8 +953,8 @@ final class AppModel {
     /// the mute already holds.
     private func findUncoveredRecording() -> UncoveredRecording? {
         guard isMicrophoneMuted else { return nil }
-        return inputDevices.lazy
-            .filter { $0.isConnected && !$0.isVirtual }
+        return connectedInputs.lazy
+            .filter { !$0.isVirtual }
             .filter { !self.mutedInputUIDs.contains($0.uid) && !self.isHardwareMuted($0) }
             .filter { self.audio.isRunning($0.platformID) }
             .map { UncoveredRecording(app: self.audio.appRecording($0.platformID), microphone: $0.name) }

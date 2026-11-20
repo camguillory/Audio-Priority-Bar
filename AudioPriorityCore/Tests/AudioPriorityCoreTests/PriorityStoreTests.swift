@@ -488,6 +488,152 @@ private func monitor(
 }
 
 @Test
+func legacyDisplayAliasesKeepVisibilityAndTheHighestRankInEachProfile() throws {
+    try withDefaults { defaults in
+        let base = UUID().uuidString
+        let old = monitor(base + "_00000000")
+        let second = monitor(base + "_00000010")
+        let current = monitor(base)
+        let other = device("speakers")
+        let legacy = [old, second].map {
+            StoredDevice(uid: $0.uid, name: $0.name, isInput: false, lastSeen: Date())
+        }
+        defaults.set(try JSONEncoder().encode(legacy), forKey: "knownDevices")
+        defaults.set([old.uid, second.uid], forKey: "displayDefaultsApplied")
+        let store = PriorityStore(defaults: defaults)
+        store.hide(second, in: .speaker)
+        store.hide(second, in: .headphone)
+        store.setCategory(.headphone, for: old)
+        store.savePriorities([old, other, second], category: .speaker)
+        store.savePriorities([other, second, old], category: .headphone)
+        let saved = store.addProfile(named: "Desk")
+        store.savePriorities([other, old, second], category: .speaker)
+        store.remember([current])
+        #expect(store.knownDevices.map(\.uid) == [current.uid])
+        #expect(!store.isHidden(current, in: .speaker))
+        #expect(!store.isHidden(current, in: .headphone))
+        #expect(store.category(for: current) == .headphone)
+        #expect(store.sorted([current, other], category: .speaker) == [other, current])
+        #expect(store.loadProfile(saved.id))
+        #expect(store.sorted([other, current], category: .speaker) == [current, other])
+        #expect(store.sorted([current, other], category: .headphone) == [other, current])
+        #expect(defaults.stringArray(forKey: "displayDefaultsApplied") == [base])
+
+        let reopened = PriorityStore(defaults: defaults)
+        reopened.remember([old])
+        #expect(reopened.knownDevices.map(\.uid) == [old.uid])
+        #expect(reopened.currentUID(for: second.uid, role: .output) == old.uid)
+        reopened.hide(old, in: .speaker)
+        reopened.remember([current])
+        #expect(reopened.isHidden(current, in: .speaker))
+        reopened.forget(uid: current.uid, role: .output)
+        reopened.remember([second])
+        #expect(reopened.isHidden(second, in: .headphone))
+        #expect(reopened.currentUID(for: old.uid, role: .output) == old.uid)
+    }
+}
+
+private func portMic(_ location: String, stream: String = "2", verified: Bool? = true) -> AudioDevice {
+    var mic = device("AppleUSBAudioEngine:Vendor:Interface:\(location):\(stream)", role: .input)
+    mic.usesUSBLocation = verified
+    return mic
+}
+
+@Test
+func usbPortChangesKeepInputOrdersAndRoleSpecificChoices() throws {
+    try withDefaults { defaults in
+        let store = PriorityStore(defaults: defaults)
+        let old = portMic("114000")
+        let new = portMic("1114000")
+        let extraChannel = portMic("114000", stream: "3")
+        let builtin = device("builtin", role: .input)
+        store.remember([old, extraChannel])
+        store.microphonesFollowOutput = true
+        store.savePriorities([old, builtin], microphonesFor: .speaker)
+        store.savePriorities([builtin, old], microphonesFor: .headphone)
+        store.hide(old)
+        store.setNeverUse(old, true)
+        store.setSelectsHalvesTogether(old, false)
+        store.appliedMicrophoneMutes = [old.uid: 0.65]
+        store.remember([new])
+        #expect(Set(store.knownDevices.map(\.uid)) == [new.uid, extraChannel.uid])
+        #expect(store.isHidden(new))
+        #expect(store.isNeverUse(new))
+        #expect(!store.selectsHalvesTogether(new))
+        #expect(store.appliedMicrophoneMutes == [new.uid: 0.65])
+        #expect(store.sorted([builtin, new], microphonesFor: .speaker) == [new, builtin])
+        #expect(store.sorted([new, builtin], microphonesFor: .headphone) == [builtin, new])
+    }
+}
+
+@Test
+func identicalWiredDevicesSeenTogetherStaySeparateAcrossRestarts() throws {
+    try withDefaults { defaults in
+        let store = PriorityStore(defaults: defaults)
+        let left = portMic("114000")
+        let right = portMic("1114000")
+        let next = portMic("127000")
+        let base = UUID().uuidString
+        let monitorA = monitor(base)
+        let monitorB = monitor(base + "_00000010")
+        store.remember([left, right, monitorA, monitorB])
+        store.hide(left)
+        store.unhide(monitorA, from: .speaker)
+        let reopened = PriorityStore(defaults: defaults)
+        reopened.remember([next, monitorB])
+        #expect(reopened.knownDevices.count == 5)
+        #expect(reopened.isHidden(left))
+        #expect(!reopened.isHidden(right))
+        #expect(!reopened.isHidden(next))
+        #expect(reopened.isHidden(monitorB, in: .speaker))
+        #expect(!reopened.isHidden(monitorA, in: .speaker))
+    }
+}
+
+@Test
+func numericUSBSerialsAndUnrelatedDisplaysKeepTheirOwnIdentities() throws {
+    try withDefaults { defaults in
+        let store = PriorityStore(defaults: defaults)
+        let serial = portMic("114000", verified: false)
+        let portable = portMic("117000")
+        let old = monitor(UUID().uuidString)
+        let different = monitor(UUID().uuidString)
+        let unrelated = device(old.uid + "_00000002")
+        store.remember([serial, old, unrelated])
+        store.hide(serial)
+        store.remember([portable, different])
+        store.remember([old])
+        #expect(store.knownDevices.count == 5)
+        #expect(!store.isHidden(portable))
+        #expect(store.currentUID(for: serial.uid, role: .input) == serial.uid)
+    }
+}
+
+@Test
+func aLiveLegacyDeviceWithALocationShapedSerialKeepsItsSettings() throws {
+    try withDefaults { defaults in
+        let serial = portMic("123400", verified: false)
+        let portable = portMic("114000")
+        let legacy = StoredDevice(uid: serial.uid, name: serial.name, isInput: true, lastSeen: Date())
+        defaults.set(try JSONEncoder().encode([legacy]), forKey: "knownDevices")
+        let store = PriorityStore(defaults: defaults)
+        store.hide(serial)
+        store.remember([portable, serial])
+        #expect(store.isHidden(serial))
+        #expect(!store.isHidden(portable))
+        #expect(store.knownDevices.count == 2)
+        // A transient lack of registry information for the same UID must
+        // not erase an earlier confirmed match.
+        store.remember([portMic("114000", verified: nil)])
+        let moved = portMic("1114000")
+        store.remember([moved])
+        #expect(store.knownDevices.count == 2)
+        #expect(store.currentUID(for: portable.uid, role: .input) == moved.uid)
+        #expect(store.currentUID(for: serial.uid, role: .input) == serial.uid)
+    }
+}
+
+@Test
 func displayOutputsAreHiddenOnceAndShowingOneSticks() throws {
     try withDefaults { defaults in
         let store = PriorityStore(defaults: defaults)
@@ -952,4 +1098,98 @@ func aFocusRestoresTheProfileFromBeforeIt() {
     let deleted = PriorityStore.focusChange(requested: nil, active: meeting, before: UUID(), existing: all)
     #expect(deleted.apply == nil)
     #expect(deleted.before == nil)
+}
+
+@Test
+func aLateUSBDescriptorDoesNotStrandSettingsAtTheOldPort() throws {
+    try withDefaults { defaults in
+        let store = PriorityStore(defaults: defaults)
+        let old = portMic("114000")
+        let new = portMic("1114000")
+        store.remember([old])
+        store.hide(old)
+        store.remember([portMic("1114000", verified: nil)])
+        #expect(store.knownDevices.count == 2)
+        store.remember([new])
+        #expect(store.knownDevices.map(\.uid) == [new.uid])
+        #expect(store.isHidden(new))
+        #expect(store.currentUID(for: old.uid, role: .input) == new.uid)
+    }
+}
+
+@Test
+func anUnverifiedOfflineUSBSerialCannotDonateItsPreferences() throws {
+    try withDefaults { defaults in
+        let store = PriorityStore(defaults: defaults)
+        let unknown = portMic("114000", verified: nil)
+        let moved = portMic("1114000")
+        store.remember([unknown])
+        store.hide(unknown)
+        store.remember([moved])
+        #expect(store.knownDevices.count == 2)
+        #expect(!store.isHidden(moved))
+        #expect(store.currentUID(for: unknown.uid, role: .input) == unknown.uid)
+    }
+}
+
+@Test
+func simultaneousCopiesRetireAliasesAndKeepCurrentChoices() throws {
+    try withDefaults { defaults in
+        let original = portMic("114000"), moved = portMic("1114000"), third = portMic("127000")
+        let store = PriorityStore(defaults: defaults)
+        store.remember([original])
+        store.hide(original)
+        store.remember([moved])
+        store.setNeverUse(moved, true)
+        #expect(store.currentUID(for: original.uid, role: .input) == moved.uid)
+
+        // The old port need not be occupied when two copies are first seen.
+        let reopened = PriorityStore(defaults: defaults)
+        reopened.remember([moved, third])
+        #expect(reopened.currentUID(for: original.uid, role: .input) == original.uid)
+        #expect(reopened.isHidden(moved))
+        #expect(reopened.isNeverUse(moved))
+        #expect(!reopened.isHidden(third))
+        #expect(!reopened.isNeverUse(third))
+        let again = PriorityStore(defaults: defaults)
+        again.remember([original])
+        #expect(again.knownDevices.count == 3)
+        #expect(!again.isHidden(original))
+    }
+}
+
+@Test
+func genericHDMIOutputsWithAZeroUUIDKeepTheirExactUIDs() throws {
+    try withDefaults { defaults in
+        let zero = "00000000-0000-0000-0000-000000000000"
+        let first = monitor(zero, "HDMI Audio")
+        let second = monitor(zero + "_00000010", "HDMI Audio")
+        let third = monitor(zero + "_00000012", "HDMI Audio")
+        let store = PriorityStore(defaults: defaults)
+        store.remember([first])
+        store.unhide(first, from: .speaker)
+        store.remember([second])
+        store.remember([third])
+        #expect(Set(store.knownDevices.map(\.uid)) == [first.uid, second.uid, third.uid])
+        #expect(store.isHidden(second, in: .speaker))
+        #expect(store.isHidden(third, in: .speaker))
+        #expect(store.currentUID(for: first.uid, role: .output) == first.uid)
+    }
+}
+
+@Test
+func anEarlierForksZeroUUIDAliasAndPortHistoryCannotRedirectAShortcut() throws {
+    try withDefaults { defaults in
+        let base = "00000000-0000-0000-0000-000000000000"
+        let generic = monitor(base + "_00000010", "HDMI Audio")
+        var stored = StoredDevice(device: generic, lastSeen: Date())
+        stored.previousUIDs = [base]
+        let encoded = try JSONEncoder().encode(stored)
+        var row = try #require(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        row["portHistory"] = ["ports": [:], "inherited": ["positions": [:]]]
+        defaults.set(try JSONSerialization.data(withJSONObject: [row]), forKey: "knownDevices")
+        let store = PriorityStore(defaults: defaults)
+        #expect(store.knownDevices.map(\.uid) == [generic.uid])
+        #expect(store.currentUID(for: base, role: .output) == base)
+    }
 }

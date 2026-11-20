@@ -3,6 +3,7 @@ import AudioPriorityCore
 import AudioToolbox
 import CoreAudio
 import Foundation
+import IOKit
 
 enum CoreAudioProperties {
     private static let system = AudioObjectID(kAudioObjectSystemObject)
@@ -95,30 +96,16 @@ enum CoreAudioProperties {
         let scope = role == .input
             ? kAudioDevicePropertyScopeInput
             : kAudioDevicePropertyScopeOutput
-        var muted: UInt32 = 0
-        if read(
-            id,
-            selector: kAudioDevicePropertyMute,
-            scope: scope,
-            element: kAudioObjectPropertyElementMain,
-            into: &muted
-        ) == noErr, muted != 0 {
-            return true
+        let muted = wholeDeviceMute(hasSingleChannel: { hasSingleChannel(id, scope: scope) }) { element in
+            var value: UInt32 = 0
+            return read(id, selector: kAudioDevicePropertyMute, scope: scope,
+                        element: element, into: &value) == noErr && value != 0
         }
-        muted = 0
-        if read(
-            id,
-            selector: kAudioDevicePropertyMute,
-            scope: scope,
-            element: 1,
-            into: &muted
-        ) == noErr, muted != 0 {
-            return true
-        }
+        if muted { return true }
         return role == .output && deviceVolume(id) < 0.01
     }
 
-    /// Sets the mute property, trying the main element before channel 1.
+    /// Sets the mute property, trying channel 1 only on a mono device.
     /// False when the device has no settable mute, so the caller can fall back
     /// to zero input volume.
     static func setMute(
@@ -130,18 +117,10 @@ enum CoreAudioProperties {
             ? kAudioDevicePropertyScopeInput
             : kAudioDevicePropertyScopeOutput
         var value: UInt32 = muted ? 1 : 0
-        for element in [kAudioObjectPropertyElementMain, 1] {
-            if write(
-                id,
-                selector: kAudioDevicePropertyMute,
-                scope: scope,
-                element: element,
-                value: &value
-            ) == noErr {
-                return true
-            }
+        return wholeDeviceMute(hasSingleChannel: { hasSingleChannel(id, scope: scope) }) { element in
+            write(id, selector: kAudioDevicePropertyMute, scope: scope,
+                  element: element, value: &value) == noErr
         }
-        return false
     }
 
     static func inputVolume(_ id: AudioObjectID) -> Float? {
@@ -171,7 +150,7 @@ enum CoreAudioProperties {
         let scope = role == .input
             ? kAudioDevicePropertyScopeInput
             : kAudioDevicePropertyScopeOutput
-        return [kAudioObjectPropertyElementMain, 1].contains { element in
+        return wholeDeviceMute(hasSingleChannel: { hasSingleChannel(id, scope: scope) }) { element in
             var address = property(
                 kAudioDevicePropertyMute, scope: scope, element: element
             )
@@ -179,6 +158,23 @@ enum CoreAudioProperties {
             return AudioObjectIsPropertySettable(id, &address, &settable) == noErr
                 && settable.boolValue
         }
+    }
+
+    /// A successful operation on channel 1 covers the device only when the
+    /// role has exactly one channel. Read the topology only if the master fails.
+    static func wholeDeviceMute(
+        hasSingleChannel: () -> Bool,
+        operation: (AudioObjectPropertyElement) -> Bool
+    ) -> Bool {
+        operation(kAudioObjectPropertyElementMain) || (hasSingleChannel() && operation(1))
+    }
+
+    private static func hasSingleChannel(_ id: AudioObjectID, scope: AudioObjectPropertyScope) -> Bool {
+        let ids = streams(id, scope: scope)
+        guard ids.count == 1, let stream = ids.first else { return false }
+        var format = AudioStreamBasicDescription()
+        return read(stream, selector: kAudioStreamPropertyVirtualFormat, into: &format) == noErr
+            && format.mChannelsPerFrame == 1
     }
 
     /// Whether any process is using the device, which for a microphone means
@@ -252,7 +248,7 @@ enum CoreAudioProperties {
             return nil
         }
         let transport = transport(id)
-        return AudioDevice(
+        var device = AudioDevice(
             platformID: id,
             uid: uid,
             name: name,
@@ -266,6 +262,51 @@ enum CoreAudioProperties {
             isDisplayOutput: role == .output && Self.isDisplayTransport(transport),
             transportType: transport
         )
+        if transport == kAudioDeviceTransportTypeUSB, let location = device.possibleUSBLocation {
+            device.usesUSBLocation = isSeriallessUSBDevice(uid: uid, at: location)
+        }
+        return device
+    }
+
+    /// The registry can lag behind the audio driver. An absent descriptor
+    /// leaves identity unresolved until a later enumeration.
+    static func isSeriallessUSBDevice(
+        uid: String, at location: UInt32,
+        hasSerial: (String) -> Bool = usbSerialExists,
+        descriptorAt: (UInt32) -> (index: Int?, serial: String?)? = usbSerialDescriptor
+    ) -> Bool? {
+        let parts = uid.components(separatedBy: ":")
+        guard parts.count == 5 else { return nil }
+        // A hexadecimal serial can coincide with an unrelated occupied port.
+        if hasSerial(parts[3]) { return false }
+        guard let descriptor = descriptorAt(location) else { return nil }
+        if let serial = descriptor.serial, !serial.isEmpty { return false }
+        return descriptor.index.map { $0 == 0 }
+    }
+
+    private static func usbService(matching key: String, value: Any) -> io_service_t {
+        guard let request = IOServiceMatching("IOUSBHostDevice") as NSMutableDictionary? else {
+            return IO_OBJECT_NULL
+        }
+        request[kIOPropertyMatchKey] = [key: value]
+        return IOServiceGetMatchingService(kIOMainPortDefault, request)
+    }
+
+    private static func usbSerialExists(_ serial: String) -> Bool {
+        let service = usbService(matching: "USB Serial Number", value: serial)
+        guard service != IO_OBJECT_NULL else { return false }
+        IOObjectRelease(service)
+        return true
+    }
+
+    private static func usbSerialDescriptor(at location: UInt32) -> (index: Int?, serial: String?)? {
+        let service = usbService(matching: "locationID", value: location)
+        guard service != IO_OBJECT_NULL else { return nil }
+        defer { IOObjectRelease(service) }
+        func property(_ key: String) -> Any? {
+            IORegistryEntryCreateCFProperty(service, key as CFString, kCFAllocatorDefault, 0)?.takeRetainedValue()
+        }
+        return (property("iSerialNumber") as? Int, property("USB Serial Number") as? String)
     }
 
     /// The category a device claims for itself, or nil when it claims nothing
