@@ -124,7 +124,6 @@ public struct StoredDevice: Codable, Equatable, Sendable {
     var followsPortChanges: Bool?
     /// Previous UIDs still used by saved Shortcuts.
     var previousUIDs: [String]?
-    var portHistory: PortHistory?
 
     public var role: DeviceRole { isInput ? .input : .output }
 

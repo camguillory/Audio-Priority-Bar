@@ -25,6 +25,7 @@ struct PortIdentity {
         } else {
             let parts = uid.components(separatedBy: "_")
             guard (1...2).contains(parts.count), parts[0].count == 36,
+                  parts[0] != "00000000-0000-0000-0000-000000000000",
                   let uuid = UUID(uuidString: parts[0]) else { return nil }
             if parts.count == 2 {
                 guard parts[1].count == 8, parts[1].allSatisfy(\.isHexDigit) else { return nil }
@@ -34,17 +35,4 @@ struct PortIdentity {
             endpoint = ""
         }
     }
-}
-
-/// Independent choices at each raw port before its settings were merged.
-/// Used only if simultaneous devices later disprove the identity match.
-struct PortHistory: Codable, Equatable, Sendable {
-    var ports: [String: PortChoices]
-    var inherited: PortChoices
-}
-
-struct PortChoices: Codable, Equatable, Sendable {
-    /// A saved position for an order, zero for an unordered flag, missing for neither.
-    var positions: [String: Int] = [:]
-    var category: String?
 }

@@ -158,10 +158,13 @@ New HDMI and DisplayPort outputs start hidden; showing one is permanent, and
 **Hide new HDMI and DisplayPort outputs** turns this off for future devices.
 The active device always stays listed, even when hidden.
 
-If a monitor reconnects with the same display UUID and a different port suffix,
-or a USB audio device without a serial number moves to another port, the app
-keeps its priority and visibility. When it sees two matching devices connected
-at once, it remembers to keep their settings separate.
+A monitor with a unique display UUID keeps its priority and visibility when
+its port suffix changes. USB audio devices keep those choices after a move
+when the app has verified that their IDs come from the USB port. Generic HDMI
+outputs with an all-zero UUID keep separate entries. If two matching devices
+appear together, each keeps its current settings and future changes apply to
+its exact device ID. Two identical devices used only one at a time can look
+like a single device moving between ports.
 
 </details>
 

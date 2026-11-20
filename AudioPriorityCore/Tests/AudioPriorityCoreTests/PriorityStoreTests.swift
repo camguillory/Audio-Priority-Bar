@@ -1104,10 +1104,12 @@ func aFocusRestoresTheProfileFromBeforeIt() {
 func aLateUSBDescriptorDoesNotStrandSettingsAtTheOldPort() throws {
     try withDefaults { defaults in
         let store = PriorityStore(defaults: defaults)
-        let old = portMic("114000", verified: nil)
+        let old = portMic("114000")
         let new = portMic("1114000")
         store.remember([old])
         store.hide(old)
+        store.remember([portMic("1114000", verified: nil)])
+        #expect(store.knownDevices.count == 2)
         store.remember([new])
         #expect(store.knownDevices.map(\.uid) == [new.uid])
         #expect(store.isHidden(new))
@@ -1116,32 +1118,43 @@ func aLateUSBDescriptorDoesNotStrandSettingsAtTheOldPort() throws {
 }
 
 @Test
-func twoPortsDiscoveredLateGetTheirIndependentSettingsBack() throws {
+func anUnverifiedOfflineUSBSerialCannotDonateItsPreferences() throws {
     try withDefaults { defaults in
-        let a = portMic("114000"), b = portMic("1114000")
-        let builtin = device("builtin", role: .input)
         let store = PriorityStore(defaults: defaults)
-        store.remember([a, builtin])
-        store.hide(a)
-        store.setSelectsHalvesTogether(a, false)
-        store.savePriorities([a, builtin], microphonesFor: .speaker)
-        let desk = store.addProfile(named: "Desk")
-        store.savePriorities([builtin, a], microphonesFor: .speaker)
-        store.remember([b, builtin])
-        #expect(store.isHidden(b))
-        store.setNeverUse(b, true) // A choice made on B while using inherited settings.
+        let unknown = portMic("114000", verified: nil)
+        let moved = portMic("1114000")
+        store.remember([unknown])
+        store.hide(unknown)
+        store.remember([moved])
+        #expect(store.knownDevices.count == 2)
+        #expect(!store.isHidden(moved))
+        #expect(store.currentUID(for: unknown.uid, role: .input) == unknown.uid)
+    }
+}
+
+@Test
+func simultaneousCopiesRetireAliasesAndKeepCurrentChoices() throws {
+    try withDefaults { defaults in
+        let original = portMic("114000"), moved = portMic("1114000"), third = portMic("127000")
+        let store = PriorityStore(defaults: defaults)
+        store.remember([original])
+        store.hide(original)
+        store.remember([moved])
+        store.setNeverUse(moved, true)
+        #expect(store.currentUID(for: original.uid, role: .input) == moved.uid)
+
+        // The old port need not be occupied when two copies are first seen.
         let reopened = PriorityStore(defaults: defaults)
-        reopened.remember([a, b, builtin])
-        #expect(reopened.isHidden(a))
-        #expect(!reopened.isHidden(b))
-        #expect(!reopened.selectsHalvesTogether(a))
-        #expect(reopened.selectsHalvesTogether(b))
-        #expect(reopened.isNeverUse(b))
-        #expect(!reopened.isNeverUse(a))
-        #expect(reopened.sorted([b, a, builtin], microphonesFor: .speaker) == [builtin, a, b])
-        #expect(reopened.loadProfile(desk.id))
-        #expect(reopened.sorted([b, a, builtin], microphonesFor: .speaker) == [a, builtin, b])
-        #expect(reopened.currentUID(for: a.uid, role: .input) == a.uid)
+        reopened.remember([moved, third])
+        #expect(reopened.currentUID(for: original.uid, role: .input) == original.uid)
+        #expect(reopened.isHidden(moved))
+        #expect(reopened.isNeverUse(moved))
+        #expect(!reopened.isHidden(third))
+        #expect(!reopened.isNeverUse(third))
+        let again = PriorityStore(defaults: defaults)
+        again.remember([original])
+        #expect(again.knownDevices.count == 3)
+        #expect(!again.isHidden(original))
     }
 }
 
@@ -1207,57 +1220,37 @@ func stableSnapshotsAvoidCatalogRewritesAndMarkDisconnectTime() throws {
 }
 
 @Test
-func lateDisplayConflictRestoresDefaultsAndExplicitVisibility() throws {
-    for changeAtSecondPort in [false, true] {
-        try withDefaults { defaults in
-            let base = UUID().uuidString
-            let a = monitor(base), b = monitor(base + "_00000010")
-            let store = PriorityStore(defaults: defaults)
-            store.remember([a])
-            if !changeAtSecondPort { store.unhide(a, from: .speaker) }
-            store.remember([b])
-            if changeAtSecondPort { store.unhide(b, from: .speaker) }
-            store.remember([a, b])
-            #expect(store.isHidden(a, in: .speaker) == changeAtSecondPort)
-            #expect(store.isHidden(b, in: .speaker) != changeAtSecondPort)
-            #expect(store.isHidden(a, in: .headphone))
-            #expect(store.isHidden(b, in: .headphone))
-        }
+func genericHDMIOutputsWithAZeroUUIDKeepTheirExactUIDs() throws {
+    try withDefaults { defaults in
+        let zero = "00000000-0000-0000-0000-000000000000"
+        let first = monitor(zero, "HDMI Audio")
+        let second = monitor(zero + "_00000010", "HDMI Audio")
+        let third = monitor(zero + "_00000012", "HDMI Audio")
+        let store = PriorityStore(defaults: defaults)
+        store.remember([first])
+        store.unhide(first, from: .speaker)
+        store.remember([second])
+        store.remember([third])
+        #expect(Set(store.knownDevices.map(\.uid)) == [first.uid, second.uid, third.uid])
+        #expect(store.isHidden(second, in: .speaker))
+        #expect(store.isHidden(third, in: .speaker))
+        #expect(store.currentUID(for: first.uid, role: .output) == first.uid)
     }
 }
 
 @Test
-func malformedArchivedPortRankIsClampedWhenSplittingCopies() throws {
+func anEarlierForksZeroUUIDAliasAndPortHistoryCannotRedirectAShortcut() throws {
     try withDefaults { defaults in
-        let a = portMic("114000"), b = portMic("1114000")
+        let base = "00000000-0000-0000-0000-000000000000"
+        let generic = monitor(base + "_00000010", "HDMI Audio")
+        var stored = StoredDevice(device: generic, lastSeen: Date())
+        stored.previousUIDs = [base]
+        let encoded = try JSONEncoder().encode(stored)
+        var row = try #require(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        row["portHistory"] = ["ports": [:], "inherited": ["positions": [:]]]
+        defaults.set(try JSONSerialization.data(withJSONObject: [row]), forKey: "knownDevices")
         let store = PriorityStore(defaults: defaults)
-        store.remember([a])
-        store.savePriorities([a], microphonesFor: .speaker)
-        store.remember([b])
-        var records = store.knownDevices
-        records[0].portHistory?.ports[a.uid]?.positions["inputPriorities"] = -2
-        defaults.set(try JSONEncoder().encode(records), forKey: "knownDevices")
-        store.remember([a, b])
-        #expect(store.sorted([b, a], microphonesFor: .speaker) == [a, b])
-    }
-}
-
-@Test
-func splittingPortsAfterAProfileSwitchUsesThatProfilesRanks() throws {
-    try withDefaults { defaults in
-        let a = portMic("114000"), b = portMic("1114000")
-        let builtin = device("builtin", role: .input)
-        let store = PriorityStore(defaults: defaults)
-        store.remember([a, builtin])
-        store.savePriorities([a, builtin], microphonesFor: .speaker)
-        let desk = try #require(store.profiles.first)
-        let travel = store.addProfile(named: "Travel")
-        store.savePriorities([builtin, a], microphonesFor: .speaker)
-        store.remember([b, builtin])
-        #expect(store.loadProfile(travel.id))
-        store.remember([a, b, builtin])
-        #expect(store.sorted([b, a, builtin], microphonesFor: .speaker) == [a, builtin, b])
-        #expect(store.loadProfile(desk.id))
-        #expect(store.sorted([b, a, builtin], microphonesFor: .speaker) == [builtin, a, b])
+        #expect(store.knownDevices.map(\.uid) == [generic.uid])
+        #expect(store.currentUID(for: base, role: .output) == base)
     }
 }
