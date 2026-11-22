@@ -135,9 +135,9 @@ switching off to keep it.
   **Use Its Microphone Too** in its row's actions menu.
 - With **Microphones follow the output** enabled, speakers and headphones
   each keep their own microphone order, so moving from headphones to
-  speakers can also move to the desk microphone. A microphone you pick in
-  Control Center or Sound Settings still stays until it disconnects or a
-  microphone your list would pick connects.
+  speakers can also move to the desk microphone. A microphone you pick by
+  hand still stays until it disconnects, a microphone your list would pick
+  connects, or the output switches to a category that already ranks it first.
 - With **Mute speakers when headphones disconnect**, on by default, the
   speakers start muted when the headphones playing disconnect, are turned off
   or run out of battery.
