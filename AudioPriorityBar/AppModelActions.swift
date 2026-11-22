@@ -33,7 +33,9 @@ extension AppModel {
         microphonesFollowOutput = enabled
         store.microphonesFollowOutput = enabled
         viewedMicrophoneCategory = nil
+        followedOutputCategory = activeOutputCategory
         refreshDevices()
+        if enabled { clearRedundantPick(for: .input) }
         if !isManualMode { applyHighestPriorityInput() }
     }
 
@@ -341,13 +343,20 @@ extension AppModel {
         let before = currentUIDs
         guard select(device) else { return }
         keepPicks(DeviceRole.allCases.filter { $0 == device.role || before[$0] != currentUIDs[$0] })
+        if device.role == .output {
+            followOutputCategory()
+        } else {
+            syncMicrophoneOrderForOutput()
+        }
     }
 
     /// Keeps `roles` on their current devices while automatic switching is
-    /// on, as a pick in Control Center is kept.
+    /// on, as a pick in Control Center is kept. Output goes first so `.input`
+    /// sees the output pick when checking whether a paired mic is already the
+    /// automatic choice.
     private func keepPicks(_ roles: [DeviceRole]) {
         guard !isManualMode else { return }
-        for role in roles {
+        for role in [DeviceRole.output, .input] where roles.contains(role) {
             if let uid = currentUIDs[role] { keepPick(uid, for: role) }
         }
     }
@@ -440,6 +449,7 @@ extension AppModel {
         guard select(output) else { return }
         select(input)
         keepPicks([.output, .input])
+        syncMicrophoneOrderForOutput()
     }
 
     /// Selects one device only, regardless of `selectsPairedDevice`. An
@@ -455,6 +465,7 @@ extension AppModel {
             return
         }
         keepPicks(device.role == .output ? [.output, .input] : [.input])
+        syncMicrophoneOrderForOutput()
     }
 
     func setVolume(_ value: Float) {
@@ -466,12 +477,14 @@ extension AppModel {
 
     func setCategory(_ category: OutputCategory, for device: AudioDevice) {
         DebugLog.shared.write("\(device.logName) moved to \(category.rawValue)")
-        let playing = activeOutputCategory
         preservingVisibility(movingTo: category, device)
         refreshDevices()
-        if !isManualMode { applyHighestPriorityOutput() }
+        if !isManualMode {
+            clearRedundantPick(for: .output)
+            applyHighestPriorityOutput()
+        }
         // Moving the device that plays changes its category without a switch.
-        followOutputCategory(from: playing)
+        followOutputCategory()
     }
 
     /// Moves a device to a category without changing whether it is hidden:
@@ -561,7 +574,12 @@ extension AppModel {
         // reapply then finds the same microphone and changes nothing.
         store.savePriorities(inputDevices, microphonesFor: microphoneOrderCategory)
         DebugLog.shared.write("microphone order with \(microphoneOrderCategory.rawValue) changed from \(before) to \(inputDevices.map(\.name))")
-        if !isManualMode { applyHighestPriorityInput() }
+        if !isManualMode {
+            if viewedMicrophoneCategory == nil {
+                clearPick(for: .input, reason: "the microphone order changed")
+            }
+            applyHighestPriorityInput()
+        }
     }
 
     func moveOutput(
@@ -585,7 +603,10 @@ extension AppModel {
             store.savePriorities(headphoneDevices, category: .headphone)
         }
         DebugLog.shared.write("\(category.rawValue) order changed from \(before) to \((category == .speaker ? speakerDevices : headphoneDevices).map(\.name))")
-        if !isManualMode { applyHighestPriorityOutput() }
+        if !isManualMode {
+            clearRedundantPick(for: .output)
+            applyHighestPriorityOutput()
+        }
     }
 
     func dropDevice(
@@ -622,7 +643,6 @@ extension AppModel {
             return true
         }
 
-        let playing = activeOutputCategory
         DebugLog.shared.write("\(device.logName) dragged to \(category.rawValue)")
         preservingVisibility(movingTo: category, device)
         refreshDevices()
@@ -642,8 +662,11 @@ extension AppModel {
         }
         store.savePriorities(devices, category: category)
         DebugLog.shared.write("\(category.rawValue) order changed from \(before) to \(devices.map(\.name))")
-        if !isManualMode { applyHighestPriorityOutput() }
-        followOutputCategory(from: playing)
+        if !isManualMode {
+            clearRedundantPick(for: .output)
+            applyHighestPriorityOutput()
+        }
+        followOutputCategory()
         return true
     }
 
@@ -720,6 +743,7 @@ extension AppModel {
         viewedMicrophoneCategory = nil
         refreshProfiles()
         refreshDevices()
+        followedOutputCategory = activeOutputCategory
         // Automatic mode alone picks from the lists, so it chooses this once
         // before the profile's own setting takes over.
         isManualMode = false

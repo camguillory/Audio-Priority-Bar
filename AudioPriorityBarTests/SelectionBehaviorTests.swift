@@ -1250,6 +1250,120 @@ func theMicrophoneIsChosenForTheOutputJustSelected() {
     #expect(desk.audio.selections.map(\.0) == [.output, .input])
 }
 
+@Test
+@MainActor
+func pickingAnOutputInThePanelMovesTheMicrophone() {
+    let desk = FollowingDesk()
+    desk.audio.catalog = [desk.speaker, desk.headphones, desk.roomMic, desk.lapelMic]
+    let model = desk.model()
+    model.start()
+    #expect(model.currentOutputID == desk.headphones.platformID)
+    #expect(model.currentInputID == desk.lapelMic.platformID)
+
+    model.selectManually(desk.speaker)
+    model.handleDefaultChanged(.output)
+
+    #expect(model.currentOutputID == desk.speaker.platformID)
+    #expect(model.currentInputID == desk.roomMic.platformID)
+    #expect(model.keptPicks == [.output: desk.speaker.uid])
+
+    model.selectManually(desk.headphones)
+    model.handleDefaultChanged(.output)
+
+    #expect(model.currentOutputID == desk.headphones.platformID)
+    #expect(model.currentInputID == desk.lapelMic.platformID)
+    #expect(model.keptPicks.isEmpty)
+}
+
+@Test
+@MainActor
+func aRedundantMicrophonePickDoesNotBlockFollowingOutput() {
+    let desk = FollowingDesk()
+    desk.audio.catalog = [desk.speaker, desk.headphones, desk.roomMic, desk.lapelMic]
+    let model = desk.model(isUserPicking: { true })
+    model.start()
+
+    // Picking the other category's top microphone while on headphones keeps it
+    // until speakers make it first in the list again.
+    model.selectManually(desk.roomMic)
+    #expect(model.keptPicks[.input] == desk.roomMic.uid)
+
+    model.selectManually(desk.speaker)
+    #expect(model.currentInputID == desk.roomMic.platformID)
+    #expect(model.keptPicks[.input] == nil)
+
+    desk.audio.defaults[.output] = desk.headphones.platformID
+    model.handleDefaultChanged(.output)
+    #expect(model.currentInputID == desk.lapelMic.platformID)
+
+    // Picking the microphone already ranked first does not pin it either.
+    model.selectManually(desk.lapelMic)
+    #expect(model.keptPicks[.input] == nil)
+
+    desk.audio.defaults[.output] = desk.speaker.platformID
+    model.handleDefaultChanged(.output)
+    #expect(model.currentInputID == desk.roomMic.platformID)
+}
+
+@Test
+@MainActor
+func defaultInputBeforeDefaultOutputStillFollowsTheOutputCategory() {
+    let desk = FollowingDesk()
+    desk.audio.catalog = [desk.speaker, desk.headphones, desk.roomMic, desk.lapelMic]
+    let model = desk.model(isUserPicking: { true })
+    model.start()
+    #expect(model.currentOutputID == desk.headphones.platformID)
+    #expect(model.currentInputID == desk.lapelMic.platformID)
+
+    // CoreAudio can report the input callback first after both defaults have
+    // moved; refreshing on `.input` must not mask the output category change.
+    desk.audio.defaults[.output] = desk.speaker.platformID
+    model.handleDefaultChanged(.input)
+    model.handleDefaultChanged(.output)
+
+    #expect(model.currentOutputID == desk.speaker.platformID)
+    #expect(model.currentInputID == desk.roomMic.platformID)
+}
+
+@Test
+@MainActor
+func outputOnlyHoldsWhenMicrophonesFollowOutput() {
+    let desk = FollowingDesk()
+    let headset = dualRole(outputID: 6, inputID: 106)
+    desk.store.setCategory(.headphone, for: headset.output)
+    desk.store.setNeverUse(headset.output, true)
+    desk.audio.catalog = [
+        desk.speaker, headset.output, headset.input, desk.roomMic, desk.lapelMic,
+    ]
+    let model = desk.model()
+    model.start()
+    #expect(model.currentOutputID == desk.speaker.platformID)
+    #expect(model.currentInputID == desk.roomMic.platformID)
+
+    model.selectOnly(headset.output)
+    model.handleDefaultChanged(.output)
+
+    #expect(model.currentOutputID == headset.output.platformID)
+    #expect(model.currentInputID == desk.roomMic.platformID)
+    #expect(model.microphoneOrderCategory == .headphone)
+}
+
+@Test
+@MainActor
+func reorderingTheActiveMicrophoneListClearsAKeptPick() {
+    let desk = FollowingDesk()
+    desk.audio.catalog = [desk.speaker, desk.roomMic, desk.lapelMic, desk.macMic]
+    let model = desk.model()
+    model.start()
+    model.selectManually(desk.macMic)
+    #expect(model.keptPicks[.input] == desk.macMic.uid)
+
+    model.moveInput(from: IndexSet(integer: 1), to: 0)
+
+    #expect(model.keptPicks[.input] == nil)
+    #expect(model.currentInputID == desk.lapelMic.platformID)
+}
+
 /// Two profiles over the same hardware: at the desk the desk speakers and the
 /// room microphone come first, while travelling the laptop's own do.
 @MainActor

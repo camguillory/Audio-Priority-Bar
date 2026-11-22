@@ -188,6 +188,8 @@ final class AppModel {
     private var connectedUIDsByID: [DeviceRole: [UInt32: String]] = [:]
     /// The output category the panel's microphone order was last shown for.
     private var microphoneOrderShownFor: OutputCategory?
+    /// The output category `followOutputCategory` last settled on.
+    var followedOutputCategory: OutputCategory?
     private var recentlyAddedUIDs: [DeviceRole: Set<String>] = [:]
     private var topologyChangedAt: [DeviceRole: TimeInterval] = [:]
     private var micFlashTimer: Timer?
@@ -278,6 +280,7 @@ final class AppModel {
     func start() {
         guard !hasStarted else { return }
         refreshDevices()
+        followedOutputCategory = activeOutputCategory
         refreshVolume()
         battery.refresh()
         if !isManualMode {
@@ -334,6 +337,7 @@ final class AppModel {
                 // it, so the default-change events after it see nothing.
                 noteOutsideMoves(from: before)
                 holdMicrophone()
+                followOutputCategory()
             }
             refreshMute()
             return
@@ -419,6 +423,7 @@ final class AppModel {
                     selectedOnlyOutputUID = nil
                     if let output { selectPairedDevice(of: output) }
                 }
+                followOutputCategory()
             }
             refreshMute()
             return
@@ -452,9 +457,7 @@ final class AppModel {
             selectPairedDevice(of: output, automatically: !isManualMode)
             // An output picked elsewhere still brings its own microphone.
             let moved = currentUIDs
-            followOutputCategory(
-                from: previousDevices[.output].map(store.category(for:))
-            )
+            followOutputCategory()
             announceAutomaticSwitches(since: moved)
         }
         refreshMute()
@@ -750,11 +753,31 @@ final class AppModel {
     }
 
     /// Keeps `uid` for `role` until it leaves or the list would use a device
-    /// that connects after it.
+    /// that connects after it. Picking what the list already chooses returns
+    /// that role to the list instead of pinning it across later switches.
     func keepPick(_ uid: String, for role: DeviceRole) {
+        if automaticTarget(for: role, honoringPicks: false)?.uid == uid {
+            clearPick(for: role, reason: "already first in the list")
+            return
+        }
         DebugLog.shared.write("keeping the \(role.rawValue) pick \(logName(uid, role)) until it leaves or a newer device outranks it")
         keptPicks[role] = uid
         connectedAtPick[role] = role == .input ? connectedInputUIDs : connectedOutputUIDs
+    }
+
+    func clearPick(for role: DeviceRole, reason: String) {
+        guard let uid = keptPicks[role] else { return }
+        DebugLog.shared.write("the \(role.rawValue) pick \(logName(uid, role)) ended: \(reason)")
+        keptPicks[role] = nil
+        connectedAtPick[role] = nil
+    }
+
+    func clearRedundantPick(for role: DeviceRole) {
+        guard let uid = keptPicks[role],
+              automaticTarget(for: role, honoringPicks: false)?.uid == uid else {
+            return
+        }
+        clearPick(for: role, reason: "now first in the list")
     }
 
     /// Drops a pick whose device left, and ends every pick once the list
@@ -1272,14 +1295,13 @@ final class AppModel {
             DebugLog.shared.write("automatic \(role.rawValue): waiting for a Jabra link check before choosing")
             return
         }
-        let category = activeOutputCategory
         if let first = automaticTarget(for: role) {
             if first.platformID != (role == .input ? currentInputID : currentOutputID) {
                 DebugLog.shared.write("automatic \(role.rawValue): \(first.logName)\(logReason(first))")
             }
             select(first, automatically: true)
         }
-        if role == .output { followOutputCategory(from: category) }
+        if role == .output { followOutputCategory() }
     }
 
     /// Why the list chose `device`, when it was not simply the first one.
@@ -1293,11 +1315,24 @@ final class AppModel {
     /// Once the output has moved to the other category, moves the microphone
     /// to the top of that category's order. Read after the output is applied,
     /// so the order always belongs to the device now playing.
-    func followOutputCategory(from previous: OutputCategory?) {
-        guard microphonesFollowOutput, activeOutputCategory != previous else { return }
+    func followOutputCategory() {
+        let active = activeOutputCategory
+        guard active != followedOutputCategory else { return }
+        followedOutputCategory = active
+        guard microphonesFollowOutput else { return }
         resetViewedMicrophoneOrderIfOutputMoved()
+        clearRedundantPick(for: .input)
         inputDevices = store.sorted(inputDevices, microphonesFor: microphoneOrderCategory)
         if !isManualMode { applyHighestPriority(.input) }
+    }
+
+    /// Updates the panel's microphone order for an explicit paired override
+    /// without re-selecting the microphone.
+    func syncMicrophoneOrderForOutput() {
+        followedOutputCategory = activeOutputCategory
+        guard microphonesFollowOutput else { return }
+        resetViewedMicrophoneOrderIfOutputMoved()
+        inputDevices = store.sorted(inputDevices, microphonesFor: microphoneOrderCategory)
     }
 
     private func automaticTarget(
@@ -1317,9 +1352,13 @@ final class AppModel {
                link.isUsable(paired) {
                 return paired
             }
-            // The panel may be showing the other category's order.
+            // The panel may be showing the other category's order, and an
+            // input event can run before a pending output change is accepted.
             return store.firstSelectable(
-                in: store.sorted(inputDevices, microphonesFor: activeOutputCategory),
+                in: store.sorted(
+                    inputDevices,
+                    microphonesFor: followedOutputCategory ?? activeOutputCategory
+                ),
                 isUsable: link.isUsable
             )
         }
