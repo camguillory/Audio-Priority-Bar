@@ -155,7 +155,7 @@ struct DeviceRow: View {
                     tint: .red,
                     spokenText: controls.isCalling
                         ? "In call, microphone muted on the headset"
-                        : controls.isLineOpen == true
+                        : controls.isRecording
                             ? "Microphone in use, muted on the headset"
                             : "Busy, microphone muted on the headset",
                     isIconOnly: true

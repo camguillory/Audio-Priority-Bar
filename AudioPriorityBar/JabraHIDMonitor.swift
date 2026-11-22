@@ -296,6 +296,12 @@ final class JabraHIDMonitor {
         run(dongle, .endCall)
     }
 
+    func setRecording(_ isRecording: Bool, for device: AudioDevice) {
+        guard case let .one(dongle) = binding(for: device),
+              dongle.session.controls.isRecording != isRecording else { return }
+        run(dongle, .setRecording(isRecording))
+    }
+
     // MARK: - Headset session
 
     /// Feeds the session one input and carries out what it asks for.
