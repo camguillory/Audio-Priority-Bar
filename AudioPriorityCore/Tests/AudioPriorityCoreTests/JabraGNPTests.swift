@@ -472,7 +472,7 @@ func theHeadsetReportsItsMicrophoneMuteWhoeverAsked() throws {
 }
 
 @Test
-func anOpenMicrophoneLinePlaysCallAudioWithoutACall() {
+func aRecordingOrHeadsetCallPlaysCallAudioWithoutAnAppCall() {
     // As with Voice Memos recording or the call button pressed with no call
     // app: HearThrough faded and the mute button answered.
     var controls = JabraGNP.HeadsetControls(
@@ -482,15 +482,25 @@ func anOpenMicrophoneLinePlaysCallAudioWithoutACall() {
     )
     controls.answeredMute = true
     #expect(!controls.isMicMuted)
-    controls.isLineOpen = true
+    controls.isRecording = true
     #expect(controls.audibleNoiseMode == .off)
     #expect(!controls.isAvailable(.hearThrough))
     #expect(controls.isAvailable(.cancelling))
     #expect(controls.isMicMuted)
+    #expect(!controls.isCalling)
     // No call began, so there is no mode for the headset to put back.
     #expect(controls.modeBeforeCall == nil)
-    controls.isLineOpen = false
+    controls.isRecording = false
     #expect(controls.audibleNoiseMode == .hearThrough)
+    #expect(!controls.isMicMuted)
+
+    controls.isHeadsetCall = true
+    #expect(controls.playsCallAudio)
+    #expect(controls.isCalling)
+    #expect(controls.isMicMuted)
+    controls.isHeadsetCall = false
+    #expect(!controls.playsCallAudio)
+    #expect(!controls.isCalling)
     #expect(!controls.isMicMuted)
 }
 

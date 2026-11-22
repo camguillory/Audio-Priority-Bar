@@ -447,11 +447,10 @@ public enum JabraGNP {
         /// busylight button does not.
         public private(set) var isInCall: Bool?
         public var isBusy: Bool?
-        /// The microphone line, open in a call and also whenever an app
-        /// records or the headset's call button opens it without a call.
-        public var isLineOpen: Bool?
+        /// An app is recording from the headset's microphone, per CoreAudio.
+        public var isRecording = false
         /// The call button opened the line with no app recording, a call of
-        /// the headset's own until the button is pressed again.
+        /// the headset's own until the button is pressed again or ended.
         public var isHeadsetCall = false
         /// The headset puts this mode back the moment a call ends, dropping
         /// any change made during the call. Nil when the call began unseen.
@@ -487,9 +486,9 @@ public enum JabraGNP {
             isInCall = inCall
         }
 
-        /// The headset plays audio as in a call while its microphone line is
-        /// open, with or without one.
-        public var playsCallAudio: Bool { isInCall == true || isLineOpen == true }
+        /// The headset plays call-mode audio during a call or while an app
+        /// records from its microphone.
+        public var playsCallAudio: Bool { isInCall == true || isHeadsetCall || isRecording }
 
         /// A call from an app, or one the headset started itself.
         public var isCalling: Bool { isInCall == true || isHeadsetCall }
@@ -512,8 +511,8 @@ public enum JabraGNP {
             }
         }
 
-        /// Muted at the headset while its microphone line is open or its
-        /// busylight marks the user busy, the times its mute means something.
+        /// Muted at the headset while it plays call audio or its busylight
+        /// marks the user busy, the times its mute means something.
         public var isMicMuted: Bool {
             guard playsCallAudio || isBusy == true else { return false }
             return answeredMute ?? (isBoomUp == true)
@@ -536,7 +535,8 @@ public enum JabraGNP {
         case sidetone(Sidetone)
         case busy(Bool)
         case inCall(Bool)
-        case lineOpen(Bool)
+        case headsetCall(Bool)
+        case recording(Bool)
         case boomUp(Bool)
         case headDetection(Bool)
         case earcup(isLeft: Bool, isOn: Bool)

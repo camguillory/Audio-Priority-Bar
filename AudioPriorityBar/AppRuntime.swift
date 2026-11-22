@@ -90,6 +90,7 @@ final class AppRuntime {
                 setSidetone: { jabra.setSidetone($0, for: $1) },
                 setBusy: { jabra.setBusy($0, for: $1) },
                 endHeadsetCall: { jabra.endHeadsetCall(for: $0) },
+                setRecording: { jabra.setRecording($0, for: $1) },
                 refreshHeadsetControls: { jabra.refreshHeadsetControls() }
             ),
             battery: BluetoothBatteryMonitor(),

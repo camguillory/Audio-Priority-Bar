@@ -45,7 +45,6 @@ public struct HeadsetSession: Sendable {
 
     public enum Wake: Sendable, Equatable {
         case hookSettled
-        case lineSettled
         case writesDue
         case muteLight
         case modeAfterCall
@@ -61,6 +60,9 @@ public struct HeadsetSession: Sendable {
         case message(JabraGNP.Message)
         case signal(Signal, Bool)
         case signals(Signals)
+        /// CoreAudio reports whether an app is recording from the dongle's
+        /// microphone.
+        case setRecording(Bool)
         /// A press of the mute button or move of the boom, which a call app
         /// answers on the Mute light some time later.
         case muteRequest
@@ -97,9 +99,6 @@ public struct HeadsetSession: Sendable {
     /// it starts the headset's own call, so a call on that switch counts only
     /// once it stays up.
     static let hookSettle: TimeInterval = 1
-    /// Something checks the microphone for 1.5 to 3s every so often, so an
-    /// open line counts only once it has stayed open longer.
-    static let lineSettle: TimeInterval = 4
     /// The call button raises Jabra's hook switch half a second before it
     /// opens the line, which nothing using the microphone does.
     static let callButtonWindow: TimeInterval = 1.5
@@ -135,6 +134,7 @@ public struct HeadsetSession: Sendable {
     private var hooks = (standard: false, jabra: false)
     private var lines = (standard: false, jabra: false)
     private var jabraHookRoseAt = -TimeInterval.greatestFiniteMagnitude
+    private var jabraHookSettlesAt = TimeInterval.greatestFiniteMagnitude
     /// While the app ends a call the headset started, the hook switch it
     /// raises on the way is its own, not a call.
     private var endsCallUntil = -TimeInterval.greatestFiniteMagnitude
@@ -179,8 +179,11 @@ public struct HeadsetSession: Sendable {
             effects.append(Self.read(JabraGNP.pairingGroup, JabraGNP.eventMaskOp))
             effects.append(.readMuteLight)
         case .disconnected:
-            // The next headset to connect may not be this one.
+            // The next headset to connect may not be this one; CoreAudio
+            // recording belongs to the dongle's USB input, so keep it.
+            let isRecording = controls.isRecording
             controls = JabraGNP.HeadsetControls()
+            controls.isRecording = isRecording
             awaitsEventMask = false
             usesAmbience = false
             pendingWrites.removeAll()
@@ -188,19 +191,29 @@ public struct HeadsetSession: Sendable {
             hooks = (false, false)
             lines = (false, false)
             jabraHookRoseAt = -TimeInterval.greatestFiniteMagnitude
+            jabraHookSettlesAt = .greatestFiniteMagnitude
         case let .message(message):
             receive(message, at: now, &effects)
         case let .signal(signal, isOn):
             note(signal, isOn, at: now, &effects)
         case let .signals(signals):
-            // Read as they stand, so a call or line already under way counts
-            // at once.
+            let wasLineOpen = lines.standard || lines.jabra
             if let up = signals.standardHook { hooks.standard = up }
-            if let up = signals.jabraHook { hooks.jabra = up }
+            if let up = signals.jabraHook {
+                if up, !hooks.jabra {
+                    jabraHookRoseAt = now
+                    jabraHookSettlesAt = now + Self.hookSettle
+                } else if !up {
+                    jabraHookSettlesAt = .greatestFiniteMagnitude
+                }
+                hooks.jabra = up
+            }
             if let open = signals.standardLine { lines.standard = open }
             if let open = signals.jabraLine { lines.jabra = open }
-            apply(.inCall(hooks.standard || hooks.jabra), at: now, &effects)
-            apply(.lineOpen(lines.standard || lines.jabra), at: now, &effects)
+            noteHooks(at: now, &effects)
+            noteLines(wasOpen: wasLineOpen, at: now, &effects)
+        case let .setRecording(isRecording):
+            apply(.recording(isRecording), at: now, &effects)
         case .muteRequest:
             for delay in Self.muteLightRereads { effects.append(.wake(.muteLight, after: delay)) }
         case let .muteLight(isLit):
@@ -235,7 +248,7 @@ public struct HeadsetSession: Sendable {
         case .endCall:
             endCall(at: now, &effects)
         case .stop:
-            finishEndingCall(&effects)
+            finishEndingCall(at: now, &effects)
         case let .failed(effect):
             undo(effect, &effects)
         }
@@ -306,15 +319,22 @@ public struct HeadsetSession: Sendable {
             if isOn, isEndingCall { effects.append(.wake(.endCall, after: Self.endCallAnswer)) }
             noteHooks(at: now, &effects)
         case .jabraHook:
-            if isOn, !hooks.jabra { jabraHookRoseAt = now }
+            if isOn, !hooks.jabra {
+                jabraHookRoseAt = now
+                jabraHookSettlesAt = now + Self.hookSettle
+            } else if !isOn {
+                jabraHookSettlesAt = .greatestFiniteMagnitude
+            }
             hooks.jabra = isOn
             noteHooks(at: now, &effects)
         case .standardLine:
+            let wasOpen = lines.standard || lines.jabra
             lines.standard = isOn
-            noteLines(at: now, &effects)
+            noteLines(wasOpen: wasOpen, at: now, &effects)
         case .jabraLine:
+            let wasOpen = lines.standard || lines.jabra
             lines.jabra = isOn
-            noteLines(at: now, &effects)
+            noteLines(wasOpen: wasOpen, at: now, &effects)
         }
     }
 
@@ -326,36 +346,41 @@ public struct HeadsetSession: Sendable {
             return
         }
         guard now > endsCallUntil else { return }
-        if hooks.standard {
+        if hooks.standard || now >= jabraHookSettlesAt {
             apply(.inCall(true), at: now, &effects)
         } else {
-            effects.append(.wake(.hookSettled, after: Self.hookSettle))
+            effects.append(.wake(.hookSettled, after: jabraHookSettlesAt - now))
         }
     }
 
-    /// Opening the microphone line makes the headset play call audio, with or
-    /// without a call: an app recording, or its call button pressed with no
-    /// call app, which opens the line until it is pressed again.
-    private mutating func noteLines(at now: TimeInterval, _ effects: inout [Effect]) {
-        guard lines.standard || lines.jabra else {
-            apply(.lineOpen(false), at: now, &effects)
+    /// The headset's call button opens the HID telephony line right after a
+    /// brief pulse on Jabra's hook switch. Output-only media playback also
+    /// holds the line open without that pulse, so only the hook-then-line
+    /// transition starts a headset call.
+    private mutating func noteLines(
+        wasOpen: Bool,
+        at now: TimeInterval,
+        _ effects: inout [Effect]
+    ) {
+        let isOpen = lines.standard || lines.jabra
+        guard isOpen else {
+            apply(.headsetCall(false), at: now, &effects)
             return
         }
-        if now - jabraHookRoseAt <= Self.callButtonWindow {
-            apply(.lineOpen(true), at: now, &effects)
-        } else {
-            effects.append(.wake(.lineSettled, after: Self.lineSettle))
-        }
+        guard !wasOpen,
+              now > endsCallUntil,
+              controls.isInCall != true,
+              !controls.isRecording,
+              now - jabraHookRoseAt <= Self.callButtonWindow else { return }
+        apply(.headsetCall(true), at: now, &effects)
     }
 
     private mutating func fire(_ wake: Wake, at now: TimeInterval, _ effects: inout [Effect]) {
         switch wake {
         case .hookSettled:
             guard hooks.standard || hooks.jabra, now > endsCallUntil else { return }
+            guard hooks.standard || now >= jabraHookSettlesAt else { return }
             apply(.inCall(true), at: now, &effects)
-        case .lineSettled:
-            guard lines.standard || lines.jabra else { return }
-            apply(.lineOpen(true), at: now, &effects)
         case .writesDue:
             guard !pendingWrites.isEmpty else { return }
             guard now >= quietUntil else {
@@ -373,7 +398,7 @@ public struct HeadsetSession: Sendable {
             let op = usesAmbience ? JabraGNP.ambienceModeOp : JabraGNP.noiseModeOp
             effects.append(Self.read(JabraGNP.settingsGroup, op))
         case .endCall:
-            finishEndingCall(&effects)
+            finishEndingCall(at: now, &effects)
         }
     }
 
@@ -384,7 +409,7 @@ public struct HeadsetSession: Sendable {
     /// the headset reminds the wearer to lower it as the brief call starts;
     /// with the boom down the light would have it announce a mute instead.
     private mutating func endCall(at now: TimeInterval, _ effects: inout [Effect]) {
-        guard controls.isLineOpen == true, controls.isInCall != true else { return }
+        guard controls.isHeadsetCall, controls.isInCall != true else { return }
         if controls.isBoomUp == true { effects.append(.setLight(.mute, true)) }
         effects.append(.setLight(.offHook, true))
         isEndingCall = true
@@ -392,11 +417,12 @@ public struct HeadsetSession: Sendable {
         effects.append(.wake(.endCall, after: Self.endCallHold))
     }
 
-    private mutating func finishEndingCall(_ effects: inout [Effect]) {
+    private mutating func finishEndingCall(at now: TimeInterval, _ effects: inout [Effect]) {
         guard isEndingCall else { return }
         isEndingCall = false
         effects.append(.setLight(.offHook, false))
         effects.append(.setLight(.mute, false))
+        apply(.headsetCall(false), at: now, &effects)
     }
 
     // MARK: - Writes
@@ -477,8 +503,12 @@ public struct HeadsetSession: Sendable {
             next.isBusy = isBusy
         case let .inCall(isInCall):
             next.setInCall(isInCall)
-        case let .lineOpen(isOpen):
-            next.isLineOpen = isOpen
+            if isInCall { next.isHeadsetCall = false }
+        case let .headsetCall(isHeadsetCall):
+            next.isHeadsetCall = isHeadsetCall
+        case let .recording(isRecording):
+            next.isRecording = isRecording
+            if isRecording { next.isHeadsetCall = false }
         case let .boomUp(isUp):
             next.isBoomUp = isUp
         case let .headDetection(isOn):
@@ -512,10 +542,10 @@ public struct HeadsetSession: Sendable {
         effects.append(.changed)
     }
 
-    /// Microphone line open or busy, the times the headset's mute means
+    /// Call, recording, or busy, the times the headset's mute means
     /// something; nil while none is known yet.
     private static func engaged(_ controls: JabraGNP.HeadsetControls) -> Bool? {
-        guard controls.isInCall != nil || controls.isLineOpen != nil || controls.isBusy != nil
+        guard controls.isInCall != nil || controls.isBusy != nil || controls.isRecording
         else { return nil }
         return controls.playsCallAudio || controls.isBusy == true
     }

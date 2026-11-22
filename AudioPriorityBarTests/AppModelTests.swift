@@ -1458,6 +1458,7 @@ func theBusylightFollowsAnAppRecordingFromTheHeadsetWhenAsked() {
     var controls = JabraGNP.HeadsetControls(noiseMode: .cancelling, isInCall: false)
     controls.isBusy = false
     var writes: [Bool] = []
+    var recordings: [Bool] = []
     let model = AppModel(
         store: PriorityStore(defaults: isolatedDefaults()),
         audio: audio.operations,
@@ -1465,12 +1466,26 @@ func theBusylightFollowsAnAppRecordingFromTheHeadsetWhenAsked() {
             isUsable: { _ in true },
             state: { _ in .up },
             headsetControls: { $0.role == .output ? controls : nil },
-            setBusy: { isBusy, _ in writes.append(isBusy) }
+            setBusy: { isBusy, _ in writes.append(isBusy) },
+            setRecording: { isRecording, _ in
+                controls.isRecording = isRecording
+                recordings.append(isRecording)
+            }
         )
     )
     model.start()
+    // Output playback alone never counts as recording.
+    audio.running = [1]
+    model.refreshMute()
+    #expect(model.headsetControls(for: headphones)?.playsCallAudio == false)
+    #expect(recordings.last == false)
+
     // Each step below is what the model sees once the microphone settles.
     audio.running = [2]
+    model.refreshMute()
+    #expect(model.headsetControls(for: headphones)?.isRecording == true)
+    #expect(model.headsetControls(for: headphones)?.playsCallAudio == true)
+    #expect(model.headsetControls(for: headphones)?.isCalling == false)
     model.updateAutomaticBusylights()
     #expect(writes.isEmpty)
 
@@ -1481,6 +1496,8 @@ func theBusylightFollowsAnAppRecordingFromTheHeadsetWhenAsked() {
     controls.isBusy = true
     model.updateAutomaticBusylights()
     audio.running = []
+    model.refreshMute()
+    #expect(model.headsetControls(for: headphones)?.isRecording == false)
     model.updateAutomaticBusylights()
     #expect(writes == [true, false])
     controls.isBusy = false
@@ -1508,18 +1525,25 @@ func theBusylightFollowsAnAppRecordingFromTheHeadsetWhenAsked() {
     audio.running = [2]
     model.updateAutomaticBusylights()
     #expect(writes == [true, false, true, true])
+
+    // Hiding the Jabra microphone keeps recording and busylight detection working.
+    model.hide(microphone)
+    audio.running = [2]
+    model.refreshMute()
+    #expect(model.headsetControls(for: headphones)?.isRecording == true)
+    model.updateAutomaticBusylights()
+    #expect(writes.last == true)
 }
 
 @Test
 @MainActor
-func aLineOpenedWithNoAppRecordingIsACallFromTheHeadset() {
+func endHeadsetCallForwardsOnlyWhileAHeadsetCallIsActive() {
     let audio = FakeAudio()
     let uid = "AppleUSBAudioEngine:Unknown Manufacturer:Jabra Link 380:50C2754454"
     let headphones = output(1, uid + ":1", "Jabra Link 380")
     let microphone = input(2, uid + ":2", "Jabra Link 380")
     audio.catalog = [headphones, microphone]
     var controls = JabraGNP.HeadsetControls(noiseMode: .hearThrough, isInCall: false)
-    controls.isLineOpen = false
     var ended = 0
     let model = AppModel(
         store: PriorityStore(defaults: isolatedDefaults()),
@@ -1533,27 +1557,15 @@ func aLineOpenedWithNoAppRecordingIsACallFromTheHeadset() {
     )
     model.start()
 
-    // The call button opens the line while nothing records, and the app
-    // may end that call.
-    controls.isLineOpen = true
-    model.classifyOpenLines()
+    controls.isHeadsetCall = true
     #expect(model.headsetControls(for: headphones)?.isCalling == true)
     model.endHeadsetCall(for: headphones)
     #expect(ended == 1)
-    controls.isLineOpen = false
-    model.classifyOpenLines()
-    #expect(model.headsetControls(for: headphones)?.isCalling == false)
 
-    // An app recording opens it too, and the line can outlast the
-    // recording without becoming a call.
-    audio.running = [2]
-    controls.isLineOpen = true
-    model.classifyOpenLines()
-    audio.running = []
-    model.classifyOpenLines()
+    controls.isHeadsetCall = false
+    controls.isRecording = true
     #expect(model.headsetControls(for: headphones)?.isCalling == false)
     #expect(model.headsetControls(for: headphones)?.playsCallAudio == true)
-    // A recording is no call to end.
     model.endHeadsetCall(for: headphones)
     #expect(ended == 1)
 }

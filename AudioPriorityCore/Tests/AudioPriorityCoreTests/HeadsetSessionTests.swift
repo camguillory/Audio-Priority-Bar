@@ -111,6 +111,7 @@ private struct Replay {
         case "setNoiseMode":
             let byte = words.count > 1 ? UInt8(words[1], radix: 16) ?? 0 : 0
             return .setNoiseMode(JabraGNP.NoiseMode(rawValue: byte) ?? .off)
+        case "setRecording": return .setRecording(flag)
         case "endCall": return .endCall
         case "stop": return .stop
         case "disconnected": return .disconnected
@@ -200,7 +201,8 @@ func theCallButtonOpensTheLineAtOnceWithoutACall() {
     113.357 hid rid 4 04 0e 00
     113.363 evt dst 00 src 04 seq df grp 23 op 01 args 00 01
     """)
-    #expect(replay.controls.isLineOpen == true)
+    #expect(replay.controls.isHeadsetCall == true)
+    #expect(replay.controls.isCalling == true)
     #expect(replay.controls.isBusy == true)
     #expect(replay.session.shownControls?.isMicMuted == true)
     replay.advance(to: 115)
@@ -213,7 +215,7 @@ func theCallButtonOpensTheLineAtOnceWithoutACall() {
     119.205 hid rid 2 02 00 00
     119.306 evt dst 00 src 04 seq f9 grp 0d op 4c args 08 08 00
     """)
-    #expect(replay.controls.isLineOpen == false)
+    #expect(replay.controls.isHeadsetCall == false)
     #expect(replay.controls.isBusy == false)
     #expect(replay.session.shownControls?.isMicMuted == false)
 }
@@ -228,23 +230,21 @@ func aMicrophoneCheckNeverOpensTheLine() {
     16.657 hid rid 2 02 00 00
     """)
     replay.advance(to: 25)
-    #expect(replay.controls.isLineOpen != true)
+    #expect(!replay.controls.isCalling)
     #expect(!replay.controls.playsCallAudio)
 }
 
 @Test
-func aRecordingOpensTheLineOnceItHolds() {
+func aRecordingPlaysCallAudioWithoutStartingACall() {
     // Voice Memos recording, with the headset's mute button pressed and
     // released during it.
     var replay = idle(at: 45)
     replay.play("""
     51.214 hid rid 4 04 08 00
     51.215 hid rid 2 02 04 00
+    51.220 do setRecording 1
     """)
-    replay.advance(to: 53)
-    #expect(replay.controls.isLineOpen != true)
-    replay.advance(to: 55.3)
-    #expect(replay.controls.isLineOpen == true)
+    #expect(replay.controls.isRecording == true)
     #expect(replay.controls.audibleNoiseMode == .off)
     #expect(!replay.controls.isCalling)
     replay.play("""
@@ -257,8 +257,9 @@ func aRecordingOpensTheLineOnceItHolds() {
     67.747 evt dst 00 src 04 seq bd grp 23 op 01 args 00 00
     73.072 hid rid 4 04 00 00
     73.073 hid rid 2 02 00 00
+    73.100 do setRecording 0
     """)
-    #expect(replay.controls.isLineOpen == false)
+    #expect(replay.controls.isRecording == false)
     #expect(replay.controls.audibleNoiseMode == .hearThrough)
 }
 
@@ -324,7 +325,7 @@ func hangingUpTheHeadsetsCallFromTheAppEndsItQuietly() {
     #expect(lights.map(\.isOn) == [true, false, false])
     #expect(abs(lights[1].time - 122.806) < 0.001)
     #expect(replay.controls.isInCall != true)
-    #expect(replay.controls.isLineOpen == false)
+    #expect(replay.controls.isHeadsetCall == false)
     #expect(replay.controls.isBusy == false)
 }
 
@@ -537,4 +538,75 @@ func aMaskReadThatNeverWentOutLeavesTheNextReplyAlone() {
     0.300 rep dst 00 src 04 seq 02 grp 0d op 4c args 00 00 01 7f
     """)
     #expect(replay.sends(kind: JabraGNP.writeKind, op: JabraGNP.eventMaskOp).isEmpty)
+}
+
+@Test
+func mediaPlaybackHoldingLineOpenNeverStartsACallOrPausesNoiseControl() {
+    // Captured on Evolve2 85 behind Link 380 while playing YouTube with ANC,
+    // sidetone on, and the boom parked up (`debug-2026-11-22.log`).
+    var replay = idle(at: 0)
+    replay.play("""
+    1.000 wrt dst 04 src 00 seq 10 grp 13 op 87 args 01
+    1.050 rep dst 00 src 04 seq 10 grp 13 op 87 args 01
+    2.000 evt dst 00 src 04 seq 11 grp 0d op 4c args 06 02
+    3.000 wrt dst 04 src 00 seq 12 grp 13 op 7c args 00 06
+    3.050 rep dst 00 src 04 seq 12 grp 13 op 7c args 00 06
+    10.000 hid rid 4 04 08 00
+    10.003 hid rid 2 02 04 00
+    """)
+    replay.advance(to: 20)
+    #expect(!replay.controls.isCalling)
+    #expect(!replay.controls.playsCallAudio)
+    #expect(replay.controls.audibleNoiseMode == .cancelling)
+    #expect(!replay.controls.isMicMuted)
+
+    // Opening the panel refreshes signals while Line is still held high.
+    replay.deliver(.signals(.init(standardHook: false, jabraHook: false, standardLine: true, jabraLine: true)), at: 25)
+    #expect(!replay.controls.isCalling)
+    #expect(!replay.controls.playsCallAudio)
+    #expect(replay.controls.audibleNoiseMode == .cancelling)
+    #expect(!replay.controls.isMicMuted)
+}
+
+@Test
+func readingSignalsDuringAHookPulseOrEndCallNeverLatchesInCall() {
+    var replay = idle(at: 0)
+    // A 0.5s jabraHook pulse starts and the panel opens mid-pulse.
+    replay.play("10.000 hid rid 4 04 01 00")
+    replay.deliver(.signals(.init(standardHook: false, jabraHook: true, standardLine: false, jabraLine: false)), at: 10.2)
+    #expect(replay.controls.isInCall != true)
+    replay.play("10.500 hid rid 4 04 00 00")
+    replay.advance(to: 12)
+    #expect(replay.controls.isInCall != true)
+
+    // A call-button call ended while media keeps Line high clears isHeadsetCall,
+    // and reading signals during endCall does not turn isInCall on.
+    replay.play("""
+    20.000 hid rid 4 04 01 00
+    20.500 hid rid 4 04 0e 00
+    20.501 hid rid 2 02 04 00
+    25.000 do endCall
+    """)
+    #expect(replay.controls.isHeadsetCall == true)
+    replay.deliver(.signals(.init(standardHook: true, jabraHook: true, standardLine: true, jabraLine: true)), at: 25.3)
+    #expect(replay.controls.isInCall != true)
+    replay.advance(to: 27)
+    #expect(replay.controls.isHeadsetCall == false)
+    #expect(!replay.controls.isCalling)
+}
+
+@Test
+func backToBackShortJabraHookPulsesNeverLatchInCallEarly() {
+    var replay = idle(at: 0)
+    replay.play("""
+    10.000 hid rid 4 04 01 00
+    10.400 hid rid 4 04 00 00
+    10.600 hid rid 4 04 01 00
+    """)
+    // At 11.0, the first pulse's wake arrives while the second pulse is only 0.4s old.
+    replay.advance(to: 11.05)
+    #expect(replay.controls.isInCall != true)
+    replay.play("11.100 hid rid 4 04 00 00")
+    replay.advance(to: 12.0)
+    #expect(replay.controls.isInCall != true)
 }
