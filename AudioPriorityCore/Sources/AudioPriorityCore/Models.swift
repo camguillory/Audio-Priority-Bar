@@ -45,6 +45,7 @@ public struct AudioDevice: Identifiable, Equatable, Hashable, Sendable {
     /// CoreAudio's `kAudioDeviceTransportType*` value, used to pick an icon.
     /// Zero when unknown, as it is for a disconnected device.
     public var transportType: UInt32 = 0
+    public var isAirPlay: Bool { transportType == 0x6169_7270 } // 'airp'
     /// True for a confirmed serial-less USB port identity, nil when its
     /// hardware descriptor is still unavailable, false for a stable UID.
     public var usesUSBLocation: Bool? = false

@@ -785,15 +785,78 @@ private func declaring(
 }
 
 @Test
-func knownSpeakerProductsOutrankTheirBrandKeyword() {
-    // The bare "jabra" keyword would otherwise claim these.
+func knownSpeakerProductsOutrankTheirBrandKeyword() throws {
+    // The bare "jabra" and "pods" keywords would otherwise claim these.
     #expect(HeadphoneDetection.isKnownSpeaker("Jabra Speak2 75"))
     #expect(HeadphoneDetection.isKnownSpeaker("JABRA SPEAK 750"))
+    #expect(HeadphoneDetection.isKnownSpeaker("HomePod"))
+    #expect(HeadphoneDetection.isKnownSpeaker("Living Room HomePod mini"))
     #expect(!HeadphoneDetection.isKnownSpeaker("Jabra Evolve2 85"))
     #expect(!HeadphoneDetection.isKnownSpeaker("Jabra Elite 8 Active"))
     #expect(!HeadphoneDetection.isKnownSpeaker("Jabra Link 380"))
+    #expect(!HeadphoneDetection.isKnownSpeaker("AirPods Pro"))
     // Brands stay out of the list, so their headphones are unaffected.
     #expect(!HeadphoneDetection.isKnownSpeaker("Marshall Major IV"))
+
+    try withDefaults { defaults in
+        let store = PriorityStore(defaults: defaults)
+        #expect(store.category(for: declaring("homepod", "HomePod mini")) == .speaker)
+    }
+}
+
+@Test
+func transientAirPlaySessionsDoNotAccumulateInKnownDevicesOrPriorities() throws {
+    try withDefaults { defaults in
+        let store = PriorityStore(defaults: defaults)
+        let speakers = device("builtin", name: "MacBook Pro Speakers")
+        let monitor = device("monitor", name: "Studio Monitor", id: 2)
+        let sessionOne = AudioDevice(
+            platformID: 3,
+            uid: "8A40E1D2-1-Audio",
+            name: "AirPlay",
+            role: .output,
+            transportType: 0x6169_7270
+        )
+        let sessionTwo = AudioDevice(
+            platformID: 4,
+            uid: "8A40E1D2-2-Audio",
+            name: "AirPlay",
+            role: .output,
+            transportType: 0x6169_7270
+        )
+
+        store.remember([sessionOne])
+        #expect(!defaults.bool(forKey: "virtualNeverUseDefaults_v1"))
+        #expect(store.knownDevices.isEmpty)
+
+        store.remember([speakers, monitor, sessionOne])
+        store.remember([speakers, monitor, sessionTwo])
+        store.savePriorities([monitor, sessionTwo, speakers], category: .speaker)
+        store.setCategory(.headphone, for: sessionTwo)
+        store.hide(sessionTwo)
+        store.hide(sessionTwo, in: .headphone)
+        store.setNeverUse(sessionTwo, true)
+
+        #expect(store.knownDevices.map(\.uid) == ["builtin", "monitor"])
+        #expect(defaults.stringArray(forKey: "speakerPriorities") == ["monitor", "builtin"])
+        #expect(store.profiles[0].speakers == ["monitor", "builtin"])
+        #expect(store.sorted([speakers, sessionTwo, monitor], category: .speaker)
+            == [sessionTwo, monitor, speakers])
+        #expect(defaults.dictionary(forKey: "deviceCategories") == nil)
+        #expect(defaults.stringArray(forKey: "hiddenSpeakers") == nil)
+        #expect(defaults.stringArray(forKey: "hiddenHeadphones") == nil)
+        #expect(defaults.stringArray(forKey: "neverUseOutputs") == nil)
+
+        let brandAirPlay = AudioDevice(
+            platformID: 5,
+            uid: "8A40E1D2-3-Audio",
+            name: "Bang & Olufsen Beosound",
+            role: .output,
+            declaredCategory: .headphone,
+            transportType: 0x6169_7270
+        )
+        #expect(store.category(for: brandAirPlay) == .speaker)
+    }
 }
 
 @Test

@@ -101,9 +101,12 @@ public final class PriorityStore {
         var known = knownDevices
         reconcilePortChanges(devices, known: &known)
         // Devices present before this shipped never passed through the
-        // first-sight branch, so seed them once too.
+        // first-sight branch, so seed them once too. AirPlay sessions mint a
+        // fresh UID on every pick and vanish on disconnect, so storing them
+        // would only accumulate dead rows.
+        let persistent = devices.filter { !$0.isAirPlay }
         let seedsExisting = !defaults.bool(forKey: Key.virtualDefaults)
-        for device in devices {
+        for device in persistent {
             let existing = known.firstIndex {
                 $0.uid == device.uid && $0.role == device.role
             }
@@ -124,7 +127,7 @@ public final class PriorityStore {
             }
             applyDisplayDefaultIfNeeded(device)
         }
-        if seedsExisting, !devices.isEmpty {
+        if seedsExisting, !persistent.isEmpty {
             defaults.set(true, forKey: Key.virtualDefaults)
         }
         saveKnownDevices(known)
@@ -408,6 +411,7 @@ public final class PriorityStore {
     }
 
     public func category(for device: AudioDevice) -> OutputCategory {
+        if device.isAirPlay { return .speaker }
         let categories = defaults.dictionary(forKey: Key.categories)
             as? [String: String] ?? [:]
         if let raw = categories[device.uid],
@@ -431,6 +435,7 @@ public final class PriorityStore {
         _ category: OutputCategory,
         for device: AudioDevice
     ) {
+        guard !device.isAirPlay else { return }
         var categories = defaults.dictionary(forKey: Key.categories)
             as? [String: String] ?? [:]
         categories[device.uid] = category.rawValue
@@ -444,6 +449,7 @@ public final class PriorityStore {
     }
 
     public func setNeverUse(_ device: AudioDevice, _ value: Bool) {
+        guard !device.isAirPlay else { return }
         migrateLegacyNeverUseIfNeeded()
         let key = neverUseKey(for: device.role)
         var uids = defaults.stringArray(forKey: key) ?? []
@@ -466,10 +472,12 @@ public final class PriorityStore {
     }
 
     public func hide(_ device: AudioDevice) {
+        guard !device.isAirPlay else { return }
         add(device.uid, to: hiddenKey(for: device))
     }
 
     public func hide(_ device: AudioDevice, in category: OutputCategory) {
+        guard !device.isAirPlay else { return }
         add(device.uid, to: hiddenKey(for: category))
     }
 
@@ -636,6 +644,9 @@ public final class PriorityStore {
         // ponytail: device lists are tiny; index scans keep ordering obvious.
         return devices.enumerated()
             .sorted { left, right in
+                if left.element.isAirPlay != right.element.isAirPlay {
+                    return left.element.isAirPlay
+                }
                 let lhs = priorities.firstIndex(of: left.element.uid) ?? .max
                 let rhs = priorities.firstIndex(of: right.element.uid) ?? .max
                 return lhs == rhs ? left.offset < right.offset : lhs < rhs
@@ -644,7 +655,7 @@ public final class PriorityStore {
     }
 
     private func savePriorities(_ devices: [AudioDevice], key: String) {
-        let visible = devices.map(\.uid)
+        let visible = devices.filter { !$0.isAirPlay }.map(\.uid)
         let stored = defaults.stringArray(forKey: key) ?? []
         defaults.set(
             Self.mergeVisibleOrder(visible, into: stored),
