@@ -664,7 +664,21 @@ final class AppModel {
     }
 
     func refreshDevices() {
-        let connected = audio.devices()
+        let connected = audio.devices().map { device -> AudioDevice in
+            guard device.role == .output,
+                  device.declaredCategory == nil,
+                  device.isBluetooth || BluetoothBattery.address(of: device) != nil else {
+                return device
+            }
+            var enriched = device
+            // CoreAudio gives Bluetooth speakers a headphones terminal, which
+            // `CoreAudioProperties` ignores; Bluetooth's own class of device
+            // settles it, and `knownDevices` holds that answer until the next
+            // `system_profiler` read finishes.
+            enriched.declaredCategory = battery.report.bluetoothDevice(for: device)?.category
+                ?? store.storedDevice(uid: device.uid, role: .output)?.declaredCategory
+            return enriched
+        }
         retryUnresolvedUSBDevices(connected)
         if !connectingBluetoothAttempts.isEmpty {
             for address in connected.compactMap(bluetoothAddress(of:)) {

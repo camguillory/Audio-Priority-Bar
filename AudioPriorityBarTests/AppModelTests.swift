@@ -384,6 +384,51 @@ func aPairedSpeakerRememberedAsHeadphonesIsListedUnderSpeakers() async throws {
 
 @Test
 @MainActor
+func connectedBluetoothDevicesFollowTheirBluetoothClassOfDevice() async throws {
+    let pill = AudioDevice(
+        platformID: 2,
+        uid: "11-22-33-44-55-66:output",
+        name: "Beats Pill",
+        role: .output,
+        transportType: kAudioDeviceTransportTypeBluetooth
+    )
+    let unnamedHeadset = AudioDevice(
+        platformID: 3,
+        uid: "AA-BB-CC-DD-EE-FF:output",
+        name: "Studio BT-10",
+        role: .output,
+        transportType: kAudioDeviceTransportTypeBluetooth
+    )
+    let profile = Data("""
+    {"SPBluetoothDataType": [{"device_connected": [
+      {"Beats Pill": {"device_address": "11:22:33:44:55:66", "device_minorType": "Speaker"}},
+      {"Studio BT-10": {"device_address": "AA:BB:CC:DD:EE:FF", "device_minorType": "Headphones"}}
+    ]}]}
+    """.utf8)
+    let defaults = isolatedDefaults()
+    let audio = FakeAudio()
+    audio.catalog = [output(1, "speaker"), pill, unnamedHeadset]
+    let battery = BluetoothBatteryMonitor(read: { profile })
+    let model = AppModel(
+        store: PriorityStore(defaults: defaults),
+        audio: audio.operations,
+        link: LinkOperations(isUsable: { _ in true }, state: { _ in nil }),
+        battery: battery
+    )
+    model.start()
+    for _ in 0..<1000 where battery.report.pairedAudio.isEmpty { await Task.yield() }
+    try #require(!battery.report.pairedAudio.isEmpty)
+
+    // Without the Bluetooth class, "beats" would file Beats Pill under
+    // Headphones and "Studio BT-10" would land in Speakers.
+    #expect(model.speakerDevices.map(\.uid) == ["speaker", pill.uid])
+    #expect(model.headphoneDevices.map(\.uid) == [unnamedHeadset.uid])
+    #expect(model.store.storedDevice(uid: pill.uid, role: .output)?.declaredCategory == .speaker)
+    #expect(model.store.storedDevice(uid: unnamedHeadset.uid, role: .output)?.declaredCategory == .headphone)
+}
+
+@Test
+@MainActor
 func theIdleMicOfHeadphonesPlayingCountsAsInUse() {
     // AirPods play while the Mac's own mic records, so the AirPods mic row is
     // not current yet disconnecting it would cut the sound.
