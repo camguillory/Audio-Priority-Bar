@@ -6,23 +6,35 @@ public enum HeadphoneDetection {
         "galaxy buds", "buds pro", "buds live", "buds fe", "quietcomfort",
         "qc ultra", "qc45", "qc35", "soundsport", "sport earbuds", "momentum",
         "hd 4", "hd 5", "pxc", "jabra", "elite", "evolve", "jbl tune",
-        "jbl live", "jbl tour", "jbl reflect", "anker", "soundcore",
+        "jbl live", "jbl tour", "jbl reflect",
+        "soundcore space", "soundcore life", "soundcore liberty",
+        "soundcore aerofit", "soundcore sleep", "soundcore q", "soundcore p",
+        "powerconf h", "ankerwork h",
         "skullcandy", "nothing ear", "oneplus buds", "pixel buds",
-        "huawei freebuds", "oppo enco", "technics eah", "bowers", "b&w px",
+        "huawei freebuds", "oppo enco", "technics eah",
+        "b&w px", "px5", "px7", "px8", "pi5", "pi7", "pi8",
         "denon perl", "focal bathys", "hifiman", "shure aonic",
-        "audio-technica ath", "beyerdynamic", "marshall", "bang & olufsen",
-        "b&o", "akg", "plantronics", "poly", "razer", "steelseries", "hyperx",
-        "logitech g pro", "astro", "corsair", "1more", "tozo", "edifier",
-        "fiio", "moondrop",
+        "audio-technica ath", "beyerdynamic",
+        "marshall major", "marshall monitor", "marshall minor", "marshall motif",
+        "beoplay h", "beoplay portal", "beoplay ex", "beoplay eq", "beoplay eleven",
+        "akg", "plantronics", "poly",
+        "blackshark", "kraken", "barracuda", "hammerhead", "razer opus", "razer kaira",
+        "steelseries", "hyperx", "logitech g pro",
+        "astro a10", "astro a20", "astro a30", "astro a40", "astro a50", "astro mixamp",
+        "corsair hs", "corsair virtuoso", "corsair void",
+        "1more", "tozo", "edifier w", "stax spirit",
+        "fiio btr", "fiio utws", "fiio fw", "fiio eh", "moondrop",
     ]
 
-    /// Product lines that are speakers even though a brand keyword above would
-    /// otherwise claim them. Entries must name a product line, never a brand:
-    /// excluding "marshall" or "anker" would misfile the headphones those same
-    /// brands make.
+    /// Product lines that are speakers even though a brand keyword above or a
+    /// USB headset terminal would otherwise claim them. Entries must name a
+    /// product line, never a brand: excluding "jabra" or "poly" would misfile
+    /// the headsets those same brands make.
     private static let speakerProducts = [
         "homepod",
         "jabra speak",
+        "poly sync",
+        "calisto",
     ]
 
     public static func isHeadphone(_ name: String) -> Bool {

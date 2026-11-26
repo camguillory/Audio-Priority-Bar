@@ -786,14 +786,18 @@ private func declaring(
 
 @Test
 func knownSpeakerProductsOutrankTheirBrandKeyword() throws {
-    // The bare "jabra" and "pods" keywords would otherwise claim these.
+    // The bare "jabra", "poly", "plantronics", and "pods" keywords, or a USB
+    // headset terminal, would otherwise claim these.
     #expect(HeadphoneDetection.isKnownSpeaker("Jabra Speak2 75"))
     #expect(HeadphoneDetection.isKnownSpeaker("JABRA SPEAK 750"))
+    #expect(HeadphoneDetection.isKnownSpeaker("Poly Sync 20"))
+    #expect(HeadphoneDetection.isKnownSpeaker("Plantronics Calisto 5300"))
     #expect(HeadphoneDetection.isKnownSpeaker("HomePod"))
     #expect(HeadphoneDetection.isKnownSpeaker("Living Room HomePod mini"))
     #expect(!HeadphoneDetection.isKnownSpeaker("Jabra Evolve2 85"))
     #expect(!HeadphoneDetection.isKnownSpeaker("Jabra Elite 8 Active"))
     #expect(!HeadphoneDetection.isKnownSpeaker("Jabra Link 380"))
+    #expect(!HeadphoneDetection.isKnownSpeaker("Poly BT700"))
     #expect(!HeadphoneDetection.isKnownSpeaker("AirPods Pro"))
     // Brands stay out of the list, so their headphones are unaffected.
     #expect(!HeadphoneDetection.isKnownSpeaker("Marshall Major IV"))
@@ -801,6 +805,44 @@ func knownSpeakerProductsOutrankTheirBrandKeyword() throws {
     try withDefaults { defaults in
         let store = PriorityStore(defaults: defaults)
         #expect(store.category(for: declaring("homepod", "HomePod mini")) == .speaker)
+        #expect(store.category(for: declaring("sync20", "Poly Sync 20", .headphone)) == .speaker)
+        #expect(store.category(for: declaring("calisto", "Plantronics Calisto 5300", .headphone)) == .speaker)
+    }
+}
+
+@Test
+func dualCategoryBrandsClassifyHeadphoneLinesWithoutClaimingTheirSpeakers() throws {
+    try withDefaults { defaults in
+        let store = PriorityStore(defaults: defaults)
+        for speaker in [
+            "Edifier MR4",
+            "Marshall Stanmore III",
+            "Soundcore Motion+",
+            "Anker PowerConf S3",
+            "Beosound A1",
+            "Bowers & Wilkins Zeppelin",
+            "Razer Nommo V2",
+            "Corsair SP2500",
+            "FiiO SP3",
+        ] {
+            #expect(store.category(for: declaring(speaker, speaker)) == .speaker)
+        }
+        for headphone in [
+            "Edifier WH950NB",
+            "Edifier Stax Spirit S3",
+            "Marshall Major IV",
+            "Soundcore Space One",
+            "Anker PowerConf H700",
+            "Beoplay H95",
+            "Px8",
+            "Razer BlackShark V2",
+            "Corsair HS80",
+            "FiiO BTR15",
+            "Astro A50",
+            "Poly BT700",
+        ] {
+            #expect(store.category(for: declaring(headphone, headphone)) == .headphone)
+        }
     }
 }
 
