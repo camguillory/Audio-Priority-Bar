@@ -94,6 +94,7 @@ final class AppRuntime {
                 refreshHeadsetControls: { jabra.refreshHeadsetControls() }
             ),
             battery: BluetoothBatteryMonitor(),
+            version: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "",
             isUserPicking: SystemSoundPicker.isInUse
         )
         updates = UpdateChecker(isIdle: { [weak model] in

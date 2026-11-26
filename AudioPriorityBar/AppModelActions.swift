@@ -395,8 +395,16 @@ extension AppModel {
             refreshDevices()
         case .device(let id):
             if let device = listedDevices.first(where: { $0.id == id }) { activate(device) }
-        case .settings, .takeoverFix: break
+        case .settings, .takeoverFix, .updateNotice: break
         }
+    }
+
+    func dismissUpdateNotice() {
+        guard let version = updatedToVersion else { return }
+        DebugLog.shared.write("dismissed the update notice for \(version)")
+        store.acknowledgeVersion(version)
+        updatedToVersion = nil
+        if keyboardItem == .updateNotice { keyboardItem = nil }
     }
 
     /// Left and Right move a highlighted level by a sixteenth, as the volume

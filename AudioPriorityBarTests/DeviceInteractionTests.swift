@@ -717,3 +717,39 @@ func pinnedAirPlayRowStaysAboveDraggedAndMovedSpeakers() {
     drag.update(hovered: DropTarget(section: .speaker, index: 0), minimumIndex: 1, translation: .zero)
     #expect(drag.target == DropTarget(section: .speaker, index: 1))
 }
+
+@Test
+@MainActor
+func updateNoticeJoinsPanelKeyboardOrderOnUpgradeAndClearsOnDismiss() {
+    let defaults = isolatedDefaults()
+    let audio = FakeAudio()
+    audio.catalog = [output(1, "speaker")]
+
+    let fresh = AppModel(
+        store: PriorityStore(defaults: defaults),
+        audio: audio.operations,
+        link: LinkOperations(isUsable: { _ in true }, state: { _ in nil }),
+        version: "2.13.1"
+    )
+    fresh.start()
+    #expect(fresh.updatedToVersion == nil)
+    #expect(!fresh.panelItems.contains(.updateNotice))
+
+    let upgraded = AppModel(
+        store: PriorityStore(defaults: defaults),
+        audio: audio.operations,
+        link: LinkOperations(isUsable: { _ in true }, state: { _ in nil }),
+        version: "2.13.2"
+    )
+    upgraded.start()
+    #expect(upgraded.updatedToVersion == "2.13.2")
+    #expect(upgraded.panelItems.last == .updateNotice)
+    #expect(PanelView.releaseNotesURL(for: "2.13.2")?.absoluteString
+        == "https://github.com/camguillory/Audio-Priority-Bar/releases/tag/v2.13.2")
+
+    upgraded.keyboardItem = .updateNotice
+    upgraded.dismissUpdateNotice()
+    #expect(upgraded.updatedToVersion == nil)
+    #expect(upgraded.keyboardItem == nil)
+    #expect(!upgraded.panelItems.contains(.updateNotice))
+}

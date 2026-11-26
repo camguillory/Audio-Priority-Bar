@@ -226,6 +226,7 @@ final class StatusItemController: NSObject, NSWindowDelegate {
                     hidePanel()
                     settings.showSettings(on: statusItem.button?.window?.screen, pane: .profiles)
                 },
+                openReleaseNotes: { [weak self] in self?.openReleaseNotes() },
                 fit: { [weak self] in self?.fitPanel(to: $0) }
             )
         )
@@ -298,6 +299,10 @@ final class StatusItemController: NSObject, NSWindowDelegate {
                 hidePanel()
                 NSWorkspace.shared.open(PanelView.headphoneSettingsURL)
                 return true
+            case .updateNotice:
+                DebugLog.shared.write("keyboard: used update notice")
+                openReleaseNotes()
+                return true
             default: break
             }
             model.use(item)
@@ -330,6 +335,7 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         )
         case .showAll: "Show hidden and disconnected devices, \(model.showAll ? "on" : "off")"
         case .settings: "\(appDisplayName) Settings"
+        case .updateNotice: "Updated to \(model.updatedToVersion ?? ""), Release Notes"
         case .device(let id): model.listedDevices.first { $0.id == id }?.name ?? ""
         }
         NSAccessibility.post(
@@ -532,6 +538,16 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         // The status item lives in the menu bar of the screen being used, which
         // is the same screen the panel is positioned against.
         settings.showSettings(on: statusItem.button?.window?.screen)
+    }
+
+    private func openReleaseNotes() {
+        guard let version = model.updatedToVersion else { return }
+        DebugLog.shared.write("opened release notes for \(version)")
+        model.dismissUpdateNotice()
+        hidePanel()
+        if let url = PanelView.releaseNotesURL(for: version) {
+            NSWorkspace.shared.open(url)
+        }
     }
 
     @objc private func handleUpdatesItem() {

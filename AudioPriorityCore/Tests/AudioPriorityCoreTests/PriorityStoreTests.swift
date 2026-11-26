@@ -1256,3 +1256,34 @@ func anEarlierForksZeroUUIDAliasAndPortHistoryCannotRedirectAShortcut() throws {
         #expect(store.currentUID(for: base, role: .output) == base)
     }
 }
+
+@Test
+func updateVersionSkipsFreshInstallsAndHoldsUpgradesUntilDismissed() throws {
+    try withDefaults { defaults in
+        let fresh = PriorityStore(defaults: defaults)
+        fresh.recordLaunchVersion("2.13.1")
+        #expect(fresh.unacknowledgedUpdateVersion(for: "2.13.1") == nil)
+
+        // Patch and minor updates both surface, and numeric comparison orders 2.13.10 after 2.13.2.
+        fresh.recordLaunchVersion("2.13.2")
+        #expect(fresh.unacknowledgedUpdateVersion(for: "2.13.2") == "2.13.2")
+        // Survives a restart before the user opens the panel or dismisses the row.
+        let restarted = PriorityStore(defaults: defaults)
+        restarted.recordLaunchVersion("2.13.2")
+        #expect(restarted.unacknowledgedUpdateVersion(for: "2.13.2") == "2.13.2")
+
+        restarted.acknowledgeVersion("2.13.2")
+        #expect(restarted.unacknowledgedUpdateVersion(for: "2.13.2") == nil)
+        #expect(restarted.unacknowledgedUpdateVersion(for: "2.13.1") == nil)
+        #expect(restarted.unacknowledgedUpdateVersion(for: "2.13.10") == "2.13.10")
+    }
+
+    // An existing install upgrading from a build before `acknowledgedVersion` existed shows the row.
+    try withDefaults { defaults in
+        let existing = PriorityStore(defaults: defaults)
+        existing.remember([device("builtin", name: "MacBook Pro Speakers")])
+        let upgraded = PriorityStore(defaults: defaults)
+        upgraded.recordLaunchVersion("2.13.2")
+        #expect(upgraded.unacknowledgedUpdateVersion(for: "2.13.2") == "2.13.2")
+    }
+}

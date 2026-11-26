@@ -40,6 +40,7 @@ public final class PriorityStore {
         static let priorityProfiles = "priorityProfiles"
         static let activePriorityProfile = "activePriorityProfile"
         static let profileBeforeFocus = "profileBeforeFocus"
+        static let acknowledgedVersion = "acknowledgedVersion"
     }
 
     /// Marks a microphone muted through its mute property rather than by
@@ -397,6 +398,33 @@ public final class PriorityStore {
     public var keepsDebugLog: Bool {
         get { defaults.bool(forKey: Key.keepsDebugLog) }
         set { defaults.set(newValue, forKey: Key.keepsDebugLog) }
+    }
+
+    /// Seeds the current version on a fresh install before `remember` runs, so
+    /// only upgrades show the panel's update row.
+    public func recordLaunchVersion(_ version: String) {
+        guard !version.isEmpty,
+              defaults.string(forKey: Key.acknowledgedVersion) == nil,
+              knownDevices.isEmpty,
+              !defaults.bool(forKey: Key.virtualDefaults) else { return }
+        defaults.set(version, forKey: Key.acknowledgedVersion)
+    }
+
+    /// Returns `currentVersion` when the user upgraded from an earlier build
+    /// and has not yet opened the release notes or dismissed the row.
+    public func unacknowledgedUpdateVersion(for currentVersion: String) -> String? {
+        guard !currentVersion.isEmpty else { return nil }
+        guard let acknowledged = defaults.string(forKey: Key.acknowledgedVersion) else {
+            return currentVersion
+        }
+        return currentVersion.compare(acknowledged, options: .numeric) == .orderedDescending
+            ? currentVersion
+            : nil
+    }
+
+    public func acknowledgeVersion(_ version: String) {
+        guard !version.isEmpty else { return }
+        defaults.set(version, forKey: Key.acknowledgedVersion)
     }
 
     /// Microphones this app muted and has not restored yet, by UID: the input
