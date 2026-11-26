@@ -7,6 +7,7 @@ struct PanelView: View {
     @Bindable var model: AppModel
     let showSettings: () -> Void
     var showProfiles: () -> Void = {}
+    var openReleaseNotes: () -> Void = {}
     /// Reports the size the content needs, which the panel takes on.
     var fit: (CGSize) -> Void = { _ in }
 
@@ -14,6 +15,11 @@ struct PanelView: View {
     static let headphoneSettingsURL = URL(
         string: "x-apple.systempreferences:com.apple.HeadphoneSettings"
     )!
+
+    static func releaseNotesURL(for version: String) -> URL? {
+        guard !version.isEmpty else { return nil }
+        return URL(string: "https://github.com/camguillory/Audio-Priority-Bar/releases/tag/v\(version)")
+    }
 
     /// Held here rather than per section so a row can be dragged between lists.
     @State private var drag: DeviceDrag?
@@ -207,7 +213,11 @@ struct PanelView: View {
             }
 
             Divider().padding(.horizontal, 12)
-            Footer(model: model, showSettings: showSettings)
+            Footer(
+                model: model,
+                showSettings: showSettings,
+                openReleaseNotes: openReleaseNotes
+            )
         }
         .frame(width: PanelLayout.panelWidth)
         .onChange(of: renderedDeviceIDs) { _, ids in
@@ -467,9 +477,12 @@ private struct LevelControl: View {
 private struct Footer: View {
     @Bindable var model: AppModel
     let showSettings: () -> Void
+    let openReleaseNotes: () -> Void
 
     @State private var isHoveringSettings = false
     @State private var isHoveringShowAll = false
+    @State private var isHoveringUpdate = false
+    @State private var isHoveringDismissUpdate = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -538,6 +551,63 @@ private struct Footer: View {
             .padding(.horizontal, 4)
             .padding(.top, 6)
             .padding(.bottom, 6)
+
+            if let version = model.updatedToVersion {
+                Divider().padding(.horizontal, 12)
+
+                HStack(spacing: 2) {
+                    Button(action: openReleaseNotes) {
+                        HStack(spacing: 0) {
+                            Image(systemName: "arrow.down.circle")
+                                .font(.system(size: 13))
+                                .frame(width: 30, alignment: .center)
+                                .accessibilityHidden(true)
+                            Text("Updated to \(version)")
+                                .font(.system(size: 13))
+                                .lineLimit(1)
+                            Spacer(minLength: 6)
+                            Text("Release Notes")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
+                        .frame(maxWidth: .infinity, minHeight: 20, alignment: .leading)
+                        .padding(.trailing, 8)
+                        .background(
+                            Color.primary.opacity(isHoveringUpdate || model.keyboardItem == .updateNotice ? 0.1 : 0),
+                            in: RoundedRectangle(cornerRadius: 6)
+                        )
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .onHover { isHoveringUpdate = $0 }
+                    .animation(.easeInOut(duration: 0.12), value: isHoveringUpdate)
+                    .help("Open release notes for \(version)")
+
+                    Button {
+                        model.dismissUpdateNotice()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 20, height: 20)
+                            .background(
+                                Color.primary.opacity(isHoveringDismissUpdate ? 0.1 : 0),
+                                in: RoundedRectangle(cornerRadius: 6)
+                            )
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .onHover { isHoveringDismissUpdate = $0 }
+                    .animation(.easeInOut(duration: 0.12), value: isHoveringDismissUpdate)
+                    .padding(.trailing, 4)
+                    .help("Dismiss")
+                    .accessibilityLabel("Dismiss update notice")
+                }
+                .padding(.leading, 4)
+                .padding(.top, 6)
+                .padding(.bottom, 6)
+            }
         }
     }
 }

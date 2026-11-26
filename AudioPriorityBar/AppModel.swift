@@ -72,7 +72,7 @@ struct AutomaticOutputDecision {
 /// Something in the panel the arrow keys can highlight.
 enum PanelItem: Hashable {
     case automatic, profile, takeoverFix, outputLevel, microphoneLevel
-    case microphoneOrder, showAll, settings
+    case microphoneOrder, showAll, settings, updateNotice
     case device(String)
 }
 
@@ -94,7 +94,9 @@ final class AppModel {
         items += (speakerDevices + headphoneDevices).map { .device($0.id) }
         if microphonesFollowOutput { items.append(.microphoneOrder) }
         items += inputDevices.map { .device($0.id) }
-        return items + [.showAll, .settings]
+        items += [.showAll, .settings]
+        if updatedToVersion != nil { items.append(.updateNotice) }
+        return items
     }
     var hiddenSpeakerDevices: [AudioDevice] = []
     var hiddenHeadphoneDevices: [AudioDevice] = []
@@ -123,6 +125,8 @@ final class AppModel {
     var activeProfileID: UUID?
     /// A profile just added, whose name Settings opens for editing.
     var renamingProfileID: UUID?
+    /// Shown at the bottom of the panel after an update until dismissed.
+    var updatedToVersion: String?
     /// The panel item the arrow keys have moved to.
     var keyboardItem: PanelItem?
     /// A device whose row should open its actions menu, asked for from the
@@ -244,6 +248,7 @@ final class AppModel {
         audio: AudioOperations,
         link: LinkOperations,
         battery: BluetoothBatteryMonitor = BluetoothBatteryMonitor(read: { nil }),
+        version: String = "",
         reduceMotion: @escaping () -> Bool = {
             NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
         },
@@ -255,6 +260,8 @@ final class AppModel {
         self.battery = battery
         self.reduceMotion = reduceMotion
         self.isUserPicking = isUserPicking
+        store.recordLaunchVersion(version)
+        updatedToVersion = store.unacknowledgedUpdateVersion(for: version)
         isManualMode = store.isManualMode
         selectsPairedDevice = store.selectsPairedDevice
         microphonesFollowOutput = store.microphonesFollowOutput
