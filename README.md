@@ -147,6 +147,9 @@ switching off to keep it.
   holds through automatic switching and replugs, leaves virtual inputs alone,
   and quitting the app restores each microphone. A microphone you had muted
   yourself stays muted.
+- A call app set to a specific speaker or microphone, such as Zoom or Teams in
+  a browser, ignores macOS default changes until its audio is set to the
+  system default.
 
 Speakers, Headphones, and Microphones remain visible in both modes.
 
