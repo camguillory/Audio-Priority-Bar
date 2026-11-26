@@ -21,6 +21,7 @@ public enum HeadphoneDetection {
     /// excluding "marshall" or "anker" would misfile the headphones those same
     /// brands make.
     private static let speakerProducts = [
+        "homepod",
         "jabra speak",
     ]
 

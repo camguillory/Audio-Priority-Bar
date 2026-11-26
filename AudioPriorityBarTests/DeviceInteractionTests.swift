@@ -688,3 +688,32 @@ func restingRowHitTestMatchesRowsAndSkipsHeadersGapsAndEmptyLists() throws {
     #expect(layout.row(at: CGPoint(x: 100, y: headphoneTop + 10)) == nil)
     #expect(layout.row(at: CGPoint(x: 100, y: inputTop + 10)) == DropTarget(section: .input, index: 0))
 }
+
+@Test
+@MainActor
+func pinnedAirPlayRowStaysAboveDraggedAndMovedSpeakers() {
+    let defaults = isolatedDefaults()
+    let first = output(1, "speaker-1", "Desk Speakers")
+    let second = output(2, "speaker-2", "MacBook Pro Speakers")
+    let airPlay = AudioDevice(
+        platformID: 3,
+        uid: "8A40E1D2-1-Audio",
+        name: "AirPlay",
+        role: .output,
+        transportType: 0x6169_7270
+    )
+    let audio = FakeAudio()
+    audio.catalog = [first, second, airPlay]
+    audio.defaults[.output] = airPlay.platformID
+    let model = testModel(audio: audio, defaults: defaults)
+    model.start()
+
+    #expect(model.speakerDevices == [airPlay, first, second])
+    #expect(!model.dropDevice(airPlay.id, into: .speaker, at: 2))
+    #expect(model.dropDevice(second.id, into: .speaker, at: 0))
+    #expect(model.speakerDevices == [airPlay, second, first])
+
+    var drag = DeviceDrag(device: first, section: .speaker, index: 2)
+    drag.update(hovered: DropTarget(section: .speaker, index: 0), minimumIndex: 1, translation: .zero)
+    #expect(drag.target == DropTarget(section: .speaker, index: 1))
+}

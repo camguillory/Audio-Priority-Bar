@@ -130,6 +130,17 @@ func onlyVideoCableTransportsCountAsDisplayOutputs() {
 }
 
 @Test
+func nonDefaultableDevicesAreExcludedWhileCurrentAndMissingPropertyStay() {
+    // Measured on macOS 27.2: ZoomAudioDevice reports dflt = 0, while
+    // selectable built-in, USB, HDMI, virtual and aggregate devices report 1.
+    // A transient route macOS already made current stays visible even with 0.
+    #expect(!CoreAudioProperties.allowsDefaultSelection(0))
+    #expect(CoreAudioProperties.allowsDefaultSelection(0, isCurrentDefault: true))
+    #expect(CoreAudioProperties.allowsDefaultSelection(1))
+    #expect(CoreAudioProperties.allowsDefaultSelection(nil))
+}
+
+@Test
 func onlyAMonoDeviceCanUseChannelOneAsItsMasterMute() {
     for mono in [false, true] {
         var attempted: [AudioObjectPropertyElement] = []

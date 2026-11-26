@@ -109,10 +109,11 @@ switching off to keep it.
 <summary>How switching works</summary>
 
 - Automatic switching uses the first available headphone, then the first speaker.
-- A device you pick in the panel, Control Center or Sound Settings stays
-  until it disconnects or a device your list would pick connects, and
-  automatic switching stays on. Other devices coming and going leave it
-  alone. With automatic switching off, it stays until you turn it back on.
+- A device you pick in the panel, Control Center or Sound Settings, or an
+  AirPlay speaker you start from an app like Music, stays until it
+  disconnects or a device your list would pick connects, and automatic
+  switching stays on. Other devices coming and going leave it alone. With
+  automatic switching off, it stays until you turn it back on.
 - When macOS or another app changes the device on its own, as AirPods do when
   you put them in, Audio Priority Bar switches back to the device you picked,
   or to your list. A device you connect still takes over if your list would

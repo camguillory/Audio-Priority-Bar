@@ -33,13 +33,16 @@ struct DeviceDrag {
 
     mutating func update(
         hovered: DropTarget?,
+        minimumIndex: Int = 0,
         translation: CGSize
     ) {
         self.translation = translation
         isForbidden = hovered.map {
             $0.section.role != device.role
         } ?? false
-        target = isForbidden ? nil : hovered
+        target = isForbidden ? nil : hovered.map {
+            DropTarget(section: $0.section, index: max(minimumIndex, $0.index))
+        }
     }
 }
 

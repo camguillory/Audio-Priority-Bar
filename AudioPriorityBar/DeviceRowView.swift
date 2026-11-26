@@ -21,6 +21,7 @@ struct DeviceRow: View {
     let section: DeviceSection
     let index: Int
     let count: Int
+    var pinnedCount = 0
     let layout: PanelLayout
     let isSelected: Bool
     let category: OutputCategory?
@@ -181,8 +182,9 @@ struct DeviceRow: View {
         HStack(spacing: 6) {
             ZStack(alignment: .leading) {
                 // The priority number gives way to the drag handle while the
-                // row is hovered or dragged.
-                Text("\(index + 1)")
+                // row is hovered or dragged; a temporary AirPlay session has
+                // neither a saved rank nor a handle.
+                Text(device.isAirPlay ? "•" : "\(index - pinnedCount + 1)")
                     .font(.caption.monospacedDigit().weight(.semibold))
                     .foregroundStyle(.secondary)
                     .opacity(showsDragHandle ? 0 : 1)
@@ -274,7 +276,7 @@ struct DeviceRow: View {
         }
         .contentShape(Rectangle())
         .onTapGesture { activate() }
-        .contextMenu { actionItems }
+        .contextMenu { if !device.isAirPlay { actionItems } }
         // Undo the content inset for layout, so the row's text lines up with
         // the section heading while its highlight and hover area overhang it.
         .padding(.horizontal, -8)
@@ -284,7 +286,7 @@ struct DeviceRow: View {
         .onChange(of: model.actionsMenuDeviceID) { _, id in
             guard id == device.id else { return }
             model.actionsMenuDeviceID = nil
-            openActionsMenu()
+            if !device.isAirPlay { openActionsMenu() }
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(device.name)
@@ -293,10 +295,10 @@ struct DeviceRow: View {
         .accessibilityAction { activate() }
         .accessibilityAddTraits(isSelected ? .isSelected : [])
         .accessibilityAction(named: "Move Up") {
-            if index > 0 { move(index - 1) }
+            if !device.isAirPlay, index > pinnedCount { move(index - 1) }
         }
         .accessibilityAction(named: "Move Down") {
-            if index < count - 1 { move(index + 1) }
+            if !device.isAirPlay, index < count - 1 { move(index + 1) }
         }
     }
 
@@ -354,9 +356,7 @@ struct DeviceRow: View {
         }
         if isUnavailable { return "This device is unavailable" }
         if isSelected { return "Current device" }
-        return model.isManualMode
-            ? "Activate to make this device active"
-            : "Activate to select this device and turn off automatic switching"
+        return "Activate to make this device active"
     }
 
     private func activate() { model.activate(device) }
@@ -388,7 +388,7 @@ struct DeviceRow: View {
 
     private var isRowHovered: Bool { hoveredDeviceID == device.id && !isDragging }
 
-    private var showsDragHandle: Bool { isRowHovered || isLifted }
+    private var showsDragHandle: Bool { !device.isAirPlay && (isRowHovered || isLifted) }
 
     /// The selection override and actions menu appear only on hover, like
     /// the system's own lists, but stay visible to VoiceOver, which has no
@@ -451,9 +451,11 @@ struct DeviceRow: View {
                 .allowsHitTesting(showsRowControls)
             }
             if let headset { headsetButtons(headset) }
-            actions
-                .opacity(showsRowControls ? 1 : 0)
-                .allowsHitTesting(showsRowControls)
+            if !device.isAirPlay {
+                actions
+                    .opacity(showsRowControls ? 1 : 0)
+                    .allowsHitTesting(showsRowControls)
+            }
         }
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.12), value: showsRowControls)
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { controlsWidth = $0 }
@@ -724,7 +726,7 @@ struct DeviceRow: View {
         } label: {
             Label("Move Up", systemImage: "arrow.up")
         }
-        .disabled(index == 0)
+        .disabled(index <= pinnedCount)
         Button {
             move(index + 1)
         } label: {
@@ -803,7 +805,9 @@ struct DeviceRow: View {
     }
 
     private var accessibilityValue: String {
-        var values = ["Priority \(index + 1) of \(count)"]
+        var values = device.isAirPlay
+            ? []
+            : ["Priority \(index - pinnedCount + 1) of \(max(0, count - pinnedCount))"]
         if isSelected, !isUnavailable { values.append("Active") }
         values.append(contentsOf: statuses.map(\.description))
         // Shown only as strikethrough, so it needs saying here.

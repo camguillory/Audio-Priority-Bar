@@ -276,7 +276,10 @@ final class StatusItemController: NSObject, NSWindowDelegate {
         case .left, .right:
             guard let item = model.keyboardItem, items.contains(item) else { return false }
             if case .device(let id) = item {
-                guard key == .right else { return false }
+                guard key == .right,
+                      model.listedDevices.first(where: { $0.id == id })?.isAirPlay != true else {
+                    return false
+                }
                 DebugLog.shared.write("keyboard: opened the actions menu of \(item)")
                 model.actionsMenuDeviceID = id
                 return true

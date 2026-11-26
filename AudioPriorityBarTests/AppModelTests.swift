@@ -2104,3 +2104,231 @@ func hiddenSecondaryMicrophonesStayCoveredRegardlessOfPanelVisibility() {
     model.setMicrophoneMuted(true)
     #expect(model.uncoveredRecording?.microphone == secondary.name)
 }
+
+private func airPlayOutput(
+    _ id: UInt32,
+    _ uid: String,
+    _ name: String = "Living Room"
+) -> AudioDevice {
+    AudioDevice(
+        platformID: id,
+        uid: uid,
+        name: name,
+        role: .output,
+        transportType: kAudioDeviceTransportTypeAirPlay
+    )
+}
+
+@Test
+@MainActor
+func airPlaySelectedInAnAppStaysWithAutomaticOff() {
+    let defaults = isolatedDefaults()
+    let store = PriorityStore(defaults: defaults)
+    store.isManualMode = true
+    let speaker = output(1, "speaker", "MacBook Pro Speakers")
+    let airPods = output(2, "airpods", "AirPods Pro")
+    let express = airPlayOutput(3, "airplay-1", "AirPort Express")
+    let bedroom = airPlayOutput(4, "airplay-2", "Bedroom Express")
+    let audio = FakeAudio()
+    audio.catalog = [speaker, airPods, bedroom]
+    audio.defaults[.output] = speaker.platformID
+    let model = testModel(audio: audio, defaults: defaults, isUserPicking: { false })
+    var clock: TimeInterval = 100
+    model.uptime = { clock }
+    model.start()
+
+    // AirPlay.driver adds its APHALAudioDevice dynamically; even when the
+    // network handshake finishes past the 2 s topology window and from an app
+    // rather than Control Center, manual mode leaves the route on AirPlay.
+    audio.catalog.append(express)
+    model.handleDevicesChanged()
+    clock += 3
+    audio.defaults[.output] = express.platformID
+    model.handleDefaultChanged(.output)
+
+    #expect(model.isManualMode)
+    #expect(model.currentOutputID == express.platformID)
+    #expect(audio.selections.isEmpty)
+
+    // Moving to an already-listed AirPlay output stays too.
+    audio.defaults[.output] = bedroom.platformID
+    model.handleDefaultChanged(.output)
+    #expect(model.currentOutputID == bedroom.platformID)
+    #expect(audio.selections.isEmpty)
+
+    // AirPods taking the output away from AirPlay are still switched back.
+    audio.defaults[.output] = airPods.platformID
+    model.handleDefaultChanged(.output)
+    #expect(model.currentOutputID == bedroom.platformID)
+    #expect(audio.selections.map(\.1) == [bedroom.platformID])
+}
+
+@Test
+@MainActor
+func airPlaySelectedInAnAppIsKeptLikeAPickWithAutomaticOn() {
+    // Arrival with the default already on AirPlay, including a HomePod whose
+    // name contains "pods".
+    let defaults = isolatedDefaults()
+    let speaker = output(1, "speaker", "MacBook Pro Speakers")
+    let airPods = output(2, "airpods", "AirPods Pro")
+    let homePod = airPlayOutput(3, "homepod", "HomePod mini")
+    let audio = FakeAudio()
+    audio.catalog = [speaker, airPods]
+    let model = testModel(audio: audio, defaults: defaults, isUserPicking: { false })
+    var clock: TimeInterval = 100
+    model.uptime = { clock }
+    model.start()
+    audio.selections.removeAll()
+    var notices: [[AudioDevice]] = []
+    model.onAutomaticSwitch = { notices.append($0) }
+
+    audio.catalog.append(homePod)
+    audio.defaults[.output] = homePod.platformID
+    model.handleDevicesChanged()
+    model.handleDefaultChanged(.output)
+
+    #expect(!model.isManualMode)
+    #expect(model.currentOutputID == homePod.platformID)
+    #expect(model.keptPicks[.output] == homePod.uid)
+    #expect(audio.selections.isEmpty)
+    #expect(notices.isEmpty)
+    #expect(model.recentSwitches.first?.device == "HomePod mini")
+    #expect(model.recentSwitches.first?.reason == "by macOS, Control Center or another app")
+
+    // Ending AirPlay returns to the ranked headphones and leaves no dead
+    // disconnected AirPlay row behind.
+    audio.catalog.removeAll { $0.uid == homePod.uid }
+    model.showAll = true
+    model.handleDevicesChanged()
+    #expect(model.currentOutputID == airPods.platformID)
+    #expect(!model.speakerDevices.contains { $0.uid == homePod.uid })
+    model.showAll = false
+
+    // Device-list callback first, followed by the default change inside the
+    // 2 s topology window, inside the 5 s handover window, or later: each
+    // keeps AirPlay until a newly connected device outranks it.
+    for delay in [0.2, 3.5, 8.0] {
+        let express = airPlayOutput(4, "express-\(delay)", "AirPort Express")
+        audio.selections.removeAll()
+        notices.removeAll()
+        audio.catalog.append(express)
+        model.handleDevicesChanged()
+        #expect(model.currentOutputID == airPods.platformID)
+
+        clock += delay
+        audio.defaults[.output] = express.platformID
+        model.handleDefaultChanged(.output)
+        #expect(model.currentOutputID == express.platformID)
+        #expect(model.keptPicks[.output] == express.uid)
+        #expect(audio.selections.isEmpty)
+        #expect(notices.isEmpty)
+
+        audio.catalog.removeAll { $0.uid == express.uid }
+        model.handleDevicesChanged()
+        #expect(model.currentOutputID == airPods.platformID)
+    }
+
+    let express = airPlayOutput(5, "express", "AirPort Express")
+    audio.catalog.append(express)
+    audio.defaults[.output] = express.platformID
+    // Default-change callback arriving ahead of the device-list callback.
+    model.handleDefaultChanged(.output)
+    model.handleDevicesChanged()
+    #expect(model.currentOutputID == express.platformID)
+
+    let headset = output(6, "usb-headset", "USB Headphones")
+    PriorityStore(defaults: defaults).savePriorities([headset, airPods], category: .headphone)
+    audio.catalog.append(headset)
+    model.handleDevicesChanged()
+    #expect(model.currentOutputID == headset.platformID)
+}
+
+@Test
+@MainActor
+func startupKeepsAnActiveAirPlayOutputAndNeverAutoSelectsAnIdleOne() {
+    let defaults = isolatedDefaults()
+    let store = PriorityStore(defaults: defaults)
+    let speaker = output(1, "speaker", "Mac mini Speakers")
+    let airPods = output(2, "airpods", "AirPods Pro")
+    let activeAirPlay = airPlayOutput(3, "8A40E1D2-1-Audio", "AirPlay")
+    let deskMic = input(4, "desk-mic", "Desk Mic")
+    let usbMic = input(5, "usb-mic", "USB Mic")
+    store.setNeverUse(speaker, true)
+    store.savePriorities([deskMic, usbMic], role: .input)
+
+    // Launching or relaunching after an update while AirPlay already plays
+    // keeps AirPlay rather than switching to the connected headphones.
+    let audio = FakeAudio()
+    audio.catalog = [speaker, airPods, activeAirPlay, deskMic, usbMic]
+    audio.defaults = [.output: activeAirPlay.platformID, .input: deskMic.platformID]
+    let started = testModel(audio: audio, defaults: defaults)
+    started.start()
+
+    #expect(started.currentOutputID == activeAirPlay.platformID)
+    #expect(started.keptPicks[.output] == activeAirPlay.uid)
+    #expect(audio.selections.isEmpty)
+
+    // With no ranked speaker eligible, an AirPlay conduit appearing before the
+    // default moves is neither auto-selected prematurely nor treated as a new
+    // top output that ends a kept microphone pick.
+    audio.catalog = [speaker, deskMic, usbMic]
+    audio.defaults = [.output: speaker.platformID, .input: deskMic.platformID]
+    let idle = testModel(audio: audio, defaults: defaults)
+    idle.start()
+    idle.selectManually(usbMic)
+    audio.selections.removeAll()
+
+    let pendingAirPlay = airPlayOutput(6, "8A40E1D2-2-Audio", "AirPlay")
+    audio.catalog.append(pendingAirPlay)
+    idle.handleDevicesChanged()
+
+    #expect(idle.currentOutputID == speaker.platformID)
+    #expect(idle.keptPicks[.input] == usbMic.uid)
+    #expect(audio.selections.isEmpty)
+}
+
+@Test
+@MainActor
+func firstMultiOutputPickInControlCenterStaysWhileBackgroundVirtualInstallDoesNot() {
+    let defaults = isolatedDefaults()
+    let speaker = output(1, "speaker", "MacBook Pro Speakers")
+    let stacked = AudioDevice(
+        platformID: 2,
+        uid: "~:AMS2_StackedOutput:0",
+        name: "Multi-Output Device",
+        role: .output,
+        isVirtual: true,
+        transportType: kAudioDeviceTransportTypeAggregate
+    )
+    let backgroundVirtual = AudioDevice(
+        platformID: 3,
+        uid: "app.virtual.speaker",
+        name: "Virtual Speaker",
+        role: .output,
+        isVirtual: true,
+        transportType: kAudioDeviceTransportTypeVirtual
+    )
+    let audio = FakeAudio()
+    audio.catalog = [speaker]
+    var isPicking = false
+    let model = testModel(audio: audio, defaults: defaults, isUserPicking: { isPicking })
+    model.start()
+
+    // An app installing a virtual output with Control Center closed returns
+    // to the ranked speaker.
+    audio.catalog.append(backgroundVirtual)
+    audio.defaults[.output] = backgroundVirtual.platformID
+    model.handleDevicesChanged()
+    model.handleDefaultChanged(.output)
+    #expect(model.currentOutputID == speaker.platformID)
+
+    // Ticking multiple outputs in Control Center creates ~:AMS2_StackedOutput:0
+    // on the fly while Control Center is open, and keeps it.
+    isPicking = true
+    audio.catalog.append(stacked)
+    audio.defaults[.output] = stacked.platformID
+    model.handleDevicesChanged()
+    model.handleDefaultChanged(.output)
+    #expect(model.currentOutputID == stacked.platformID)
+    #expect(model.keptPicks[.output] == stacked.uid)
+}

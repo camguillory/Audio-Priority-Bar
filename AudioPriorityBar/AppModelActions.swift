@@ -587,14 +587,15 @@ extension AppModel {
         from source: IndexSet,
         to destination: Int
     ) {
-        let count = category == .speaker
-            ? speakerDevices.count
-            : headphoneDevices.count
-        guard source.allSatisfy((0..<count).contains),
+        let current = category == .speaker ? speakerDevices : headphoneDevices
+        let pinned = current.prefix(while: \.isAirPlay).count
+        let count = current.count
+        guard source.allSatisfy((pinned..<count).contains),
               (0...count).contains(destination) else {
             return
         }
-        let before = (category == .speaker ? speakerDevices : headphoneDevices).map(\.name)
+        let destination = max(pinned, destination)
+        let before = current.map(\.name)
         if category == .speaker {
             speakerDevices.move(fromOffsets: source, toOffset: destination)
             store.savePriorities(speakerDevices, category: .speaker)
@@ -628,17 +629,19 @@ extension AppModel {
         guard let category,
               let device = (speakerDevices + headphoneDevices).first(where: {
                   $0.id == id
-              }) else { return false }
+              }),
+              !device.isAirPlay else { return false }
         let sourceCategory = store.category(for: device)
         if sourceCategory == category {
             let devices = category == .speaker
                 ? speakerDevices
                 : headphoneDevices
+            let pinned = devices.prefix(while: \.isAirPlay).count
             guard let source = devices.firstIndex(of: device) else { return false }
             moveOutput(
                 in: category,
                 from: IndexSet(integer: source),
-                to: max(0, min(destination, devices.count))
+                to: max(pinned, min(destination, devices.count))
             )
             return true
         }
@@ -649,12 +652,13 @@ extension AppModel {
         var devices = category == .speaker
             ? speakerDevices
             : headphoneDevices
+        let pinned = devices.prefix(while: \.isAirPlay).count
         guard let source = devices.firstIndex(where: {
             $0.id == id
         }) else { return false }
         let before = devices.map(\.name)
         let moved = devices.remove(at: source)
-        devices.insert(moved, at: max(0, min(destination, devices.count)))
+        devices.insert(moved, at: max(pinned, min(destination, devices.count)))
         if category == .speaker {
             speakerDevices = devices
         } else {

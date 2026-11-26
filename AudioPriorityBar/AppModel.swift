@@ -281,6 +281,9 @@ final class AppModel {
         refreshVolume()
         battery.refresh()
         if !isManualMode {
+            if let output = currentOutputDevice, output.isAirPlay {
+                keepPick(output.uid, for: .output)
+            }
             applyHighestPriorityDevices()
         } else {
             heldInputUID = currentUIDs[.input]
@@ -339,8 +342,13 @@ final class AppModel {
             refreshMute()
             return
         }
+        var automaticSince = before
+        if keepOutsideOutputPickIfMoved(from: before) {
+            noteOutsideMove(.output, from: before[.output])
+            automaticSince[.output] = currentUIDs[.output]
+        }
         applyHighestPriorityDevices()
-        announceAutomaticSwitches(since: before)
+        announceAutomaticSwitches(since: automaticSince)
     }
 
     /// The Jabra monitor reached a new verdict for some dongle. Bumping the
@@ -397,6 +405,7 @@ final class AppModel {
                let currentUID = currentUIDs[.output],
                previousDevice.uid != currentUID,
                connectedOutputUIDs.contains(previousDevice.uid),
+               currentOutputDevice?.isAirPlay != true,
                !isUserPicking(),
                shouldSwitchBack(.output, from: currentUID) {
                 // macOS or another app moved it, as when AirPods in the ears
@@ -425,10 +434,14 @@ final class AppModel {
             refreshMute()
             return
         }
+        var automaticSince = before
+        if keepOutsideOutputPickIfMoved(from: previousUIDs) {
+            automaticSince[.output] = currentUIDs[.output]
+        }
         if topologyExplainsChange(role) {
             DebugLog.shared.write("the \(role.rawValue) change follows a device connecting or leaving, so the list decides")
             applyHighestPriorityDevices()
-            announceAutomaticSwitches(since: before)
+            announceAutomaticSwitches(since: automaticSince)
             return
         }
         if let target = automaticTarget(for: role),
@@ -464,11 +477,31 @@ final class AppModel {
     /// `previousUIDs`. Both roles, since one refresh can reveal both moves.
     private func noteOutsideMoves(from previousUIDs: [DeviceRole: String]) {
         for role in DeviceRole.allCases where previousUIDs[role] != currentUIDs[role] {
-            DebugLog.shared.write("default \(role.rawValue) changed outside the app: \(previousUIDs[role].map { logName($0, role) } ?? "none") to \(currentUIDs[role].map { logName($0, role) } ?? "none")")
-            if let device = role == .input ? currentInputDevice : currentOutputDevice {
-                recordSwitch(role, device.name, "by macOS, Control Center or another app")
-            }
+            noteOutsideMove(role, from: previousUIDs[role])
         }
+    }
+
+    private func noteOutsideMove(_ role: DeviceRole, from previousUID: String?) {
+        DebugLog.shared.write("default \(role.rawValue) changed outside the app: \(previousUID.map { logName($0, role) } ?? "none") to \(currentUIDs[role].map { logName($0, role) } ?? "none")")
+        if let device = role == .input ? currentInputDevice : currentOutputDevice {
+            recordSwitch(role, device.name, "by macOS, Control Center or another app")
+        }
+    }
+
+    /// An AirPlay route, or a virtual output such as Multi-Output picked while
+    /// Control Center or Sound Settings is open, is the user's choice even
+    /// when CoreAudio creates the device at the same moment, and any audio
+    /// callback can be the first to refresh and see it.
+    @discardableResult
+    private func keepOutsideOutputPickIfMoved(from previousUIDs: [DeviceRole: String]) -> Bool {
+        guard hasStarted, !isManualMode,
+              previousUIDs[.output] != currentUIDs[.output],
+              let output = currentOutputDevice,
+              output.isAirPlay || (output.isVirtual && isUserPicking()) else {
+            return false
+        }
+        keepPick(output.uid, for: .output)
+        return true
     }
 
     /// With automatic switching off, puts the held microphone back whenever
@@ -511,7 +544,9 @@ final class AppModel {
     /// appeared (macOS 26.6.2).
     private func connectedMomentsAgo(_ uid: String, _ role: DeviceRole) -> Bool {
         // ponytail: a fixed 5 s window; a slower handover reads as a pick.
-        recentlyAddedUIDs[role]?.contains(uid) == true
+        let devices = role == .input ? connectedInputs : allOutputs
+        guard devices.first(where: { $0.uid == uid })?.isVirtual != true else { return false }
+        return recentlyAddedUIDs[role]?.contains(uid) == true
             && uptime() - (topologyChangedAt[role] ?? 0) < 5
     }
 
@@ -746,7 +781,9 @@ final class AppModel {
     }
 
     func logName(_ uid: String, _ role: DeviceRole) -> String {
-        store.storedDevice(uid: uid, role: role)?.disconnectedDevice().logName ?? "[\(uid)]"
+        (role == .input ? connectedInputs : allOutputs).first { $0.uid == uid && $0.isConnected }?.logName
+            ?? store.storedDevice(uid: uid, role: role)?.disconnectedDevice().logName
+            ?? "[\(uid)]"
     }
 
     /// Keeps `uid` for `role` until it leaves or the list would use a device
@@ -1234,6 +1271,7 @@ final class AppModel {
         for device in headphoneDevices + speakerDevices {
             let category = store.category(for: device)
             guard device.isConnected,
+                  !device.isAirPlay,
                   !store.isHidden(device, in: category) else { continue }
             if store.isNeverUse(device) {
                 skipped = skipped ?? SkippedOutput(

@@ -9,9 +9,13 @@ enum CoreAudioProperties {
     private static let system = AudioObjectID(kAudioObjectSystemObject)
 
     static func devices() -> [AudioDevice] {
-        deviceIDs().flatMap { id in
+        let defaults: [DeviceRole: AudioObjectID] = [
+            .input: defaultDevice(.input),
+            .output: defaultDevice(.output),
+        ].compactMapValues { $0 }
+        return deviceIDs().flatMap { id in
             DeviceRole.allCases.compactMap { role in
-                makeDevice(id: id, role: role)
+                makeDevice(id: id, role: role, isCurrentDefault: defaults[role] == id)
             }
         }
     }
@@ -230,13 +234,15 @@ enum CoreAudioProperties {
 
     private static func makeDevice(
         id: AudioObjectID,
-        role: DeviceRole
+        role: DeviceRole,
+        isCurrentDefault: Bool
     ) -> AudioDevice? {
         let scope = role == .input
             ? kAudioDevicePropertyScopeInput
             : kAudioDevicePropertyScopeOutput
         let streams = streams(id, scope: scope)
         guard !streams.isEmpty,
+              canBeDefaultDevice(id, scope: scope, isCurrentDefault: isCurrentDefault),
               let name = stringProperty(
                 id,
                 selector: kAudioDevicePropertyDeviceNameCFString
@@ -410,6 +416,33 @@ enum CoreAudioProperties {
     static func isDisplayTransport(_ transport: UInt32) -> Bool {
         transport == kAudioDeviceTransportTypeHDMI
             || transport == kAudioDeviceTransportTypeDisplayPort
+    }
+
+    /// Excludes internal streams that CoreAudio says cannot be chosen as the
+    /// default input or output, such as per-app conduits, while keeping a
+    /// transient route macOS already made current and failing open when a
+    /// driver omits the property.
+    static func allowsDefaultSelection(
+        _ canBeDefault: UInt32?,
+        isCurrentDefault: Bool = false
+    ) -> Bool {
+        isCurrentDefault || canBeDefault != 0
+    }
+
+    private static func canBeDefaultDevice(
+        _ id: AudioObjectID,
+        scope: AudioObjectPropertyScope,
+        isCurrentDefault: Bool
+    ) -> Bool {
+        if isCurrentDefault { return true }
+        var value: UInt32 = 1
+        let status = read(
+            id,
+            selector: kAudioDevicePropertyDeviceCanBeDefaultDevice,
+            scope: scope,
+            into: &value
+        )
+        return allowsDefaultSelection(status == noErr ? value : nil)
     }
 
     private static func streams(

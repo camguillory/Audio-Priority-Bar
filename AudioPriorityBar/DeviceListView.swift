@@ -111,6 +111,7 @@ struct DeviceSectionView: View {
                     )
                     .padding(.horizontal, -8)
             } else {
+                let pinnedCount = devices.prefix(while: \.isAirPlay).count
                 ForEach(Array(devices.enumerated()), id: \.element.id) {
                     index, device in
                     let lifted = drag?.device.id == device.id
@@ -120,6 +121,7 @@ struct DeviceSectionView: View {
                         section: section,
                         index: index,
                         count: devices.count,
+                        pinnedCount: pinnedCount,
                         layout: layout,
                         isSelected: device.isConnected
                             && currentID == device.platformID,
@@ -194,14 +196,20 @@ struct DeviceSectionView: View {
             coordinateSpace: .named(PanelLayout.space)
         )
         .onChanged { value in
+            guard !device.isAirPlay else { return }
             if drag == nil { hoveredDeviceID = nil }
             var session = drag ?? DeviceDrag(
                 device: device,
                 section: section,
                 index: index
             )
+            let hovered = layout.target(at: value.location)
+            let minimum = hovered?.section == .speaker
+                ? model.speakerDevices.prefix(while: \.isAirPlay).count
+                : 0
             session.update(
-                hovered: layout.target(at: value.location),
+                hovered: hovered,
+                minimumIndex: minimum,
                 translation: value.translation
             )
             drag = session
